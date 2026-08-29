@@ -1,0 +1,23 @@
+%% Financy — procurement and three-way match
+%% Source of truth: docs/05-USER-FLOWS.md §N
+flowchart TD
+  PR["Purchase request"] --> PA{"Approval — the same engine,<br/>spendType = PURCHASE_ORDER"}
+  PA -- reject --> PX["Rejected"]
+  PA -- approve --> PO["Purchase order issued"]
+  PO --> COM["budget: COMMITMENT movement"]
+  COM --> SENT["Sent to the vendor"]
+  SENT --> REC["Goods or services received<br/>quantities recorded per PO line"]
+  REC --> BILL["Vendor bill arrives"]
+  BILL --> M3{"Three-way match<br/>PO line vs received qty vs bill line<br/>within configured tolerance?"}
+  M3 -- matched --> APPR["Auto-approve within tolerance"]
+  APPR --> PAY["Bill proceeds to payment"]
+  M3 -- variance --> EXC["Exception queue — finance review"]
+  EXC --> RES{"Resolution"}
+  RES -->|"accept variance"| PAY
+  RES -->|"amend PO"| PO
+  RES -->|"dispute"| DISP["Vendor dispute"]
+  PAY --> REL["budget: RELEASE the commitment,<br/>record the ACTUAL"]
+  REL --> CLOSE["PO closed once fully received and billed"]
+
+  classDef warn fill:#FEF4E6,stroke:#8A5000
+  class EXC,M3 warn

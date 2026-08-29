@@ -1,0 +1,40 @@
+%% Financy — queue and worker topology
+%% Source of truth: docs/14-ASYNC-JOBS.md §5
+graph TB
+  subgraph Producers
+    API["API instances<br/>enqueue AFTER commit"]
+    CRON["Scheduler<br/>cron, UTC, distributed lock"]
+    HOOK["Webhook endpoint<br/>202 immediately, process async"]
+  end
+
+  Q[("Redis — BullMQ<br/>(InlineQueueAdapter locally: no Redis on the dev host)")]
+
+  API --> Q
+  CRON --> Q
+  HOOK --> Q
+
+  Q --> W1["Worker: critical · concurrency 10<br/>notifications · approval reminders · escalations"]
+  Q --> W2["Worker: default · concurrency 5<br/>receipt scan/OCR · transaction enrich · auto-match"]
+  Q --> W3["Worker: heavy · concurrency 2<br/>exports · large reports · CSV imports"]
+  Q --> W4["Worker: scheduled · concurrency 1<br/>maintenance · integrity checks · rollovers"]
+
+  W1 --> DB[("PostgreSQL")]
+  W2 --> DB
+  W3 --> DB
+  W4 --> DB
+  W2 --> OBJ[("Object storage")]
+  W3 --> OBJ
+
+  W1 -.failure.-> DLQ[("Dead-letter queue")]
+  W2 -.failure.-> DLQ
+  W3 -.failure.-> DLQ
+  W4 -.failure.-> DLQ
+  DLQ --> AL["Alert — any arrival pages on-call"]
+
+  W4 --> CHK["budget drift · orphaned records ·<br/>audit gaps · immutability violations"]
+  CHK -.any finding.-> AL
+
+  classDef crit fill:#FDECEC,stroke:#A3161C
+  class DLQ,AL,CHK crit
+
+  %% Separate queues so a 50,000-row export cannot delay an approval notification.

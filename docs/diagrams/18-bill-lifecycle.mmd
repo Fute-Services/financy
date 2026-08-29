@@ -1,0 +1,32 @@
+%% Financy — bill / accounts payable lifecycle
+%% Source of truth: docs/05-USER-FLOWS.md §M
+stateDiagram-v2
+  [*] --> DRAFT: captured manually or ingested
+  DRAFT --> PENDING_APPROVAL: submit — THE SAME policy and approval engine
+  DRAFT --> VOID: void before approval
+  PENDING_APPROVAL --> APPROVED
+  PENDING_APPROVAL --> REJECTED
+  PENDING_APPROVAL --> CHANGES_REQUESTED
+  CHANGES_REQUESTED --> DRAFT
+  APPROVED --> SCHEDULED: payment date set
+  SCHEDULED --> PAID: payment executed and referenced
+  APPROVED --> PAID: paid outside the system, recorded
+  PAID --> RECONCILED: matched to a statement
+  PAID --> PARTIALLY_CREDITED: credit note applied
+  PARTIALLY_CREDITED --> RECONCILED
+  REJECTED --> [*]
+  VOID --> [*]
+  RECONCILED --> [*]
+
+  note right of PAID
+    A paid bill's amounts are immutable.
+    Corrections are credit notes —
+    new, linked records.
+  end note
+
+  note left of PENDING_APPROVAL
+    spendType = BILL is the only
+    difference from a spend request.
+    A second approval implementation
+    would be a design failure.
+  end note

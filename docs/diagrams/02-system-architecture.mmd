@@ -1,0 +1,49 @@
+%% Financy — high-level system architecture
+%% Source of truth: docs/08-ARCHITECTURE.md §2
+graph TB
+  subgraph Client
+    BR["Browser<br/>untrusted"]
+  end
+
+  subgraph Application
+    WEB["apps/web — Next.js 15<br/>App Router · RSC + client islands<br/>adds NO authority"]
+    API["apps/api — NestJS 11<br/>modular monolith<br/>ALL authorisation decisions"]
+    WRK["Workers — same artefact,<br/>worker entrypoint"]
+  end
+
+  subgraph Data
+    PG[("PostgreSQL 16+<br/>tenant-scoped, RLS from Phase 6")]
+    RD[("Redis<br/>queue · rate limit")]
+    OBJ[("Object storage<br/>private, signed URLs only")]
+  end
+
+  subgraph Ports["External systems — behind ports"]
+    CP["CardProvider"]
+    PP["PaymentProvider"]
+    AP["AccountingProvider"]
+    NP["NotificationProvider"]
+    OP["OCRProvider"]
+    IP["IdentityProvider"]
+  end
+
+  OTEL["OpenTelemetry collector"]
+
+  BR -->|"TLS · httpOnly cookie"| WEB
+  BR -->|"TLS · httpOnly cookie"| API
+  WEB -->|"forwards the user session"| API
+  API --> PG
+  API --> RD
+  API --> OBJ
+  API -. "enqueue after commit" .-> RD
+  RD -. "consume" .-> WRK
+  WRK --> PG
+  WRK --> OBJ
+  API --> CP & PP & AP & NP & OP & IP
+  WRK --> CP & PP & AP & NP & OP & IP
+  API --> OTEL
+  WRK --> OTEL
+
+  classDef trust fill:#EEF3FF,stroke:#2A4CD1
+  classDef untrust fill:#FDECEC,stroke:#A3161C
+  class API,WRK trust
+  class BR untrust

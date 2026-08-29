@@ -1,0 +1,23 @@
+%% Financy — accounting export, and why re-running is safe
+%% Source of truth: docs/05-USER-FLOWS.md §P
+flowchart TD
+  SEL["Select period · entity · record types"] --> ELG{"Eligible records:<br/>REVIEWED and CODED and not yet EXPORTED"}
+  ELG -- none --> EMPTY["Nothing to export"]
+  ELG -- some --> MAP["Apply mapping rules:<br/>GL account · cost centre · entity ·<br/>department · project · tax code"]
+  MAP --> VAL{"Every line maps to a valid code?"}
+  VAL -- no --> UNM["Unmapped queue — export BLOCKED until resolved.<br/>A silently-defaulted GL account produces a<br/>clean-looking export that is wrong."]
+  VAL -- yes --> BAL{"Debits equal credits per journal?"}
+  BAL -- no --> ERR["Export aborted — integrity error raised"]
+  BAL -- yes --> GEN["queue: accounting.export"]
+  GEN --> FILE["Generate the file in the adapter's layout<br/>UTF-8 BOM · RFC 4180 · formula-injection escaped"]
+  FILE --> BATCH["INSERT export_batch:<br/>id · checksum · row count · record ids · actor"]
+  BATCH --> MARK["Mark every record EXPORTED with the batch id"]
+  MARK --> AUD["audit: accounting.exported"]
+  AUD --> DL["Signed download link"]
+  DL --> RE{"Re-run the same period?"}
+  RE -- yes --> IDEM["Already-exported records are excluded<br/>by the eligibility filter — the re-run is<br/>idempotent by construction, not by a check."]
+
+  classDef warn fill:#FEF4E6,stroke:#8A5000
+  classDef ok fill:#E7F6EC,stroke:#0A6B36
+  class UNM,ERR warn
+  class IDEM ok

@@ -1,0 +1,29 @@
+{
+  "name": "@financy/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint/index.js",
+    "./eslint/node": "./eslint/node.js",
+    "./eslint/react": "./eslint/react.js",
+    "./tsconfig/base": "./tsconfig/base.json",
+    "./tsconfig/node": "./tsconfig/node.json",
+    "./tsconfig/react": "./tsconfig/react.json",
+    "./vitest": "./vitest/base.js"
+  },
+  "files": ["eslint", "tsconfig", "vitest"],
+  "scripts": {
+    "lint": "echo \"@financy/config: no sources to lint\"",
+    "typecheck": "echo \"@financy/config: no sources to typecheck\"",
+    "test": "echo \"@financy/config: no tests\"",
+    "clean": "echo \"@financy/config: nothing to clean\""
+  },
+  "dependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}

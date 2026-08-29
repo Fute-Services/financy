@@ -1,0 +1,21 @@
+%% Financy — reimbursement batching and payment
+%% Source of truth: docs/05-USER-FLOWS.md §K · FR-EXP-008..010
+flowchart TD
+  AP["Approved out-of-pocket expenses"] --> ELG{"Eligible?<br/>approved · not already in a batch ·<br/>receipt present where required"}
+  ELG -- no --> HOLD["Held, with an explicit reason shown"]
+  ELG -- yes --> GRP["Group by payee + entity + currency + period"]
+  GRP --> TOT["Total computed SERVER-SIDE from the lines<br/>a client-supplied total is ignored"]
+  TOT --> BATCH["INSERT reimbursement + reimbursement_lines"]
+  BATCH --> DUP{"UNIQUE (expense_id) on reimbursement_lines"}
+  DUP -- violated --> ERR["409 EXPENSE_ALREADY_REIMBURSED"]
+  DUP -- ok --> APR["Finance approval — same approval engine"]
+  APR -- reject --> BACK["Batch dissolved · expenses released"]
+  APR -- approve --> PAY["Mark paid — payment reference REQUIRED"]
+  PAY --> AUD["audit: reimbursement.paid"]
+  AUD --> CLOSE["Linked expenses to CLOSED"]
+  CLOSE --> NOTE["Notify the payee"]
+
+  classDef guard fill:#EEF3FF,stroke:#2A4CD1
+  classDef danger fill:#FDECEC,stroke:#A3161C
+  class DUP,TOT guard
+  class ERR danger

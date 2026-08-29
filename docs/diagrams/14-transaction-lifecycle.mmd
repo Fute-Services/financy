@@ -1,0 +1,38 @@
+%% Financy — transaction lifecycle and its three independent status axes
+%% Source of truth: docs/05-USER-FLOWS.md §H
+stateDiagram-v2
+  direction LR
+  [*] --> PENDING: authorisation received or imported
+  PENDING --> POSTED: settlement confirmed
+  PENDING --> DECLINED: authorisation refused
+  PENDING --> EXPIRED: authorisation never settled
+  POSTED --> DISPUTED: dispute raised
+  DISPUTED --> POSTED: dispute lost
+  DISPUTED --> REVERSED: dispute won or chargeback
+  POSTED --> REFUNDED: linked refund transaction
+  POSTED --> [*]
+  DECLINED --> [*]
+  EXPIRED --> [*]
+  REVERSED --> [*]
+  REFUNDED --> [*]
+
+  note right of POSTED
+    Once POSTED, amount, currency,
+    merchant, and occurred_at are
+    IMMUTABLE — enforced by a
+    database trigger, not only by
+    application code.
+    Corrections are adjustment rows.
+    Category, review, and accounting
+    fields remain mutable: they are
+    ABOUT the transaction, not the
+    money itself.
+  end note
+
+  note left of PENDING
+    Duplicate prevention:
+    UNIQUE (organization_id, provider,
+    provider_transaction_id).
+    A replayed webhook or re-uploaded
+    CSV is a logged no-op.
+  end note

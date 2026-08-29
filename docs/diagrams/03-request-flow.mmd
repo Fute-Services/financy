@@ -1,0 +1,43 @@
+%% Financy — request pipeline, browser to database and back
+%% Source of truth: docs/08-ARCHITECTURE.md §4.4
+sequenceDiagram
+  autonumber
+  participant C as Browser
+  participant MW as Middleware
+  participant G as Guards
+  participant I as Interceptors
+  participant P as Validation pipe
+  participant CT as Controller
+  participant S as Application service
+  participant D as Domain (pure)
+  participant R as Repository
+  participant DB as PostgreSQL
+
+  C->>MW: HTTP request + session cookie
+  MW->>MW: correlation id · security headers · body limit · rate limit
+  MW->>G: pass
+  G->>G: 1 AuthGuard — resolve session, load membership
+  G->>G: 2 TenantGuard — bind organizationId from the membership;<br/>reject any client-supplied mismatch
+  G->>G: 3 PermissionGuard — required permission present?
+  G->>G: 4 ScopeGuard — attach the row-scope predicate
+  G->>G: 5 StepUpGuard — recent re-auth for high-risk actions
+  G->>I: pass
+  I->>I: IdempotencyInterceptor — replay or reserve the key
+  I->>P: pass
+  P->>P: Zod parse from packages/contracts, strip unknown keys
+  P->>CT: typed, validated DTO
+  CT->>S: one use-case call
+  S->>DB: BEGIN
+  S->>R: read (tenant predicate is mandatory)
+  R->>DB: SELECT ... WHERE organization_id = $ctx
+  S->>D: apply invariants and the state machine
+  D-->>S: result or domain error
+  S->>R: write
+  S->>R: write the audit event — SAME transaction
+  S->>DB: COMMIT
+  S-->>CT: result
+  CT-->>I: representation
+  I->>I: serialise · store the idempotent response · emit metrics
+  I-->>C: response + correlation id
+
+  Note over G: Tenant binding happens BEFORE permission checking,<br/>so a query that could reveal another tenant's data<br/>cannot even be constructed.

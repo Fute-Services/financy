@@ -1,0 +1,32 @@
+%% Financy — budget movements and balance calculation
+%% Source of truth: docs/05-USER-FLOWS.md §L · FR-BDG-003/004
+flowchart TD
+  subgraph Sources["What moves a budget"]
+    C1["Approved spend request"] -->|COMMITMENT| L
+    C2["Approved purchase order"] -->|COMMITMENT| L
+    A1["Posted transaction"] -->|ACTUAL| L
+    A2["Approved expense"] -->|ACTUAL| L
+    A3["Approved bill"] -->|ACTUAL| L
+    R1["Cancelled, expired, or reversed"] -->|RELEASE| L
+  end
+
+  L["budget_movements — APPEND ONLY<br/>amount always positive; direction carries the sign<br/>UNIQUE (line, source_type, source_id, movement_type)"]
+
+  L --> TX["Write path, one transaction:<br/>1 SELECT budget_lines FOR UPDATE<br/>2 INSERT budget_movements<br/>3 UPDATE materialised balance<br/>4 INSERT audit_event"]
+  TX --> CALC["allocated · committed · actual<br/>remaining = allocated - committed - actual"]
+
+  CALC --> THR{"Utilisation threshold"}
+  THR -->|">= 75%"| N1["budget.alert CAUTION"]
+  THR -->|">= 90%"| N2["budget.alert WARNING"]
+  THR -->|"> 100%"| N3["budget.alert OVERSPEND"]
+
+  CALC --> POL["Budget state is an INPUT to the policy engine:<br/>budget.wouldExceed, budget.utilizationAfter"]
+  POL --> BEH{"Configured overspend behaviour"}
+  BEH -->|WARN| W["Allow and alert"]
+  BEH -->|REQUIRE_APPROVAL| RA["Inject a finance approval step"]
+  BEH -->|BLOCK| BL["Policy verdict BLOCK"]
+
+  CALC --> CHK["Nightly integrity check:<br/>materialised balance MUST equal SUM(movements).<br/>Drift ALERTS — it is never silently repaired,<br/>because drift means something wrote outside<br/>the sanctioned path."]
+
+  classDef crit fill:#FEF4E6,stroke:#8A5000
+  class CHK,TX crit

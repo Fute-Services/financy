@@ -1,0 +1,74 @@
+%% Financy — the first vertical slice, end to end
+%% Source of truth: docs/05-USER-FLOWS.md §0 · docs/01-PRODUCT-REQUIREMENTS.md §10.1
+%% This is the flow that defines "the product works".
+sequenceDiagram
+  autonumber
+  actor Daniel as Org Admin
+  actor Aisha as Employee
+  actor Marcus as Manager
+  actor Priya as Finance
+  participant API
+  participant PE as Policy Engine
+  participant DB as PostgreSQL
+  participant Q as Queue
+  participant AU as Audit
+
+  rect rgb(238, 243, 255)
+  Note over Daniel,AU: Phase 1 — identity, tenancy, audit
+  Daniel->>API: POST /v1/auth/register
+  API->>DB: org + user + membership(ORG_ADMIN) + entity — ATOMIC
+  API->>AU: organization.created · membership.created
+  Daniel->>API: POST /v1/memberships/invitations
+  API->>Q: email.invitation
+  API->>AU: invitation.created
+  Aisha->>API: POST /v1/auth/invitations/accept
+  API->>AU: invitation.accepted · membership.created
+  end
+
+  rect rgb(241, 237, 253)
+  Note over Daniel,AU: Phase 2 — policy, approval, spend
+  Daniel->>API: POST /v1/policies
+  API->>AU: policy.created (version 1, immutable)
+  Aisha->>API: POST /v1/spend-requests/evaluate (DRY RUN)
+  API->>PE: evaluate(context)
+  PE-->>API: ALLOWED_WITH_APPROVAL, chain [Manager, Finance]
+  API-->>Aisha: preview — no rows written
+  Aisha->>API: POST /v1/spend-requests (Idempotency-Key)
+  API->>PE: evaluate — AUTHORITATIVE
+  API->>DB: spend_request + approval_instance + steps + decision snapshot
+  API->>AU: spend_request.submitted · policy.evaluated
+  API->>Q: notification.approval_requested
+  Marcus->>API: POST /v1/approvals/steps/{id}/approve
+  API->>DB: FOR UPDATE · re-check · action · advance · COMMITMENT movement
+  API->>AU: approval.approved · budget.committed
+  Priya->>API: POST /v1/approvals/steps/{id}/approve
+  API->>DB: instance APPROVED · request APPROVED
+  API->>AU: spend_request.approved
+  end
+
+  rect rgb(231, 246, 236)
+  Note over Priya,AU: Phase 3 — transaction, evidence, review
+  Priya->>API: POST /v1/transactions/import (CSV)
+  API->>DB: transaction — UNIQUE(provider, provider_transaction_id)
+  API->>DB: match to the approved spend request
+  API->>AU: transaction.imported · transaction.matched
+  Aisha->>API: POST /v1/receipts/upload-intent then /complete
+  API->>API: magic-byte validation — not the declared MIME
+  API->>Q: receipt.scan then receipt.ocr
+  API->>AU: receipt.uploaded · receipt.attached
+  Priya->>API: POST /v1/transactions/{id}/review
+  API->>DB: REVIEWED · release COMMITMENT · record ACTUAL
+  API->>AU: transaction.categorized · transaction.reviewed · budget.actualized
+  end
+
+  rect rgb(254, 244, 230)
+  Note over Priya,AU: Phase 4 — insight
+  Priya->>API: GET /v1/dashboard/summary
+  API->>DB: server-side aggregate
+  Priya->>API: GET /v1/reports/spend-by-department
+  API-->>Priya: figures — NOTHING computed in the browser
+  Priya->>API: GET /v1/audit-events?resourceId=...
+  API-->>Priya: the complete lifecycle, every actor, every timestamp
+  end
+
+  Note over Daniel,AU: End-state assertions the e2e test makes:<br/>1 request APPROVED and linked to its instance<br/>2 transaction linked, receipt ATTACHED<br/>3 budget shows actual, not committed; remaining correct<br/>4 report total includes this amount exactly once<br/>5 15+ audit events, every one with an actor, in order<br/>6 a second organisation gets 404 for every id in this flow

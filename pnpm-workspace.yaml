@@ -1,0 +1,8 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# esbuild fetches a platform binary in its postinstall. It is a direct
+# dependency of Vitest, so the test runner does not work without it.
+allowBuilds:
+  esbuild: true

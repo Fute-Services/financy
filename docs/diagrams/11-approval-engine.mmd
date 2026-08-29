@@ -1,0 +1,35 @@
+%% Financy — approval resolution and action handling
+%% Source of truth: docs/11-APPROVAL-POLICY-ENGINE.md §6-7
+flowchart TD
+  D["PolicyDecision.requirements.approvalSteps"] --> L{"For each step spec"}
+  L --> R{"ApproverSpec kind"}
+  R -- MEMBERSHIP --> M1["Use it directly"]
+  R -- ROLE --> M2["All active memberships<br/>with that role, in scope"]
+  R -- DEPARTMENT_HEAD --> M3["Walk the department tree<br/>levelsUp times, take the head"]
+  R -- MANAGER_CHAIN --> M4["managerChain at position n"]
+  R -- ENTITY_FINANCE_OWNER --> M5["The entity's finance owner"]
+  R -- WORKFLOW --> M6["Expand the named workflow"]
+
+  M1 --> F1
+  M2 --> F1
+  M3 --> F1
+  M4 --> F1
+  M5 --> F1
+  M6 --> F1
+
+  F1["Filter: active memberships only"] --> F2["Filter: remove the requester<br/>INV-02, applied BEFORE delegation"]
+  F2 --> F3["Apply active delegations<br/>substitute delegate for delegator"]
+  F3 --> F4["Filter AGAIN: remove the requester<br/>a delegation must not reintroduce them"]
+  F4 --> E{"Any eligible approver left?"}
+  E -- yes --> OK["Persist the step and its approver set"]
+  E -- no --> FB["Fallback ladder:<br/>1 next level up the manager chain<br/>2 the department head's manager<br/>3 the entity finance owner<br/>4 any ORG_ADMIN<br/>5 raise UNRESOLVABLE_APPROVER"]
+  FB --> OK
+
+  OK --> ACT["Approver acts"]
+  ACT --> LK["SELECT ... FOR UPDATE on the step"]
+  LK --> RC{"Re-check status INSIDE the lock"}
+  RC -- "not ACTIVE" --> C409["409 STEP_NOT_ACTIONABLE"]
+  RC -- ACTIVE --> WR["INSERT approval_action (immutable)<br/>UPDATE step<br/>activate next step or complete instance<br/>INSERT audit_event<br/>— all in one transaction"]
+
+  classDef danger fill:#FDECEC,stroke:#A3161C
+  class FB,C409 danger

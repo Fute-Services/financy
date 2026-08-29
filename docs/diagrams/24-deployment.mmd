@@ -1,0 +1,52 @@
+%% Financy — deployment topology
+%% Source of truth: docs/17-DEPLOYMENT.md §7 · docs/08-ARCHITECTURE.md §10
+graph TB
+  subgraph Edge
+    CDN["CDN — static assets"]
+    LB["Load balancer<br/>TLS 1.2+ termination · HSTS"]
+  end
+
+  subgraph App["Application tier — stateless, no sticky sessions"]
+    W["Web instances xN<br/>Next.js standalone"]
+    A["API instances xN<br/>node dist/main.js"]
+    K["Worker instances xM<br/>node dist/worker.js<br/>SAME artefact, different entrypoint"]
+  end
+
+  subgraph Data["Data tier — private networking only"]
+    PG[("PostgreSQL primary<br/>PITR · nightly full + WAL")]
+    PGR[("Read replica — Phase 6<br/>reporting")]
+    RD[("Redis — queue, rate limit")]
+    S3[("Object storage — private,<br/>versioned, separate origin")]
+  end
+
+  subgraph Obs["Observability"]
+    OT["OTel collector"]
+    LOG["Log aggregation"]
+    ERRT["Error tracking"]
+  end
+
+  CDN --> W
+  LB --> W
+  LB --> A
+  W -->|"forwards the user session"| A
+  A --> PG
+  A --> RD
+  A --> S3
+  K --> PG
+  K --> RD
+  K --> S3
+  A -.reports.-> PGR
+  PG -.replicates.-> PGR
+  A --> OT
+  K --> OT
+  A --> LOG
+  K --> LOG
+  A --> ERRT
+
+  MIG["Migrations run as a SEPARATE deploy step,<br/>BEFORE the application rolls — never on process start.<br/>Expand/contract, so old code keeps working."]
+  MIG --> PG
+
+  classDef same fill:#EEF3FF,stroke:#2A4CD1
+  classDef note fill:#FEF4E6,stroke:#8A5000
+  class A,K same
+  class MIG note

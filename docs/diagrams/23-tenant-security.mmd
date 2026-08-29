@@ -1,0 +1,25 @@
+%% Financy — tenant isolation and the security model
+%% Source of truth: docs/12-SECURITY-MODEL.md §5 · ADR-0010
+graph TB
+  REQ["Incoming request<br/>with a session cookie"]
+
+  REQ --> L1["LAYER 1 — Request context<br/>organizationId comes ONLY from the session's membership.<br/>A client-supplied organizationId is ignored;<br/>if present and different, reject with 403 + security event."]
+  L1 --> L2["LAYER 2 — Prisma client extension<br/>Injects organizationId into every query on a<br/>tenant-scoped model. Missing context THROWS<br/>TenantContextMissingError — fail closed, never fail open."]
+  L2 --> L3["LAYER 3 — PostgreSQL row-level security (Phase 6)<br/>USING (organization_id = current_setting('app.current_organization_id')).<br/>The only layer that still holds if the application is wrong."]
+  L3 --> L0["LAYER 0 — Schema<br/>Composite foreign keys carry organization_id on both sides,<br/>so a cross-tenant reference is PHYSICALLY IMPOSSIBLE<br/>regardless of application code."]
+  L0 --> DATA[("Data — this tenant's rows only")]
+
+  REQ --> AZ["Authorisation, in order:<br/>1 session valid?<br/>2 membership active in this org?<br/>3 permission held?<br/>4 row within scope?<br/>5 step-up satisfied?"]
+  AZ --> DATA
+
+  DATA --> RESP["Response"]
+
+  X1["Cross-tenant resource requested"] --> R404["404 RESOURCE_NOT_FOUND<br/>— never 403, which would confirm it exists"]
+
+  classDef layer fill:#EEF3FF,stroke:#2A4CD1
+  classDef danger fill:#FDECEC,stroke:#A3161C
+  class L0,L1,L2,L3 layer
+  class X1,R404 danger
+
+  %% Four layers because one is a single point of failure,
+  %% and two that both live in the application share a failure mode.

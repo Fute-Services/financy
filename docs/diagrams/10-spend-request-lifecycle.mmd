@@ -1,0 +1,41 @@
+%% Financy — spend request state machine
+%% Source of truth: docs/05-USER-FLOWS.md §D · FR-SPD-005
+stateDiagram-v2
+  [*] --> DRAFT: create
+  DRAFT --> DRAFT: edit / autosave
+  DRAFT --> SUBMITTED: submit — authoritative policy evaluation
+  DRAFT --> CANCELLED: cancel
+
+  SUBMITTED --> PENDING_APPROVAL: chain resolved, at least one step
+  SUBMITTED --> APPROVED: verdict AUTO_APPROVE
+  SUBMITTED --> BLOCKED: verdict BLOCK
+
+  PENDING_APPROVAL --> APPROVED: all steps approved
+  PENDING_APPROVAL --> REJECTED: any step rejected
+  PENDING_APPROVAL --> CHANGES_REQUESTED: approver returns it
+  PENDING_APPROVAL --> ESCALATED: step timeout
+  PENDING_APPROVAL --> CANCELLED: requester cancels
+
+  ESCALATED --> PENDING_APPROVAL: reassigned
+  ESCALATED --> APPROVED: escalation approver approves
+  ESCALATED --> REJECTED: escalation approver rejects
+
+  CHANGES_REQUESTED --> DRAFT: requester edits — re-evaluated from scratch
+  CHANGES_REQUESTED --> CANCELLED: abandoned
+
+  APPROVED --> FULFILLED: linked transaction settles
+  APPROVED --> EXPIRED: unused past valid_until — commitment released
+
+  BLOCKED --> DRAFT: requester revises
+  BLOCKED --> [*]
+  REJECTED --> [*]
+  CANCELLED --> [*]
+  FULFILLED --> [*]
+  EXPIRED --> [*]
+
+  note right of BLOCKED
+    BLOCKED is the policy refusing.
+    REJECTED is a human refusing.
+    Kept distinct so policy
+    effectiveness is measurable.
+  end note

@@ -1,0 +1,32 @@
+%% Financy — card lifecycle
+%% Source of truth: docs/05-USER-FLOWS.md §G · FR-CRD-002
+stateDiagram-v2
+  [*] --> REQUESTED: user requests a card
+  REQUESTED --> PENDING: approved, provider issuance queued
+  REQUESTED --> REJECTED: approval declined
+  PENDING --> ACTIVE: provider confirms issuance
+  PENDING --> FAILED: provider error
+  FAILED --> PENDING: retry
+  ACTIVE --> LOCKED: locked by user, manager, finance, or policy
+  LOCKED --> ACTIVE: unlock
+  ACTIVE --> EXPIRED: past valid_until
+  ACTIVE --> TERMINATED: terminate — irreversible, step-up required
+  LOCKED --> TERMINATED
+  EXPIRED --> [*]
+  TERMINATED --> [*]
+  REJECTED --> [*]
+
+  note right of TERMINATED
+    A terminated card can never
+    be reactivated. History is
+    retained in full.
+  end note
+
+  note right of ACTIVE
+    The application stores only the
+    provider reference and last four.
+    Never a PAN, never a CVV.
+    Limit changes append a
+    spend_limits row rather than
+    overwriting the current limit.
+  end note

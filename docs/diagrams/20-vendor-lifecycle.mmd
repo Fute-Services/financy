@@ -1,0 +1,26 @@
+%% Financy — vendor lifecycle
+%% Source of truth: docs/05-USER-FLOWS.md §O
+stateDiagram-v2
+  [*] --> PENDING: created manually or auto-detected from a merchant
+  PENDING --> ACTIVE: verified — details and tax id confirmed
+  PENDING --> REJECTED: failed verification
+  ACTIVE --> ON_HOLD: payment or compliance hold
+  ON_HOLD --> ACTIVE: hold released
+  ACTIVE --> INACTIVE: no activity, archived
+  INACTIVE --> ACTIVE: reactivated
+  ACTIVE --> MERGED: merged into a duplicate master
+  REJECTED --> [*]
+  MERGED --> [*]
+
+  note right of MERGED
+    Merging is non-destructive.
+    The merged record is retained
+    with merged_into_id, so historical
+    bills and transactions never
+    lose their reference.
+  end note
+
+  note left of PENDING
+    Duplicate detection on create,
+    by normalised name and tax id.
+  end note

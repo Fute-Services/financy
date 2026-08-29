@@ -1,0 +1,49 @@
+%% Financy — product ecosystem
+%% Source of truth: docs/01-PRODUCT-REQUIREMENTS.md
+graph TB
+  subgraph People["People who use Financy"]
+    EMP["Employee<br/>requests and spends"]
+    MGR["Manager<br/>approves within budget"]
+    FIN["Finance Admin<br/>reviews, codes, closes"]
+    ADM["Org Admin<br/>configures access and policy"]
+    AUD["Auditor<br/>reads everything, changes nothing"]
+  end
+
+  subgraph Financy["Financy — the control and orchestration layer"]
+    CTRL["Control<br/>policies · approvals · limits"]
+    EVID["Evidence<br/>receipts · memos · context"]
+    REC["Record<br/>transactions · expenses · bills"]
+    INS["Insight<br/>budgets · reports · dashboard"]
+    HIST["History<br/>immutable audit trail"]
+  end
+
+  subgraph External["Systems Financy connects to"]
+    ISS["Card issuer<br/>(Phase 7)"]
+    RAIL["Payment rail<br/>(Phase 7)"]
+    ACC["Accounting system<br/>the book of record"]
+    BANK["Bank statements<br/>reconciliation"]
+    IDP["Identity provider<br/>SSO (Phase 7)"]
+  end
+
+  EMP --> CTRL
+  MGR --> CTRL
+  ADM --> CTRL
+  FIN --> REC
+  FIN --> INS
+  AUD --> HIST
+
+  CTRL --> EVID --> REC --> INS
+  CTRL --> HIST
+  REC --> HIST
+  INS --> HIST
+
+  CTRL <--> ISS
+  REC <--> RAIL
+  REC --> ACC
+  BANK --> REC
+  IDP --> Financy
+
+  classDef core fill:#EEF3FF,stroke:#2A4CD1,color:#161B23
+  classDef ext fill:#F5F7FA,stroke:#98A3B4,stroke-dasharray:4,color:#3A4250
+  class CTRL,EVID,REC,INS,HIST core
+  class ISS,RAIL,ACC,BANK,IDP ext

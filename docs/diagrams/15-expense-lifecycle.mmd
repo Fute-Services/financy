@@ -1,0 +1,26 @@
+%% Financy — expense lifecycle
+%% Source of truth: docs/05-USER-FLOWS.md §J · FR-EXP-002
+stateDiagram-v2
+  [*] --> DRAFT: create (receipt-first)
+  DRAFT --> SUBMITTED: submit — policy evaluated
+  DRAFT --> DELETED: discard
+  SUBMITTED --> BLOCKED: policy blocks, e.g. receipt missing
+  BLOCKED --> DRAFT: attach evidence and retry
+  SUBMITTED --> PENDING_APPROVAL: chain resolved
+  PENDING_APPROVAL --> APPROVED
+  PENDING_APPROVAL --> REJECTED
+  PENDING_APPROVAL --> CHANGES_REQUESTED
+  CHANGES_REQUESTED --> DRAFT
+  APPROVED --> REIMBURSEMENT_PENDING: out-of-pocket funding
+  APPROVED --> CLOSED: card-funded, nothing owed
+  REIMBURSEMENT_PENDING --> REIMBURSED: batch marked paid
+  REIMBURSED --> CLOSED
+  REJECTED --> [*]
+  DELETED --> [*]
+  CLOSED --> [*]
+
+  note right of BLOCKED
+    BLOCKED, not REJECTED —
+    the policy refused, no human did.
+    The user can fix it and resubmit.
+  end note

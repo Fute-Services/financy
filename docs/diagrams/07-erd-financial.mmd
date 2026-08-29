@@ -1,0 +1,124 @@
+%% Financy — ERD: transactions, receipts, expenses, reimbursements, budgets
+%% Source of truth: docs/09-DATABASE-DESIGN.md §4
+erDiagram
+  TRANSACTIONS ||--o{ RECEIPT_ATTACHMENTS : "evidenced by"
+  TRANSACTIONS ||--o{ TRANSACTION_ADJUSTMENTS : "corrected by"
+  TRANSACTIONS }o--o| SPEND_REQUESTS : fulfils
+  RECEIPTS ||--o{ RECEIPT_ATTACHMENTS : "attached via"
+  EXPENSES ||--o{ EXPENSE_ITEMS : itemised
+  EXPENSES ||--o{ RECEIPT_ATTACHMENTS : "evidenced by"
+  REIMBURSEMENTS ||--o{ REIMBURSEMENT_LINES : pays
+  EXPENSES ||--o| REIMBURSEMENT_LINES : "reimbursed at most once"
+  BUDGETS ||--o{ BUDGET_LINES : periodised
+  BUDGET_LINES ||--o{ BUDGET_MOVEMENTS : "append-only ledger"
+  BUDGET_LINES ||--o{ BUDGET_ALERTS : triggers
+
+  TRANSACTIONS {
+    uuid id PK
+    uuid organization_id FK
+    uuid card_id FK
+    uuid member_membership_id FK
+    uuid spend_request_id FK
+    text merchant_name
+    numeric amount
+    char3 currency
+    numeric fx_rate
+    text fx_rate_source
+    date fx_rate_as_of
+    text status
+    text receipt_status
+    text review_status
+    text accounting_status
+    text provider
+    text provider_transaction_id
+    timestamptz occurred_at
+    timestamptz posted_at
+  }
+  TRANSACTION_ADJUSTMENTS {
+    uuid id PK
+    uuid adjusts_transaction_id FK
+    numeric amount
+    char3 currency
+    text reason
+    uuid actor_membership_id FK
+  }
+  RECEIPTS {
+    uuid id PK
+    uuid organization_id FK
+    uuid uploaded_by_membership_id FK
+    text storage_key
+    text mime_type
+    bigint size_bytes
+    bytea checksum_sha256
+    text scan_status
+    jsonb ocr_result
+  }
+  RECEIPT_ATTACHMENTS {
+    uuid id PK
+    uuid receipt_id FK
+    text subject_type
+    uuid subject_id
+    timestamptz attached_at
+    timestamptz detached_at
+  }
+  EXPENSES {
+    uuid id PK
+    uuid organization_id FK
+    text reference UK
+    uuid member_membership_id FK
+    numeric amount
+    char3 currency
+    date expense_date
+    text funding_type
+    text status
+    jsonb policy_decision
+    uuid approval_instance_id FK
+  }
+  REIMBURSEMENTS {
+    uuid id PK
+    uuid organization_id FK
+    text reference UK
+    uuid payee_membership_id FK
+    numeric total_amount
+    char3 currency
+    text status
+    text payment_reference
+    timestamptz paid_at
+  }
+  REIMBURSEMENT_LINES {
+    uuid id PK
+    uuid reimbursement_id FK
+    uuid expense_id FK "UNIQUE"
+    numeric amount
+    char3 currency
+  }
+  BUDGETS {
+    uuid id PK
+    uuid organization_id FK
+    text scope_type
+    uuid scope_id
+    char3 currency
+    date period_start
+    date period_end
+    text overspend_behavior
+    jsonb alert_thresholds
+  }
+  BUDGET_LINES {
+    uuid id PK
+    uuid budget_id FK
+    date period_start
+    numeric allocated_amount
+    numeric committed_amount
+    numeric actual_amount
+    int version
+  }
+  BUDGET_MOVEMENTS {
+    uuid id PK
+    uuid budget_line_id FK
+    text movement_type
+    text direction
+    numeric amount
+    text source_type
+    uuid source_id
+    timestamptz created_at
+  }

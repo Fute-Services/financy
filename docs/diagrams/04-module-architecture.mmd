@@ -1,0 +1,77 @@
+%% Financy — domain module architecture
+%% Source of truth: docs/08-ARCHITECTURE.md §4.2
+graph TB
+  subgraph Platform["Platform — cross-cutting, no business logic"]
+    CFG[config]:::p
+    DBM[database]:::p
+    CTX[request-context]:::p
+    AUTHZ[authorization]:::p
+    AUDIT[audit]:::p
+    QUEUE[queue]:::p
+    STORE[storage]:::p
+    TEL[telemetry]:::p
+    ERR[errors]:::p
+  end
+
+  subgraph P1["Phase 1 — Foundation"]
+    AUTH[auth]
+    ORG[organization]
+    USERS[users]
+    PERM[permissions]
+  end
+
+  subgraph P2["Phase 2 — Spend control"]
+    POL[policies]
+    APRV[approvals]
+    SPEND[spend]
+    CARDS[cards]
+  end
+
+  subgraph P3["Phase 3 — Record"]
+    TXN[transactions]
+    RCPT[receipts]
+    EXPS[expenses]
+    REIM[reimbursements]
+  end
+
+  subgraph P4["Phase 4 — Insight"]
+    BUD[budgets]
+    RPT[reports]
+  end
+
+  subgraph P56["Phase 5-6 — Payables"]
+    VEND[vendors]
+    BILL[bills]
+    PROC[procurement]
+    ACCT[accounting]
+  end
+
+  INTG[integrations]:::p
+
+  AUTH --> ORG --> USERS --> PERM
+  SPEND --> POL
+  SPEND --> APRV
+  APRV --> POL
+  CARDS --> POL
+  TXN --> CARDS
+  EXPS --> RCPT
+  EXPS --> APRV
+  REIM --> EXPS
+  BUD --> TXN
+  BUD --> SPEND
+  RPT --> TXN
+  RPT --> BUD
+  RPT --> EXPS
+  BILL --> APRV
+  BILL --> VEND
+  PROC --> APRV
+  PROC --> VEND
+  PROC --> BUD
+  ACCT --> TXN
+  ACCT --> EXPS
+  ACCT --> BILL
+  CARDS --> INTG
+  TXN --> INTG
+  ACCT --> INTG
+
+  classDef p fill:#F5F7FA,stroke:#6B7788,color:#3A4250

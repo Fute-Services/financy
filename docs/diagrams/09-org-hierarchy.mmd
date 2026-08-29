@@ -1,0 +1,45 @@
+%% Financy — organisation and user hierarchy
+%% Source of truth: docs/03-USER-ROLES-PERMISSIONS.md §1
+graph TB
+  ORG["Organisation — Acme Ltd<br/>base currency USD"]
+
+  ORG --> E1["Entity: Acme Ltd (US)<br/>functional currency USD"]
+  ORG --> E2["Entity: Acme Europe BV<br/>functional currency EUR"]
+
+  ORG --> D0["Department root: Acme"]
+  D0 --> D1["Engineering<br/>path /engineering"]
+  D0 --> D2["Sales<br/>path /sales"]
+  D0 --> D3["Operations<br/>path /operations"]
+  D1 --> D11["Platform<br/>path /engineering/platform"]
+  D1 --> D12["Product<br/>path /engineering/product"]
+
+  D1 -.head.-> M2
+  D2 -.head.-> M5
+
+  subgraph Memberships["Memberships — user + organisation + role + scope"]
+    M1["Daniel · ORG_ADMIN<br/>scope ORGANISATION"]
+    M2["Marcus · MANAGER<br/>scope DEPARTMENT /engineering"]
+    M3["Aisha · EMPLOYEE<br/>scope SELF"]
+    M4["Priya · FINANCE_ADMIN<br/>scope ORGANISATION"]
+    M5["Sofia · MANAGER<br/>scope DEPARTMENT /sales"]
+    M6["Robert · AUDITOR<br/>scope ORGANISATION, read-only"]
+  end
+
+  D11 --> M3
+  D1 --> M2
+  D2 --> M5
+  D3 --> M1
+  D3 --> M4
+  D3 --> M6
+
+  M3 -.manager.-> M2
+  M2 -.manager.-> M1
+
+  subgraph Users["Users — global identities"]
+    U1["aisha@acme.com"]
+  end
+  U1 --> M3
+  U1 -.may also hold.-> MX["Membership at another organisation"]
+
+  classDef note fill:#F5F7FA,stroke:#98A3B4,stroke-dasharray:4
+  class MX note

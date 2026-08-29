@@ -1,0 +1,101 @@
+%% Financy — ERD: identity, tenancy, access
+%% Source of truth: docs/09-DATABASE-DESIGN.md §2
+erDiagram
+  ORGANIZATIONS ||--o{ ENTITIES : has
+  ORGANIZATIONS ||--o{ DEPARTMENTS : has
+  ORGANIZATIONS ||--o{ MEMBERSHIPS : has
+  ORGANIZATIONS ||--o{ PROJECTS : has
+  ORGANIZATIONS ||--o{ CATEGORIES : has
+  ORGANIZATIONS ||--o{ INVITATIONS : issues
+  ORGANIZATIONS ||--o{ AUDIT_EVENTS : records
+  ORGANIZATIONS ||--o{ SECURITY_EVENTS : records
+  USERS ||--o{ MEMBERSHIPS : holds
+  USERS ||--o{ SESSIONS : opens
+  USERS ||--o{ MFA_FACTORS : enrols
+  ROLES ||--o{ ROLE_PERMISSIONS : grants
+  PERMISSIONS ||--o{ ROLE_PERMISSIONS : "granted by"
+  ROLES ||--o{ MEMBERSHIPS : "assigned to"
+  DEPARTMENTS ||--o{ DEPARTMENTS : "parent of"
+  DEPARTMENTS ||--o{ MEMBERSHIPS : contains
+  MEMBERSHIPS ||--o{ MEMBERSHIPS : manages
+  MEMBERSHIPS ||--o{ AUDIT_EVENTS : "actor of"
+
+  ORGANIZATIONS {
+    uuid id PK
+    citext slug UK
+    text name
+    char3 base_currency
+    text timezone
+    int fiscal_year_start_month
+    jsonb settings
+  }
+  USERS {
+    uuid id PK
+    citext email UK
+    text password_hash
+    text full_name
+    int failed_login_count
+    timestamptz locked_until
+  }
+  MEMBERSHIPS {
+    uuid id PK
+    uuid organization_id FK
+    uuid user_id FK
+    uuid role_id FK
+    uuid department_id FK
+    uuid manager_membership_id FK
+    text scope
+    text status
+  }
+  ROLES {
+    uuid id PK
+    uuid organization_id FK
+    text key
+    bool is_system
+  }
+  PERMISSIONS {
+    uuid id PK
+    text key UK
+    text resource
+    text action
+  }
+  ROLE_PERMISSIONS {
+    uuid role_id FK
+    uuid permission_id FK
+  }
+  ENTITIES {
+    uuid id PK
+    uuid organization_id FK
+    text name
+    char3 functional_currency
+    timestamptz archived_at
+  }
+  DEPARTMENTS {
+    uuid id PK
+    uuid organization_id FK
+    uuid parent_id FK
+    text path
+    uuid head_membership_id FK
+  }
+  SESSIONS {
+    uuid id PK
+    uuid user_id FK
+    uuid active_membership_id FK
+    bytea token_hash UK
+    timestamptz idle_expires_at
+    timestamptz absolute_expires_at
+    timestamptz revoked_at
+  }
+  AUDIT_EVENTS {
+    uuid id PK
+    uuid organization_id FK
+    uuid actor_membership_id FK
+    text actor_type
+    text action
+    text resource_type
+    uuid resource_id
+    jsonb before
+    jsonb after
+    uuid correlation_id
+    timestamptz created_at
+  }

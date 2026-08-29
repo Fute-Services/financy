@@ -1,0 +1,24 @@
+%% Financy — policy evaluation algorithm
+%% Source of truth: docs/11-APPROVAL-POLICY-ENGINE.md §5
+flowchart TD
+  A["evaluate(context) — PURE, no I/O"] --> B["Load active policy versions:<br/>org matches · spendType matches ·<br/>effective_from <= now < effective_to · status ACTIVE"]
+  B --> C["Sort by priority DESC, then policy id ASC<br/>deterministic, never insertion order"]
+  C --> D{"More policies?"}
+  D -- no --> E{"Any outcome collected?"}
+  E -- no --> F["Apply the organisation default outcome"]
+  E -- yes --> M
+  D -- yes --> G["Next policy — evaluate rules in sequence"]
+  G --> H{"Rule conditions match?"}
+  H -- no --> I{"More rules in this policy?"}
+  I -- yes --> G
+  I -- no --> D
+  H -- yes --> J["Collect outcomes;<br/>record matched rule id and policy version id"]
+  J --> K{"Rule terminal, or outcome BLOCK?"}
+  K -- yes --> M
+  K -- no --> I
+  F --> M["merge(outcomes) — nine precedence rules:<br/>1 BLOCK dominates<br/>2 approvers unioned and de-duplicated<br/>3 same sequence becomes one step, strictest type<br/>4 strictest evidence requirement wins<br/>5 AUTO_APPROVE only if no approver required<br/>6 finance review is sticky<br/>7 shortest timeout wins<br/>8 shortest validity wins<br/>9 exceptions accumulate"]
+  M --> N["PolicyDecision:<br/>verdict · requirements · blocks · exceptions ·<br/>matchedRuleIds · policyVersionIds · engineVersion"]
+  N --> P["Persist verbatim on the record — IMMUTABLE.<br/>Never recomputed for display."]
+
+  classDef pure fill:#E7F6EC,stroke:#0A6B36
+  class A,M pure

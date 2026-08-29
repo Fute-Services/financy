@@ -1,0 +1,95 @@
+%% Financy — ERD: vendors, bills, procurement, accounting
+%% Source of truth: docs/09-DATABASE-DESIGN.md §5
+erDiagram
+  VENDORS ||--o{ VENDOR_CONTACTS : has
+  VENDORS ||--o{ BILLS : invoices
+  VENDORS ||--o{ PURCHASE_ORDERS : supplies
+  BILLS ||--o{ BILL_LINES : itemised
+  PURCHASE_ORDERS ||--o{ PURCHASE_ORDER_LINES : itemised
+  PURCHASE_ORDER_LINES ||--o{ PO_RECEIPTS : received
+  BILL_LINES }o--o| PURCHASE_ORDER_LINES : "three-way match"
+  ACCOUNTING_CODES ||--o{ ACCOUNTING_MAPPINGS : "targeted by"
+  EXPORT_BATCHES ||--o{ EXPORT_BATCH_ITEMS : contains
+
+  VENDORS {
+    uuid id PK
+    uuid organization_id FK
+    text name
+    text normalized_name
+    text tax_id
+    text status
+    uuid merged_into_id FK
+    bytea bank_details_encrypted
+  }
+  BILLS {
+    uuid id PK
+    uuid organization_id FK
+    uuid vendor_id FK
+    text bill_number
+    date issue_date
+    date due_date
+    numeric total_amount
+    char3 currency
+    text status
+    uuid approval_instance_id FK
+    timestamptz paid_at
+  }
+  BILL_LINES {
+    uuid id PK
+    uuid bill_id FK
+    int sequence
+    numeric quantity
+    numeric unit_amount
+    numeric line_amount
+    uuid accounting_code_id FK
+    uuid purchase_order_line_id FK
+  }
+  PURCHASE_ORDERS {
+    uuid id PK
+    uuid organization_id FK
+    text po_number
+    uuid vendor_id FK
+    numeric total_amount
+    char3 currency
+    text status
+    uuid approval_instance_id FK
+  }
+  PURCHASE_ORDER_LINES {
+    uuid id PK
+    uuid purchase_order_id FK
+    numeric quantity
+    numeric unit_amount
+    numeric received_quantity
+  }
+  PO_RECEIPTS {
+    uuid id PK
+    uuid purchase_order_line_id FK
+    numeric quantity
+    timestamptz received_at
+  }
+  ACCOUNTING_CODES {
+    uuid id PK
+    uuid organization_id FK
+    text code_type
+    text code
+    text name
+    bool is_active
+  }
+  ACCOUNTING_MAPPINGS {
+    uuid id PK
+    uuid organization_id FK
+    int priority
+    jsonb conditions
+    uuid gl_account_id FK
+    uuid cost_center_id FK
+    uuid tax_code_id FK
+  }
+  EXPORT_BATCHES {
+    uuid id PK
+    uuid organization_id FK
+    date period_start
+    date period_end
+    int row_count
+    bytea checksum_sha256
+    text storage_key
+  }

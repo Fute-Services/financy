@@ -1,0 +1,108 @@
+%% Financy — ERD: policies, approvals, spend requests, cards
+%% Source of truth: docs/09-DATABASE-DESIGN.md §3
+erDiagram
+  POLICIES ||--o{ POLICY_VERSIONS : "versioned as"
+  POLICY_VERSIONS ||--o{ POLICY_RULES : contains
+  SPEND_REQUESTS ||--o{ SPEND_REQUEST_ITEMS : "itemised by"
+  SPEND_REQUESTS ||--|| APPROVAL_INSTANCES : "authorised by"
+  APPROVAL_WORKFLOWS ||--o{ APPROVAL_STEP_TEMPLATES : defines
+  APPROVAL_INSTANCES ||--o{ APPROVAL_STEPS : has
+  APPROVAL_STEPS ||--o{ APPROVAL_STEP_APPROVERS : eligible
+  APPROVAL_STEPS ||--o{ APPROVAL_ACTIONS : records
+  MEMBERSHIPS ||--o{ APPROVAL_ACTIONS : acted
+  MEMBERSHIPS ||--o{ APPROVAL_DELEGATIONS : delegates
+  CARDS ||--o{ SPEND_LIMITS : "limit history"
+  POLICIES ||--o{ CARDS : governs
+
+  POLICIES {
+    uuid id PK
+    uuid organization_id FK
+    text name
+    text spend_types
+    int priority
+    text status
+    uuid current_version_id FK
+    timestamptz effective_from
+    timestamptz effective_to
+  }
+  POLICY_VERSIONS {
+    uuid id PK
+    uuid policy_id FK
+    int version
+    jsonb snapshot
+    timestamptz created_at
+  }
+  POLICY_RULES {
+    uuid id PK
+    uuid policy_version_id FK
+    int sequence
+    jsonb conditions
+    jsonb outcomes
+    bool is_terminal
+  }
+  SPEND_REQUESTS {
+    uuid id PK
+    uuid organization_id FK
+    text reference UK
+    uuid requester_membership_id FK
+    numeric amount
+    char3 currency
+    text status
+    jsonb policy_decision
+    uuid approval_instance_id FK
+    date valid_until
+    int version
+  }
+  APPROVAL_INSTANCES {
+    uuid id PK
+    uuid organization_id FK
+    text subject_type
+    uuid subject_id
+    text status
+    jsonb policy_decision_snapshot
+  }
+  APPROVAL_STEPS {
+    uuid id PK
+    uuid approval_instance_id FK
+    int sequence
+    text step_type
+    int quorum
+    text status
+    timestamptz due_at
+    text escalation_action
+  }
+  APPROVAL_ACTIONS {
+    uuid id PK
+    uuid approval_step_id FK
+    uuid acted_by_membership_id FK
+    uuid on_behalf_of_membership_id FK
+    text action
+    text comment
+    timestamptz created_at
+  }
+  APPROVAL_DELEGATIONS {
+    uuid id PK
+    uuid from_membership_id FK
+    uuid to_membership_id FK
+    timestamptz starts_at
+    timestamptz ends_at
+  }
+  CARDS {
+    uuid id PK
+    uuid organization_id FK
+    uuid holder_membership_id FK
+    numeric limit_amount
+    char3 limit_currency
+    text status
+    text provider
+    text provider_card_id
+    char4 last_four
+  }
+  SPEND_LIMITS {
+    uuid id PK
+    uuid card_id FK
+    numeric amount
+    char3 currency
+    text period
+    timestamptz effective_from
+  }
