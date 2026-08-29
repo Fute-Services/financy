@@ -1,0 +1,9 @@
+{
+  "extends": "@financy/config/tsconfig/react",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules"]
+}

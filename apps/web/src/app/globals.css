@@ -1,0 +1,7 @@
+@import 'tailwindcss';
+@import '@financy/ui/styles.css';
+
+/* Tailwind v4 needs to be told where to scan for class names when the source
+   lives outside this app — otherwise every utility used inside @financy/ui
+   is tree-shaken away and the design system renders unstyled. */
+@source '../../../../packages/ui/src/**/*.{ts,tsx}';
