@@ -18,11 +18,33 @@ export interface RequestContext {
   readonly membershipId?: string;
   readonly userId?: string;
   readonly sessionId?: string;
+  /** Recorded on every audit and security event, so they are attributable. */
+  readonly ipAddress?: string;
+  readonly userAgent?: string;
   /** When the request entered the process — the basis for its duration. */
   readonly startedAt: number;
 }
 
-const storage = new AsyncLocalStorage<RequestContext>();
+/**
+ * The store holds a **mutable** object, and `enterContext` mutates it.
+ *
+ * The obvious implementation — `storage.enterWith({ ...current, ...patch })` —
+ * is silently wrong here, and cost an afternoon to find. `enterWith` rebinds
+ * the store for the current execution and its descendants only; when the
+ * `AuthGuard`'s promise resolves and Nest calls the route handler, that handler
+ * runs in the *caller's* async context, which still holds the object the
+ * middleware created. The guard's organisation and membership vanish between
+ * the guard and the controller.
+ *
+ * Mutating the single object `runWithContext` established for the request
+ * makes the change visible everywhere in it, which is what the guards
+ * actually need. Isolation is unaffected: each request gets its own object.
+ */
+type MutableRequestContext = {
+  -readonly [K in keyof RequestContext]: RequestContext[K];
+};
+
+const storage = new AsyncLocalStorage<MutableRequestContext>();
 
 /** Run `fn` with `context` visible to everything it awaits. */
 export function runWithContext<T>(context: RequestContext, fn: () => T): T {
@@ -79,5 +101,5 @@ export function enterContext(patch: Partial<Omit<RequestContext, 'correlationId'
     throw new Error('enterContext called outside a request context.');
   }
 
-  storage.enterWith({ ...current, ...patch });
+  Object.assign(current, patch);
 }

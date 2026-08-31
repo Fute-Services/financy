@@ -27,6 +27,25 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   /** Tenant-scoped. This is what everything above the platform layer gets. */
   readonly client: TenantScopedPrismaClient;
 
+  /**
+   * The **unscoped** client. Almost nothing may use this.
+   *
+   * A handful of operations legitimately run before any tenant context exists,
+   * and the tenant extension would fail them closed — correctly, because at
+   * that moment there is genuinely no organisation to scope by:
+   *
+   * - **Login**, which resolves a user by email before knowing their org.
+   * - **Registration**, which creates the organisation it would scope to.
+   * - **Session resolution**, which is what establishes the context.
+   * - **Invitation acceptance**, where the token is the authorisation and it
+   *   determines which organisation is being joined.
+   *
+   * Every one of those is in `modules/auth`. Anywhere else, reaching for this
+   * means the tenant predicate is being bypassed, which is the bug this whole
+   * layer exists to prevent — use {@link client} and let it fail closed.
+   */
+  readonly unscoped: PrismaClient;
+
   constructor(
     private readonly config: ConfigService,
     private readonly logger: PinoLogger,
@@ -46,6 +65,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    this.unscoped = this.prisma;
     this.client = withTenantScope(this.prisma, getOrganizationId);
   }
 

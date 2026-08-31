@@ -31,8 +31,22 @@ export class RequestContextMiddleware implements NestMiddleware {
     // survives a handler that throws.
     response.setHeader(HEADER.correlationId, correlationId);
 
-    runWithContext({ correlationId, startedAt: Date.now() }, () => {
-      next();
-    });
+    // Captured here rather than in the audit service: by the time a service
+    // writes an event it has no request object, and passing one down every
+    // call chain is how it gets forgotten on the path that mattered.
+    const ipAddress = request.ip;
+    const userAgent = request.header('user-agent');
+
+    runWithContext(
+      {
+        correlationId,
+        startedAt: Date.now(),
+        ...(ipAddress === undefined ? {} : { ipAddress }),
+        ...(userAgent === undefined ? {} : { userAgent }),
+      },
+      () => {
+        next();
+      },
+    );
   }
 }

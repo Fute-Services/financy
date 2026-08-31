@@ -28,6 +28,10 @@ playwright-report/
 blob-report/
 .playwright/
 
+# Screenshots taken while checking a change locally. Useful to look at,
+# never worth committing.
+.shots/
+
 # ─── Local storage (LocalDocumentProvider) ───────────────────
 .storage/
 

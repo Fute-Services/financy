@@ -3,14 +3,10 @@ import { ROLE_PERMISSIONS, type RoleKey } from './permissions';
 /**
  * Session accessor.
  *
- * **Phase 0 placeholder.** Today this returns a fixed development session so
- * the shell, navigation, and permission-aware rendering can be built and seen.
- * In Phase 1 (roadmap task 1.3.4) it is replaced by a call to
- * `GET /v1/auth/session`, which returns the user, the active membership, the
- * role, and the server-resolved permission set.
- *
- * The shape below is deliberately identical to that endpoint's response, so
- * swapping the implementation touches this file and nothing else.
+ * The shape below is **exactly** `SessionResponse` from `@financy/contracts`,
+ * which is what `GET /v1/auth/session` returns. That endpoint now exists and
+ * works; wiring the browser to it is the next step (task 1.7.10), and keeping
+ * the shapes identical means that swap touches this file and nothing else.
  *
  * Nothing here is a security boundary. The permission set drives *rendering*
  * only — every endpoint re-checks server-side, independently
@@ -25,6 +21,7 @@ export interface SessionUser {
 
 export interface SessionOrganization {
   id: string;
+  slug: string;
   name: string;
   baseCurrency: string;
 }
@@ -32,6 +29,8 @@ export interface SessionOrganization {
 export interface Session {
   user: SessionUser;
   organization: SessionOrganization;
+  /** Every organisation this user belongs to, for the switcher. */
+  organizations: Array<{ id: string; slug: string; name: string; roleKey: RoleKey }>;
   roleKey: RoleKey;
   permissions: ReadonlySet<string>;
   /** True while any provider is a mock or sandbox adapter (ADR-0014). */
@@ -56,9 +55,13 @@ export function getSession(roleKey: RoleKey = 'ORG_ADMIN'): Session {
     },
     organization: {
       id: '01936d2a-0000-7000-8000-0000000000ff',
+      slug: 'acme',
       name: 'Acme Ltd',
       baseCurrency: 'USD',
     },
+    organizations: [
+      { id: '01936d2a-0000-7000-8000-0000000000ff', slug: 'acme', name: 'Acme Ltd', roleKey },
+    ],
     roleKey,
     permissions: new Set(ROLE_PERMISSIONS[roleKey]),
     isSandbox: true,

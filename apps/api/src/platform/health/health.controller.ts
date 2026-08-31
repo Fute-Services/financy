@@ -2,6 +2,7 @@ import type { LivenessResponse, ReadinessResponse } from '@financy/contracts';
 import { Controller, Get, HttpCode, Res } from '@nestjs/common';
 import type { Response } from 'express';
 
+import { Public } from '../authorization/index.js';
 import { HealthService } from './health.service.js';
 
 /** Injected rather than imported from `package.json`, which is not in `dist`. */
@@ -20,6 +21,10 @@ const VERSION = process.env['npm_package_version'] ?? '0.0.0';
  * still a contract, just a different one.
  */
 @Controller('health')
+// Both probes are unauthenticated. A probe has no session, and requiring one
+// would mean the orchestrator could not tell "the database is down" from
+// "authentication is down" — the two need very different responses.
+@Public()
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 

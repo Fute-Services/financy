@@ -7,7 +7,10 @@
  * domain module be tested without booting the framework.
  */
 
+export * from './audit/index.js';
+export * from './authorization/index.js';
 export * from './config/index.js';
+export * from './crypto/index.js';
 export * from './database/index.js';
 export * from './errors/index.js';
 export * from './health/index.js';
