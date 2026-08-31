@@ -1,8 +1,25 @@
 # 09 — Database Design
 
 **Status:** Baseline v1.0 — 2026-08-29
-**Engine:** PostgreSQL 16+ (development host runs 18.1)
+**Engine:** PostgreSQL 16+ — **the design. Not what is currently running.**
+**Running on:** MongoDB Atlas, temporarily. See ADR-0017.
 **ORM:** Prisma 6 — `packages/db/prisma/schema.prisma` is the executable form of this document.
+
+> **Read this before trusting anything below.**
+>
+> This document describes the schema as designed, for PostgreSQL. The system currently runs on
+> MongoDB, which enforces materially less: no composite foreign keys, so a child row _can_ name
+> another organisation's parent; no `CHECK` constraints; no `citext`; no `REVOKE` making the
+> audit trail immutable; no migrations. Row-level security, in §9 below, has nothing to attach
+> to and is not in force.
+>
+> Every constraint stated in this document as a database guarantee should be read, today, as a
+> guarantee carried by application code — the Prisma tenant extension, the Zod schemas at the
+> boundary, and the services. `packages/db/test/constraints.integration.test.ts` is the
+> authoritative, executable record of which is which: the assertions that no longer hold are
+> inverted rather than deleted, and each names what carries the rule instead.
+>
+> ADR-0017 lists what must be restored when PostgreSQL returns.
 
 ---
 

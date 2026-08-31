@@ -1,9 +1,15 @@
 {
+  // The emitting configuration. `noEmit` and `outDir` are restated rather than
+  // inherited, because the base sets `noEmit: true` for typechecking and an
+  // inherited `true` here silently produces an empty `dist` while `tsc` still
+  // exits 0 — a build that reports success and ships nothing.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "types": ["node"],
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "noEmit": false,
+    "outDir": "./dist"
   },
   "exclude": ["node_modules", "dist", "test", "src/**/*.test.ts", "src/**/*.spec.ts"],
   "include": ["src/**/*.ts"]

@@ -11,6 +11,45 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ## [Unreleased]
 
+### Changed
+
+- **The database is MongoDB Atlas, temporarily** (ADR-0017). PostgreSQL remains the design and
+  the documents still describe it; no PostgreSQL was reachable on the development host, and the
+  alternative was blocking Phase 1 entirely. Composite foreign keys, `CHECK` constraints,
+  `citext`, migrations, and the `REVOKE` that made the audit trail immutable are all gone —
+  every one of those guarantees now rests on application code. The thirteen constraint tests that
+  proved them are **inverted rather than deleted**, so the loss is recorded in executable form.
+  Tenant isolation is now enforced in one layer instead of two; treat it accordingly.
+
+### Fixed
+
+- **Logout did not end the session.** `updateMany({ where: { revokedAt: null } })` matches zero
+  documents on MongoDB, where an optional field that was never written is _absent_ rather than
+  null. The endpoint returned `204` and the session stayed fully usable. Revocation now reads
+  and writes by primary key, with unit and integration regression tests. The same code was
+  correct against PostgreSQL, which is what made it dangerous.
+- **`enterWith` does not survive an `await`.** The request context was lost after the first
+  asynchronous boundary, so `GET /auth/session` returned `401` immediately after a successful
+  login — and would have silently broken tenant scoping in Phase 2. The store object is now
+  mutated in place.
+- **Role provisioning expired its own transaction.** 185 grants were written as 185 `create`
+  calls, which is 185 round trips to a remote database and over five seconds. One `createMany`
+  now. The loop finished instantly against a local PostgreSQL, which is how it survived review.
+- Compiled `.js` and `.d.ts` files had been committed beside their sources in
+  `packages/db/test`, breaking lint. Removed, and the pattern is gitignored; the tsconfig that
+  scattered them is marked `noEmit`.
+
+### Testing
+
+- Vitest and Playwright timeouts raised, and Playwright capped at two workers. Registration
+  writes an organisation, five roles, 185 grants, a user, a membership, an entity, and 36
+  categories in one transaction: ~140ms against a local database, ~3s across the internet. The
+  tests were not wrong; the database moved.
+
+---
+
+## [Phase 0]
+
 Phase 0 — foundation. A clean clone installs, lints, typechecks, tests, and builds. No product
 code: everything here is the scaffolding the product is built on, and every piece of it is the
 mechanised form of a rule the documentation already states.

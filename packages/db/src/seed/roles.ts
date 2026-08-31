@@ -1,4 +1,10 @@
-import { ROLE_DESCRIPTIONS, ROLE_KEYS, ROLE_LABELS, ROLE_PERMISSIONS } from '@financy/contracts';
+import {
+  ROLE_DESCRIPTIONS,
+  ROLE_KEYS,
+  ROLE_LABELS,
+  ROLE_PERMISSIONS,
+  type RoleKey,
+} from '@financy/contracts';
 
 import { newId } from '@financy/core';
 
@@ -18,7 +24,7 @@ export interface RoleProvisionResult {
   rolesUpdated: number;
   grantsAdded: number;
   grantsRemoved: number;
-  roleIdByKey: Map<string, string>;
+  roleIdByKey: Map<RoleKey, string>;
 }
 
 /**

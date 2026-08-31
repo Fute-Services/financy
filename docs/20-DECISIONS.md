@@ -371,6 +371,64 @@ requires anyway.
 
 ---
 
+## ADR-0017 — MongoDB Atlas as a temporary substrate; PostgreSQL remains the design
+
+**Status:** Accepted · 2026-08-31 · **Temporary — revisit before Phase 2 closes**
+
+**Context.** Every document in this repository specifies PostgreSQL, and the Phase 1 schema was
+built for it: composite foreign keys carrying `organization_id` into every child table,
+`CHECK` constraints on currency codes and expiry ordering, `citext` for email, a `REVOKE`
+making the audit trail immutable, and row-level security planned for Phase 6. No PostgreSQL was
+reachable on the development machine — no Docker, no WSL, no administrator rights — and a
+managed MongoDB Atlas cluster was available immediately. The choice was between blocking all
+Phase 1 work and running the application on a substrate that enforces materially less.
+
+**Decision.** Run on MongoDB Atlas for now. PostgreSQL stays the target design; the documents are
+**not** rewritten to describe MongoDB, because they describe where this system is going.
+
+**What the database no longer enforces.** Each of these was a database guarantee and is now
+application code, which means each is now fallible:
+
+| Guarantee                                  | Was                              | Now rests on                            |
+| ------------------------------------------ | -------------------------------- | --------------------------------------- |
+| A child row cannot cross tenants           | Composite FK `(id, org_id)`      | Prisma tenant extension; the services   |
+| Currency is ISO-4217                       | `CHECK`                          | `currencyCodeSchema` at the boundary    |
+| A department is not its own parent         | `CHECK`                          | Nothing yet — see below                 |
+| Idle expiry precedes absolute expiry       | `CHECK`                          | The clamp in `SessionService.issue`     |
+| The audit trail cannot be edited           | `REVOKE UPDATE, DELETE`          | `AuditService` exposing no such method  |
+| One email is one account whatever the case | `citext` + unique                | `emailSchema` lower-casing before write |
+| Schema changes are reviewable and ordered  | Migrations under version control | `db push`; no migration history         |
+
+**Two semantic differences that produced real bugs**, both of which were _correct_ code against
+PostgreSQL — which is what made them dangerous:
+
+- An optional field never written is **absent**, not null, and `{ field: null }` does not match
+  absent. `updateMany({ where: { revokedAt: null } })` matched zero documents, so logout returned
+  `204` and left the session fully usable.
+- A unique index treats all missing values as one value, so `@@unique([organizationId, code])`
+  permitted exactly one department without a code per organisation.
+
+**Alternatives.** _An embedded PostgreSQL via `initdb`_ — was in fact provisioned and worked, but
+only on one machine, with no path to a shared environment. _SQLite_ — has `CHECK` and foreign
+keys, but no `citext`, no RLS, and a different concurrency model, so it defers the same problem.
+_Blocking on infrastructure_ — rejected: the schema, the tenancy extension, authentication, and
+the permission catalogue are all substrate-independent work that would have sat idle.
+
+**Consequences.** Phase 1 shipped. The cost is that tenant isolation — the single property this
+product cannot get wrong — is now enforced in one layer instead of two, and Phase 6's row-level
+security has nothing to attach to. `packages/db/test/constraints.integration.test.ts` documents
+this in executable form: the thirteen assertions that no longer hold are **inverted** rather than
+deleted, asserting that the database now accepts what it used to refuse. If one begins failing,
+something has started enforcing the rule again.
+
+**Revisit trigger.** Before the first customer's data exists, and no later than the close of
+Phase 2. Moving back requires: restoring the composite foreign keys and `CHECK` constraints,
+re-inverting that test file, writing a real initial migration, and adding the department
+self-parent constraint that currently has no home. Until then, treat every cross-tenant write
+path as unguarded by the database.
+
+---
+
 ## Open questions
 
 Business decisions, not engineering ones. Each needs an owner and a date.
@@ -383,4 +441,4 @@ Business decisions, not engineering ones. Each needs an owner and a date.
 | OQ-04 | What is the data residency requirement?                                              | Phase 6     | Affects hosting region and topology               |
 | OQ-05 | Is SOC 2 pursuit planned, and on what timeline?                                      | Post-pilot  | Affects logging retention and evidence collection |
 | OQ-06 | Is Slack/Teams approval notification required for the pilot?                         | Phase 4     | Affects `NotificationProvider` adapters           |
-| OQ-07 | What PostgreSQL credentials should the application use locally? (audit P1)           | **Phase 1** | Blocks running migrations                         |
+| OQ-07 | Where does a shared PostgreSQL live, and with which credentials? (audit P1)          | **Phase 2** | Keeps the system on MongoDB — see ADR-0017        |

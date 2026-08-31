@@ -1,4 +1,8 @@
 {
+  // Typechecking only. `noEmit` is deliberate: a stray `tsc -p` against this
+  // file once scattered .js and .d.ts beside the sources in `test/`, which
+  // broke lint and shadowed edits. `tsconfig.build.json` turns emit back on —
+  // if you add an emit setting here, check there too.
   "extends": "@financy/config/tsconfig/base",
   "compilerOptions": {
     "rootDir": ".",

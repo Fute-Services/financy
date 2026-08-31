@@ -89,33 +89,42 @@ scaffolding nobody could test:
 
 ### Epic 1.1 — Data foundation
 
-| ID    | Task                                                                                            | Status                |
-| ----- | ----------------------------------------------------------------------------------------------- | --------------------- |
-| 1.1.1 | Prisma schema: organisations, users, memberships, roles, permissions, role_permissions          | ✅                    |
-| 1.1.2 | Prisma schema: entities, departments (tree + path), projects, categories                        | ✅                    |
-| 1.1.3 | Prisma schema: sessions, mfa_factors, invitations, security_events                              | ✅                    |
-| 1.1.4 | Prisma schema: audit_events with the actor `CHECK` constraint                                   | ✅                    |
-| 1.1.5 | Composite unique keys `(id, organization_id)` on every tenant parent; composite FKs on children | ✅                    |
-| 1.1.6 | Initial migration; extensions; `REVOKE UPDATE, DELETE ON audit_events`                          | ✅ applied + verified |
-| 1.1.7 | System seed: the full permission catalogue, five system roles, default categories — idempotent  | ✅                    |
-| 1.1.8 | Demo seed: a realistic organisation                                                             | ⚠️ structure only     |
+| ID    | Task                                                                                            | Status                 |
+| ----- | ----------------------------------------------------------------------------------------------- | ---------------------- |
+| 1.1.1 | Prisma schema: organisations, users, memberships, roles, permissions, role_permissions          | ✅                     |
+| 1.1.2 | Prisma schema: entities, departments (tree + path), projects, categories                        | ✅                     |
+| 1.1.3 | Prisma schema: sessions, mfa_factors, invitations, security_events                              | ✅                     |
+| 1.1.4 | Prisma schema: audit_events with the actor `CHECK` constraint                                   | ⚠️ no CHECK on Mongo   |
+| 1.1.5 | Composite unique keys `(id, organization_id)` on every tenant parent; composite FKs on children | ⚠️ no composite FKs    |
+| 1.1.6 | Initial migration; extensions; `REVOKE UPDATE, DELETE ON audit_events`                          | ⚠️ db push, no grants  |
+| 1.1.7 | System seed: the full permission catalogue, five system roles, default categories — idempotent  | ✅                     |
+| 1.1.8 | Demo seed: a realistic organisation                                                             | ✅ with a demo account |
 
-**1.1.6 is applied and verified.** The development cluster is a second PostgreSQL 18 instance at
-`C:\Users\FS165\.financy-pg` on port **5443**, created with `initdb` — it needs no administrator
-rights, downloads nothing, and leaves the machine-wide `postgresql-x64-18` service on 5432
-untouched. `packages/db/test/constraints.integration.test.ts` asserts that each hand-written
-constraint actually refuses what it is meant to: the composite foreign key rejecting a cross-tenant
-reference, `UPDATE` and `DELETE` denied on both immutable tables, the audit actor rule, the ISO
-format checks, and the `citext` case-insensitivity of email.
+**1.1.4 through 1.1.6 are marked with a warning, and the warning is the point.** The schema is
+written and applied, but the system runs on MongoDB (ADR-0017), which has no `CHECK` constraints,
+no composite foreign keys, and no grants to revoke. Those three rows were complete against
+PostgreSQL and would be again; today the guarantees they name are carried by the Prisma tenant
+extension, the Zod schemas, and `AuditService` — application code, all of it fallible.
+
+`packages/db/test/constraints.integration.test.ts` is the honest record. Under PostgreSQL it
+proved thirteen database guarantees; those thirteen assertions are now **inverted** rather than
+deleted, asserting that the database accepts what it used to refuse and naming what carries each
+rule instead. Marking these tasks done would have been the easy lie.
+
+The development cluster built for this — a second PostgreSQL 18 instance under the user profile on
+port **5443**, created with `initdb`, needing no administrator rights and leaving the machine-wide
+service on 5432 untouched — still works, and is how PostgreSQL comes back.
 
 **The role model was corrected here.** `roles.organization_id` was specified as nullable for system
 roles, which cannot satisfy the composite foreign key from `memberships` — no membership could have
 held a role at all. Every organisation now owns its five, provisioned at registration. See
 `docs/09 §7.4a`; the integration suite is what caught it.
 
-**1.1.8 creates no people.** A membership needs a user, a user needs an argon2id hash, and the
-hasher belongs with authentication in task 1.3.1 — it cannot live in `@financy/core`, which is
-compiled into the browser bundle. Demo people land with 1.3.1.
+**1.1.8 now creates a person**, which it could not before 1.3.1 existed: a membership needs a
+user, a user needs an argon2id hash, and the hasher cannot live in `@financy/core` because that
+package is compiled into the browser bundle. With authentication built, the demo account is created
+through the real registration endpoint rather than by inserting a row — an account seeded with a
+hash the real verifier cannot read is worse than no account at all.
 
 **1.4.1 (the permission catalogue as typed constants) was brought forward**, because 1.1.7 seeds
 from it. It lives in `@financy/contracts` and is the single definition shared by the seed, the
