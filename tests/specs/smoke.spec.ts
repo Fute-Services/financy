@@ -54,3 +54,44 @@ test.describe('smoke', () => {
     expect(errors).toEqual([]);
   });
 });
+
+/**
+ * The public site.
+ *
+ * `/` is the landing page now, not a redirect into the application. These
+ * assertions exist because the page makes claims, and the one claim that must
+ * never quietly disappear is the disclaimer: this product is not a bank and
+ * holds no compliance certification.
+ */
+test.describe('landing page', () => {
+  test('renders the hero and both calls to action', async ({ page }) => {
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Most companies discover');
+    await expect(page.getByRole('link', { name: 'Create an organisation' }).first()).toBeVisible();
+  });
+
+  test('states plainly that it is not a bank and holds no certification', async ({ page }) => {
+    await page.goto('/');
+
+    const footer = page.locator('footer');
+    await expect(footer).toContainText('not a bank');
+    await expect(footer).toContainText('no compliance certification');
+  });
+
+  test('does not send a signed-out visitor into the application', async ({ page }) => {
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test('the calls to action reach sign in and sign up', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('link', { name: 'Get started' }).click();
+    await expect(page).toHaveURL(/\/register$/);
+
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Sign in' }).first().click();
+    await expect(page).toHaveURL(/\/login$/);
+  });
+});
