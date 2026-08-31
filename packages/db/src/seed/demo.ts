@@ -165,36 +165,39 @@ export async function seedDemo(prisma: PrismaClient): Promise<DemoSeedResult> {
     // ── Categories ────────────────────────────────────────────────────────
     // The same tree every organisation gets at registration, applied here
     // directly so the demo matches a freshly registered organisation.
-    const categoryIdByKey = new Map<string, string>();
+    // One read and one write, rather than two round trips per category.
+    // Thirty-six of each against a remote database is several seconds, and an
+    // interactive transaction does not have several seconds to spare.
+    const existingCategories = await tx.category.findMany({
+      where: { organizationId },
+      select: { id: true, key: true },
+    });
 
-    for (const category of flattenCategories(DEFAULT_CATEGORIES)) {
-      const existing = await tx.category.findFirst({
-        where: { organizationId, key: category.key },
-        select: { id: true },
-      });
+    const categoryIdByKey = new Map(existingCategories.map((row) => [row.key, row.id]));
 
-      if (existing !== null) {
-        categoryIdByKey.set(category.key, existing.id);
-        continue;
-      }
+    // Ids are generated up front so a child can reference its parent without
+    // waiting for the parent's insert to return. `flattenCategories` emits
+    // parents before children, so the map is always populated in time.
+    const newCategories = flattenCategories(DEFAULT_CATEGORIES)
+      .filter((category) => !categoryIdByKey.has(category.key))
+      .map((category) => {
+        const id = newId();
+        categoryIdByKey.set(category.key, id);
 
-      const id = newId();
-      await tx.category.create({
-        data: {
+        return {
           id,
           organizationId,
           key: category.key,
           name: category.name,
           isSystem: true,
-          // `flattenCategories` emits parents before children, so the parent
-          // is always already in the map.
           parentId:
             category.parentKey === null ? null : (categoryIdByKey.get(category.parentKey) ?? null),
-        },
+        };
       });
 
-      categoryIdByKey.set(category.key, id);
-      result.categoriesCreated += 1;
+    if (newCategories.length > 0) {
+      await tx.category.createMany({ data: newCategories });
+      result.categoriesCreated = newCategories.length;
     }
 
     // ── Projects ──────────────────────────────────────────────────────────

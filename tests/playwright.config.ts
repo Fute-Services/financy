@@ -45,9 +45,17 @@ export default defineConfig({
    * needs it more than occasionally is a spec to fix.
    */
   retries: isCI ? 1 : 0,
-  // Left to Playwright locally (it picks half the cores); pinned in CI, where
-  // the runner reports more cores than the two the stack can actually feed.
-  ...(isCI ? { workers: 2 } : {}),
+  /**
+   * Two workers, everywhere.
+   *
+   * Playwright's local default is half the cores, and that was fine when the
+   * database was a local PostgreSQL. It is not fine against Atlas: every
+   * registration is a multi-write transaction crossing the internet, so six
+   * workers queue behind each other and behind the dev server's first compile
+   * of each route, and journeys that pass alone time out together. CI has the
+   * same ceiling for the same reason.
+   */
+  workers: 2,
 
   reporter: isCI
     ? [
@@ -57,7 +65,18 @@ export default defineConfig({
       ]
     : [['list'], ['html', { open: 'never' }]],
 
-  timeout: 30_000,
+  /**
+   * Sixty seconds, because the slowest journey here is registration and
+   * registration is genuinely slow: one transaction writing an organisation,
+   * five roles, 185 grants, a user, a membership, an entity, and 36 categories,
+   * each round trip going to a remote database. It takes ~3s against Atlas
+   * versus ~140ms against a local PostgreSQL, and a locally-run spec pays the
+   * dev server's first compile of each route on top.
+   *
+   * The per-assertion timeout stays short. A slow write is expected; an element
+   * that takes five seconds to appear is a bug.
+   */
+  timeout: 60_000,
   expect: { timeout: 5_000 },
 
   use: {

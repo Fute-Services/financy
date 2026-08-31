@@ -64,8 +64,10 @@ export class SessionService {
         tokenHash: hashToken(token),
         ipAddress: context.ipAddress ?? null,
         userAgent: context.userAgent ?? null,
-        // The database CHECK refuses idle > absolute; clamping here means a
-        // long idle timeout in configuration cannot make login fail outright.
+        // Clamped, and this is now the only thing enforcing it. PostgreSQL had
+        // a CHECK refusing idle > absolute; MongoDB has no CHECK constraints, so
+        // a long idle timeout in configuration would otherwise produce a session
+        // whose idle window can never fire.
         idleExpiresAt: idleExpiresAt < absoluteExpiresAt ? idleExpiresAt : absoluteExpiresAt,
         absoluteExpiresAt,
       },
@@ -140,11 +142,29 @@ export class SessionService {
     });
   }
 
+  /**
+   * Revoke one session.
+   *
+   * Reads before writing rather than filtering on `revokedAt: null`, and that
+   * is not a style choice. On MongoDB an optional field that was never set is
+   * **absent**, not null, and Prisma's filter distinguishes the two: the
+   * predicate matched zero documents, `updateMany` reported success, and
+   * logout returned `204` while leaving the session fully usable. The same
+   * code was correct against PostgreSQL, which is what made it dangerous.
+   *
+   * A read plus a write by primary key behaves identically on both, and still
+   * preserves the original timestamp when a session is revoked twice.
+   */
   async revoke(tx: Prisma.TransactionClient, sessionId: string, reason: string): Promise<void> {
-    await tx.session.updateMany({
-      // `updateMany` with a `revokedAt: null` predicate, so revoking twice does
-      // not overwrite the original reason and timestamp with a later one.
-      where: { id: sessionId, revokedAt: null },
+    const existing = await tx.session.findUnique({
+      where: { id: sessionId },
+      select: { revokedAt: true },
+    });
+
+    if (existing === null || existing.revokedAt !== null) return;
+
+    await tx.session.update({
+      where: { id: sessionId },
       data: { revokedAt: new Date(), revokedReason: reason },
     });
   }
@@ -162,12 +182,24 @@ export class SessionService {
     reason: string,
     exceptSessionId?: string,
   ): Promise<number> {
+    // Selected by id, for the same reason `revoke` reads first: filtering on
+    // `revokedAt: null` matches nothing on MongoDB, where an unset optional
+    // field is absent rather than null. Here the failure would be worse than a
+    // broken logout — deactivating a member would report success and leave
+    // every one of their sessions working.
+    const live = await tx.session.findMany({
+      where: { userId },
+      select: { id: true, revokedAt: true },
+    });
+
+    const toRevoke = live
+      .filter((session) => session.revokedAt === null && session.id !== exceptSessionId)
+      .map((session) => session.id);
+
+    if (toRevoke.length === 0) return 0;
+
     const result = await tx.session.updateMany({
-      where: {
-        userId,
-        revokedAt: null,
-        ...(exceptSessionId === undefined ? {} : { id: { not: exceptSessionId } }),
-      },
+      where: { id: { in: toRevoke } },
       data: { revokedAt: new Date(), revokedReason: reason },
     });
 

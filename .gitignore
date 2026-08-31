@@ -63,3 +63,10 @@ desktop.ini
 .cache/
 tmp/
 temp/
+
+# Compiled output that once landed beside its source. `packages/db/test` had
+# .js and .d.ts files committed next to the .ts, which broke lint (the parser
+# is given a project that does not list them) and silently shadowed edits.
+packages/*/test/*.js
+packages/*/test/*.d.ts
+packages/*/test/*.map

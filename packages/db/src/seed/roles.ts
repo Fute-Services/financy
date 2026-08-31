@@ -1,4 +1,5 @@
 import { ROLE_DESCRIPTIONS, ROLE_KEYS, ROLE_LABELS, ROLE_PERMISSIONS } from '@financy/contracts';
+
 import { newId } from '@financy/core';
 
 import type { Prisma } from '@prisma/client';
@@ -135,10 +136,24 @@ export async function provisionOrganizationRoles(
     const toRemove = [...currentIds].filter((id) => !desired.has(id));
 
     if (toAdd.length > 0) {
+      // One round trip, not one per grant.
+      //
+      // A loop of `create` calls was tried and is wrong against a remote
+      // database: 185 grants meant 185 round trips to Atlas, which took over
+      // five seconds and expired the interactive transaction. Against a local
+      // PostgreSQL the same loop finished instantly, which is exactly how that
+      // mistake survives review.
+      //
+      // MongoDB has no composite primary key, so each join row carries its own
+      // `_id`. The unique index on (roleId, permissionId) is what still makes a
+      // duplicate grant impossible. `skipDuplicates` is PostgreSQL-only, so a
+      // concurrent provisioning run aborts this transaction instead of being
+      // absorbed — which is correct: the retry finds the rows already present
+      // and adds nothing.
       await tx.rolePermission.createMany({
-        data: toAdd.map((permissionId) => ({ roleId, permissionId })),
-        skipDuplicates: true,
+        data: toAdd.map((permissionId) => ({ id: newId(), roleId, permissionId })),
       });
+
       result.grantsAdded += toAdd.length;
     }
 

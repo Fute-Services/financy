@@ -357,24 +357,33 @@ export class AuthService {
   ): Promise<void> {
     const idByKey = new Map<string, string>();
 
-    // `flattenCategories` emits parents before children, so a parent is always
-    // already in the map by the time its child needs it.
-    for (const category of flattenCategories(DEFAULT_CATEGORIES)) {
+    /**
+     * One insert for the whole tree.
+     *
+     * Ids are generated up front so a child can name its parent without
+     * waiting for the parent's insert to return — `flattenCategories` emits
+     * parents first, so the map is always populated in time.
+     *
+     * Inserting them one at a time is thirty-six round trips inside the
+     * registration transaction. Against a local database that is free; against
+     * a hosted one it is most of the five-second interactive-transaction
+     * budget, and registration starts failing under no load at all.
+     */
+    const rows = flattenCategories(DEFAULT_CATEGORIES).map((category) => {
       const id = newId();
-
-      await tx.category.create({
-        data: {
-          id,
-          organizationId,
-          key: category.key,
-          name: category.name,
-          isSystem: true,
-          parentId: category.parentKey === null ? null : (idByKey.get(category.parentKey) ?? null),
-        },
-      });
-
       idByKey.set(category.key, id);
-    }
+
+      return {
+        id,
+        organizationId,
+        key: category.key,
+        name: category.name,
+        isSystem: true,
+        parentId: category.parentKey === null ? null : (idByKey.get(category.parentKey) ?? null),
+      };
+    });
+
+    await tx.category.createMany({ data: rows });
   }
 }
 

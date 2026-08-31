@@ -100,10 +100,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   /**
    * A liveness probe for the connection itself.
    *
-   * `SELECT 1` rather than a table read, so readiness does not depend on any
-   * particular migration having been applied.
+   * The server's own `ping` command rather than a collection read, so
+   * readiness does not depend on any particular collection existing or on the
+   * application user holding read access to it.
    */
   async ping(): Promise<void> {
-    await this.prisma.$queryRaw`SELECT 1`;
+    await this.prisma.$runCommandRaw({ ping: 1 });
   }
 }

@@ -15,6 +15,13 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.{test,spec}.ts', 'test/**/*.{test,spec}.ts'],
     setupFiles: ['./test/setup-env.ts'],
+    // Atlas is a remote database: registration writes an organisation, five
+    // roles, 185 grants, a user, a membership, an entity, and 36 categories,
+    // and each round trip crosses the internet. The same transaction took
+    // ~140ms against a local PostgreSQL and takes ~2.9s here, so the default
+    // five-second timeout expires on any test doing two of them.
+    testTimeout: 30_000,
+    hookTimeout: 90_000,
     clearMocks: true,
     restoreMocks: true,
     coverage: {

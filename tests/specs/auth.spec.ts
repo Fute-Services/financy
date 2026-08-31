@@ -58,7 +58,11 @@ test.describe('authentication', () => {
     await page.fill('#password', PASSWORD);
     await page.click('button[type=submit]');
 
-    await expect(page).toHaveURL(/\/overview$/);
+    // An explicit timeout, unlike every other assertion in this file. The
+    // default five seconds is for something appearing on a page that has
+    // already loaded; this waits on registration's whole transaction reaching
+    // a remote database, which takes about three seconds by itself.
+    await expect(page).toHaveURL(/\/overview$/, { timeout: 30_000 });
     // The name comes back from the database, not from the form state.
     await expect(page.locator('nav')).toContainText(`Signup ${id}`.slice(0, 12));
   });
