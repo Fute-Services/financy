@@ -20,11 +20,16 @@ import { useSession } from './session-provider';
 /**
  * Highest roadmap phase whose modules actually exist.
  *
- * Raised as each phase lands. Phase 1 is in progress — authentication,
- * sessions, and the audit trail work end to end; the screens over them are
- * being built — so the markers stay honest until those screens are real.
+ * Raised as each phase lands, and only once the *screens* are real — not once
+ * the endpoints behind them are. Phase 1 now qualifies: People, Settings, and
+ * the Audit log each read a live endpoint, enforce their permission, and show
+ * the caller's own organisation and nobody else's.
+ *
+ * Everything from Phase 2 up is still a stub, and the palette marks it as one.
+ * Raising this number ahead of the screens would silently turn every "not
+ * built yet" marker into a promise the application does not keep.
  */
-const BUILT_PHASES = 0;
+const BUILT_PHASES = 1;
 
 /**
  * Counts beside a pinned item, keyed by href.

@@ -12,6 +12,9 @@ import {
   RequestContextMiddleware,
 } from './platform/index.js';
 import { AuthModule } from './modules/auth/index.js';
+import { AuditReadModule } from './modules/audit/index.js';
+import { OrganizationModule } from './modules/organization/index.js';
+import { PeopleModule } from './modules/people/index.js';
 
 /**
  * The application root.
@@ -27,7 +30,17 @@ import { AuthModule } from './modules/auth/index.js';
  * first thing worth reading.
  */
 @Module({
-  imports: [ConfigModule, LoggingModule, DatabaseModule, AuditModule, HealthModule, AuthModule],
+  imports: [
+    ConfigModule,
+    LoggingModule,
+    DatabaseModule,
+    AuditModule,
+    HealthModule,
+    AuthModule,
+    PeopleModule,
+    OrganizationModule,
+    AuditReadModule,
+  ],
   providers: [
     {
       // Registered here rather than with `app.useGlobalFilters` so it takes

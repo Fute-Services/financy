@@ -22,6 +22,19 @@ export default defineConfig({
     // five-second timeout expires on any test doing two of them.
     testTimeout: 30_000,
     hookTimeout: 90_000,
+    /**
+     * One file at a time.
+     *
+     * Both end-to-end suites register organisations, and every registration is
+     * an interactive transaction against the same remote Atlas cluster. Run
+     * concurrently they contend on it and registration starts returning `500`
+     * — a failure with nothing wrong in it except the two suites' timing.
+     *
+     * Nothing is lost by serialising: these tests are latency-bound on a
+     * single shared database, so the "parallel" runs were queueing on that
+     * cluster anyway. The unit tests in `src/` cost milliseconds either way.
+     */
+    fileParallelism: false,
     clearMocks: true,
     restoreMocks: true,
     coverage: {

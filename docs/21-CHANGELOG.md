@@ -11,6 +11,22 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ## [Unreleased]
 
+### Added
+
+- **People, Settings, and the Audit log** — the three screens that finish Phase 1. Each reads a
+  live endpoint (`GET /v1/people`, `GET /v1/organization`, `GET /v1/audit-events`), enforces its
+  permission at the route as well as in the navigation, and shows the caller's own organisation
+  and nobody else's. `BUILT_PHASES` is raised from `0` to `1`, so the shell stops marking them
+  unbuilt. All three are read-only until task 1.5 adds the writes with the concurrency control and
+  audit events they need.
+- The audit endpoint has no `POST` and no `DELETE`, permanently. An endpoint that accepted an
+  audit event would accept a false one, and a trail somebody can prune is not evidence.
+- `packages/db/test/enum-parity.test.ts` — asserts the contract's hand-written enums match the
+  Prisma ones. `@financy/contracts` compiles into the browser and cannot import Prisma, so it
+  restates every enum; this package can see both. The first draft of `people.ts` wrote
+  `ORGANIZATION` where the schema says `ORGANISATION` and gave `MembershipStatus` four values
+  where it has two — both typechecked perfectly.
+
 ### Changed
 
 - **The database is MongoDB Atlas, temporarily** (ADR-0017). PostgreSQL remains the design and
@@ -22,6 +38,16 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   Tenant isolation is now enforced in one layer instead of two; treat it accordingly.
 
 ### Fixed
+
+- **A bare `organization.findFirst()` returned another tenant's organisation.** `Organization` is
+  a global model in the tenant registry — scoping the tenant by its own id would be circular — so
+  the extension adds no predicate and the caller must supply one. Caught by the end-to-end suite,
+  not by review.
+- **`where: { archivedAt: null }` silently returned nothing**, emptying the entities and
+  departments tables, for the same reason logout once failed: on MongoDB an optional field that
+  was never written is absent, not null. Filtered in the application instead.
+- `membership.groupBy({ _count: { _all: true } })` makes Prisma's MongoDB query engine panic. The
+  aggregation runs in the application now.
 
 - **Logout did not end the session.** `updateMany({ where: { revokedAt: null } })` matches zero
   documents on MongoDB, where an optional field that was never written is _absent_ rather than

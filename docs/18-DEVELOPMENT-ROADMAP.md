@@ -130,6 +130,26 @@ hash the real verifier cannot read is worse than no account at all.
 from it. It lives in `@financy/contracts` and is the single definition shared by the seed, the
 guard, and the frontend.
 
+**Phase 1 screens are real, and `BUILT_PHASES` says so.** People, Settings, and the Audit log
+each read a live endpoint — `GET /v1/people`, `GET /v1/organization`, `GET /v1/audit-events` —
+enforce their permission at the route as well as in the navigation, and show the caller’s own
+organisation and nobody else’s. The shell marker was raised from `0` to `1` only once those
+three rendered real data; raising it earlier would have turned every honest "not built yet"
+into a promise the application does not keep.
+
+All three are **read-only**, deliberately. Inviting a member, changing a role, editing the
+department tree, and renaming the organisation are writes that need optimistic concurrency, an
+audit event each, and a self-elevation refusal for role changes. They are task 1.5. A save
+button without those would silently discard a colleague’s concurrent edit, which is worse than
+no button at all (docs/19 §5).
+
+**Two tenant-isolation bugs were caught by the end-to-end suite here, not by review.** A bare
+`organization.findFirst()` returned _another tenant’s_ organisation, because `Organization` is
+a global model in the tenant registry — scoping the tenant by its own id would be circular, so
+the extension adds no predicate and the caller must pass one. And `where: { archivedAt: null }`
+silently returned nothing at all, because on MongoDB an unset optional field is absent rather
+than null (ADR-0017). Both were plausible code that a reader would have approved.
+
 ### Epic 1.2 — Platform layer
 
 | ID     | Task                                                                            |
