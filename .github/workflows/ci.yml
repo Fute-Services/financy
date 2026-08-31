@@ -316,6 +316,23 @@ jobs:
         run: pnpm audit --audit-level high --prod
 
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
+        # The gitleaks **binary** is MIT-licensed and free; only the Action
+        # wrapper requires a paid licence for organisations, which is what this
+        # repository is. Running the release directly is the same scanner
+        # without the licence gate, and pinning the version means a new
+        # upstream release cannot change what the gate accepts overnight.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          # `git` rather than `dir`: the question is whether a secret was ever
+          # **committed**, and `dir` answers a different one — it walks the
+          # working tree including gitignored build output, which produced 27
+          # false positives from webpack cache packs the first time this ran.
+          #
+          # `--redact` so a finding does not print the secret it found into a
+          # build log, which would leak it a second time. `fetch-depth: 0` on
+          # the checkout above is what makes the whole history visible here.
+          /tmp/gitleaks git . --redact --exit-code 1
