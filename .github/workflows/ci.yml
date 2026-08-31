@@ -125,7 +125,11 @@ jobs:
       DATABASE_TEST_URL: mongodb://localhost:27017/financy_test?directConnection=true
       APP_ENV: test
       NODE_ENV: test
-      LOG_LEVEL: fatal
+      # `error`, not `fatal`. A suite that fails with "500 Internal Server
+      # Error" and logs nothing about why costs a push-and-wait cycle per
+      # guess. Handled errors still log at debug and stay quiet; this only
+      # surfaces the ones that already failed the build.
+      LOG_LEVEL: error
       LOG_PRETTY: 'false'
 
     steps:
