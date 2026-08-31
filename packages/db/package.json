@@ -33,7 +33,9 @@
     "seed:system": "tsx src/seed/index.ts --system",
     "seed:demo": "tsx src/seed/index.ts --demo",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "verify:constraints": "vitest run test/constraints.integration.test.ts"
+    "verify:constraints": "vitest run test/constraints.integration.test.ts",
+    "push": "prisma db push --skip-generate",
+    "push:reset": "prisma db push --force-reset --skip-generate"
   },
   "dependencies": {
     "@financy/contracts": "workspace:*",

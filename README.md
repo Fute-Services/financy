@@ -47,22 +47,36 @@ pnpm dev                        # 5 · web :3100 · api :4100
 
 ### Provisioning the database
 
-The application must **never** connect as the `postgres` superuser, in any environment. Create a
-least-privilege role once:
+The database is **MongoDB**, temporarily; PostgreSQL remains the design. ADR-0017 in
+`docs/20-DECISIONS.md` records why, exactly which guarantees that costs, and what has to be
+restored when PostgreSQL returns. Read it before trusting `docs/09-DATABASE-DESIGN.md`, which
+describes the schema as designed rather than as it currently runs.
 
-```sql
-CREATE ROLE financy_app WITH LOGIN PASSWORD '<generated>';
-CREATE DATABASE financy_dev  OWNER financy_app;
-CREATE DATABASE financy_test OWNER financy_app;
+Whatever `DATABASE_URL` points at must be a **replica set**. Every write path in this
+application runs inside an interactive transaction, and MongoDB has no transactions on a
+standalone server. A single node is enough:
 
-\c financy_dev
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS citext;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS btree_gin;
+```bash
+# A single-node replica set, initiated for you on startup.
+docker run -d -p 27017:27017 --name financy-mongo mongodb/mongodb-atlas-local
 ```
 
-Then set `DATABASE_URL` in `.env`.
+```bash
+# .env
+DATABASE_URL=mongodb://localhost:27017/financy_dev?directConnection=true
+```
+
+Then create the collections and indexes:
+
+```bash
+pnpm db:push            # no migration history under Mongo — see ADR-0017
+pnpm db:seed:system     # the permission catalogue, in every environment
+pnpm db:seed:demo:full  # a demo organisation, with accounts you can sign in as
+```
+
+Never connect as the admin or root user, in any environment — create a user scoped to this
+database with `readWrite` and nothing more. The config schema refuses a PostgreSQL superuser
+outright, and the same rule applies here.
 
 ### Local infrastructure
 

@@ -101,24 +101,28 @@ jobs:
     timeout-minutes: 15
 
     services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
+      # A single-node replica set, which Prisma requires: every write path in
+      # this application runs inside an interactive transaction, and MongoDB
+      # has no transactions on a standalone server. `mongodb-atlas-local`
+      # initiates the replica set on startup, so there is no separate
+      # `rs.initiate()` step to race against the health check.
+      mongodb:
+        image: mongodb/mongodb-atlas-local:latest
         ports:
-          - 5432:5432
+          - 27017:27017
         options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 40s
 
     env:
-      # The application never connects as the superuser, here included.
-      DATABASE_URL: postgresql://financy_app:financy_app@localhost:5432/financy_test
-      DATABASE_TEST_URL: postgresql://financy_app:financy_app@localhost:5432/financy_test
+      # `directConnection` because the replica set advertises a hostname the
+      # runner cannot resolve; without it the driver discovers that name from
+      # the hello response and then fails to reach it.
+      DATABASE_URL: mongodb://localhost:27017/financy_test?directConnection=true
+      DATABASE_TEST_URL: mongodb://localhost:27017/financy_test?directConnection=true
       APP_ENV: test
       NODE_ENV: test
       LOG_LEVEL: fatal
@@ -135,23 +139,6 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Provision the database
-        # Mirrors infra/postgres/init — same role, same extensions — so the
-        # container service and docker-compose stay interchangeable.
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
-            CREATE ROLE financy_app WITH LOGIN PASSWORD 'financy_app';
-            CREATE DATABASE financy_test OWNER financy_app;
-          SQL
-          psql -h localhost -U postgres -d financy_test -v ON_ERROR_STOP=1 <<'SQL'
-            CREATE EXTENSION IF NOT EXISTS pgcrypto;
-            CREATE EXTENSION IF NOT EXISTS citext;
-            CREATE EXTENSION IF NOT EXISTS pg_trgm;
-            CREATE EXTENSION IF NOT EXISTS btree_gin;
-          SQL
-
       - name: Build
         # Before the migration and the seed, not after: the seed runs from
         # source through tsx but imports `@financy/core` by its package entry,
@@ -159,8 +146,12 @@ jobs:
         # that says nothing about ordering.
         run: pnpm build
 
-      - name: Apply migrations
-        run: pnpm db:migrate:deploy
+      - name: Create the collections and indexes
+        # `db push`, not `migrate deploy`: MongoDB has no migration history
+        # under Prisma, so there is nothing to replay. This is the loss ADR-0017
+        # records — a schema change reaches an environment with no reviewable
+        # artefact describing it.
+        run: pnpm db:push
 
       - name: Seed the permission catalogue
         # The integration suite provisions organisations, and provisioning
@@ -198,23 +189,25 @@ jobs:
     timeout-minutes: 20
 
     services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
+      # A single-node replica set, which Prisma requires: every write path in
+      # this application runs inside an interactive transaction, and MongoDB
+      # has no transactions on a standalone server. `mongodb-atlas-local`
+      # initiates the replica set on startup, so there is no separate
+      # `rs.initiate()` step to race against the health check.
+      mongodb:
+        image: mongodb/mongodb-atlas-local:latest
         ports:
-          - 5432:5432
+          - 27017:27017
         options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 40s
 
     env:
       CI: 'true'
-      DATABASE_URL: postgresql://financy_app:financy_app@localhost:5432/financy_dev
+      DATABASE_URL: mongodb://localhost:27017/financy_dev?directConnection=true
       APP_ENV: test
       NODE_ENV: test
       LOG_LEVEL: fatal
@@ -245,21 +238,6 @@ jobs:
             echo "SIGNED_URL_SECRET=$(openssl rand -base64 32)"
           } >> "$GITHUB_ENV"
 
-      - name: Provision the database
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
-            CREATE ROLE financy_app WITH LOGIN PASSWORD 'financy_app';
-            CREATE DATABASE financy_dev OWNER financy_app;
-          SQL
-          psql -h localhost -U postgres -d financy_dev -v ON_ERROR_STOP=1 <<'SQL'
-            CREATE EXTENSION IF NOT EXISTS pgcrypto;
-            CREATE EXTENSION IF NOT EXISTS citext;
-            CREATE EXTENSION IF NOT EXISTS pg_trgm;
-            CREATE EXTENSION IF NOT EXISTS btree_gin;
-          SQL
-
       - name: Build
         # First, for two reasons: Playwright starts the apps itself and they
         # need their dependencies built, and the seed imports `@financy/core`
@@ -267,9 +245,9 @@ jobs:
         # generates the Prisma client, so no separate step for it.
         run: pnpm build
 
-      - name: Apply migrations and seed
+      - name: Create the collections, then seed
         run: |
-          pnpm db:migrate:deploy
+          pnpm db:push
           pnpm db:seed
 
       - name: Install Chromium

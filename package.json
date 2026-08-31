@@ -32,7 +32,9 @@
     "diagrams": "node scripts/gen-diagrams.mjs",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "clean": "turbo run clean && node scripts/clean.mjs",
-    "db:seed:demo:full": "pnpm --filter @financy/api seed:demo"
+    "db:seed:demo:full": "pnpm --filter @financy/api seed:demo",
+    "db:push": "pnpm --filter @financy/db push",
+    "db:push:reset": "pnpm --filter @financy/db push:reset"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
