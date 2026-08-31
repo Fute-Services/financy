@@ -132,20 +132,21 @@ side fails the build.
 
 ## Commands
 
-| Command                       | Does                                         |
-| ----------------------------- | -------------------------------------------- |
-| `pnpm dev`                    | Run everything in watch mode                 |
-| `pnpm build`                  | Build all packages                           |
-| `pnpm check`                  | Lint + typecheck + test — run before pushing |
-| `pnpm test`                   | Unit, integration, and API tests             |
-| `pnpm test:coverage`          | Tests with coverage thresholds enforced      |
-| `pnpm test:e2e`               | Playwright — starts the whole stack itself   |
-| `pnpm lint` / `pnpm lint:fix` | ESLint                                       |
-| `pnpm format`                 | Prettier                                     |
-| `pnpm db:migrate`             | Apply migrations (development)               |
-| `pnpm db:studio`              | Prisma Studio                                |
-| `pnpm diagrams`               | Regenerate `docs/diagrams/*.mmd`             |
-| `pnpm clean`                  | Remove build output                          |
+| Command                       | Does                                            |
+| ----------------------------- | ----------------------------------------------- |
+| `pnpm dev`                    | Run everything in watch mode                    |
+| `pnpm build`                  | Build all packages                              |
+| `pnpm check`                  | Lint + typecheck + test — run before pushing    |
+| `pnpm test`                   | Unit, integration, and API tests                |
+| `pnpm test:coverage`          | Tests with coverage thresholds enforced         |
+| `pnpm test:e2e`               | Playwright — starts the whole stack itself      |
+| `pnpm lint` / `pnpm lint:fix` | ESLint                                          |
+| `pnpm format`                 | Prettier                                        |
+| `pnpm db:migrate`             | Apply migrations (development)                  |
+| `pnpm db:studio`              | Prisma Studio                                   |
+| `pnpm diagrams`               | Regenerate `docs/diagrams/*.mmd`                |
+| `pnpm ports`                  | What is holding 3100 / 4100 (`--free` stops it) |
+| `pnpm clean`                  | Remove build output                             |
 
 ---
 
