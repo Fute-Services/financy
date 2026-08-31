@@ -14,8 +14,8 @@ This is a deliberate choice, not a stepping stone taken by default.
 
 **Why not microservices**
 
-- The hardest guarantees in this product — *the budget movement, the approval action, and the
-  audit event all commit or none do* — are trivial in one database transaction and require
+- The hardest guarantees in this product — _the budget movement, the approval action, and the
+  audit event all commit or none do_ — are trivial in one database transaction and require
   sagas, compensating actions, and eventual-consistency reasoning across services. For a finance
   system, that is a large correctness risk bought for no benefit at this scale.
 - The domain boundaries are not yet proven. Splitting on guesses produces distributed coupling,
@@ -79,37 +79,37 @@ graph TB
 
 ## 3. Technology decisions
 
-| Layer | Choice | Rationale |
-|---|---|---|
-| Monorepo | **pnpm workspaces + Turborepo** | pnpm 11 already present; strict `node_modules` prevents phantom dependencies — which is exactly how module boundaries get quietly violated. Turbo gives caching and a task graph. |
-| Backend | **NestJS 11** | The brief prefers it absent a prior decision. Its module system, DI, guards, interceptors, and pipes map directly onto the cross-cutting concerns this product cannot omit: authorisation, tenant scoping, audit, validation. Those become framework-level guarantees rather than per-controller discipline. |
-| API style | **REST, `/v1`** | Stable, cacheable, trivially testable, and well understood by the integrators this product will meet. GraphQL is reconsidered only if client query shapes become genuinely dynamic. |
-| ORM | **Prisma 6** | See ADR-0003 and §3.1. |
-| Frontend | **Next.js 15 App Router + React 19** | Server Components keep the initial payload small for data-dense pages; route-level layouts match the shell; Server Actions are *not* used for financial mutations — those go through the versioned REST API so there is exactly one authorisation path. |
-| Client data | **TanStack Query** | Caching, invalidation, and request de-duplication for a table-heavy application. |
-| Forms | **react-hook-form + Zod** | The same Zod schema validates on both sides, from `packages/contracts`. |
-| Styling | **Tailwind CSS v4 + CSS variables** | Token-driven theming; utility classes keep the design system honest. |
-| Primitives | **Radix UI** | Accessible, unstyled behaviour for menus, dialogs, and popovers. Accessibility is a requirement (NFR-UX-001); hand-rolling it is a false economy. |
-| Money | **decimal.js in a `Money` value object** | NFR-FIN-001..005. |
-| Queue | **BullMQ behind `QueuePort`** | ADR-0006 — inline adapter locally, BullMQ in staging and production. |
-| Validation | **Zod** | One schema, server-authoritative, client-inferred. |
-| Auth | **First-party sessions + `IdentityProvider` port** | ADR-0005. |
-| Testing | **Vitest · Supertest · Testcontainers/local PG · Playwright** | §7 of `16-TESTING-STRATEGY.md`. |
-| Logging | **Pino** | Structured JSON, low overhead, redaction built in. |
-| Tracing | **OpenTelemetry SDK** | Vendor-neutral by requirement. |
+| Layer       | Choice                                                        | Rationale                                                                                                                                                                                                                                                                                                    |
+| ----------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Monorepo    | **pnpm workspaces + Turborepo**                               | pnpm 11 already present; strict `node_modules` prevents phantom dependencies — which is exactly how module boundaries get quietly violated. Turbo gives caching and a task graph.                                                                                                                            |
+| Backend     | **NestJS 11**                                                 | The brief prefers it absent a prior decision. Its module system, DI, guards, interceptors, and pipes map directly onto the cross-cutting concerns this product cannot omit: authorisation, tenant scoping, audit, validation. Those become framework-level guarantees rather than per-controller discipline. |
+| API style   | **REST, `/v1`**                                               | Stable, cacheable, trivially testable, and well understood by the integrators this product will meet. GraphQL is reconsidered only if client query shapes become genuinely dynamic.                                                                                                                          |
+| ORM         | **Prisma 6**                                                  | See ADR-0003 and §3.1.                                                                                                                                                                                                                                                                                       |
+| Frontend    | **Next.js 15 App Router + React 19**                          | Server Components keep the initial payload small for data-dense pages; route-level layouts match the shell; Server Actions are _not_ used for financial mutations — those go through the versioned REST API so there is exactly one authorisation path.                                                      |
+| Client data | **TanStack Query**                                            | Caching, invalidation, and request de-duplication for a table-heavy application.                                                                                                                                                                                                                             |
+| Forms       | **react-hook-form + Zod**                                     | The same Zod schema validates on both sides, from `packages/contracts`.                                                                                                                                                                                                                                      |
+| Styling     | **Tailwind CSS v4 + CSS variables**                           | Token-driven theming; utility classes keep the design system honest.                                                                                                                                                                                                                                         |
+| Primitives  | **Radix UI**                                                  | Accessible, unstyled behaviour for menus, dialogs, and popovers. Accessibility is a requirement (NFR-UX-001); hand-rolling it is a false economy.                                                                                                                                                            |
+| Money       | **decimal.js in a `Money` value object**                      | NFR-FIN-001..005.                                                                                                                                                                                                                                                                                            |
+| Queue       | **BullMQ behind `QueuePort`**                                 | ADR-0006 — inline adapter locally, BullMQ in staging and production.                                                                                                                                                                                                                                         |
+| Validation  | **Zod**                                                       | One schema, server-authoritative, client-inferred.                                                                                                                                                                                                                                                           |
+| Auth        | **First-party sessions + `IdentityProvider` port**            | ADR-0005.                                                                                                                                                                                                                                                                                                    |
+| Testing     | **Vitest · Supertest · Testcontainers/local PG · Playwright** | §7 of `16-TESTING-STRATEGY.md`.                                                                                                                                                                                                                                                                              |
+| Logging     | **Pino**                                                      | Structured JSON, low overhead, redaction built in.                                                                                                                                                                                                                                                           |
+| Tracing     | **OpenTelemetry SDK**                                         | Vendor-neutral by requirement.                                                                                                                                                                                                                                                                               |
 
 ### 3.1 Prisma over Drizzle — the reasoning
 
 Both are credible. The deciding factors, weighted for a financial system:
 
-| Criterion | Prisma | Drizzle | Weight |
-|---|---|---|---|
-| Migration tooling | `migrate dev` / `deploy` / `diff` / `resolve`; shadow-database drift detection | Improving, but less mature drift and rollback story | **Decisive** — every schema change must be a reviewed, ordered, reversible artefact |
-| Decimal handling | `Decimal` (decimal.js) end to end for `NUMERIC` | Returns `string`; safe but requires manual wrapping everywhere | High |
-| Global tenant enforcement | **Client extensions** can inject `organizationId` into every query on tenant-scoped models and throw when the context is missing | Would require discipline at each call site | **Decisive** — makes INV-01 structural |
-| Raw SQL when needed | `$queryRaw` with tagged-template parameterisation | Native, excellent | Medium |
-| Type inference | Generated, exact | Inferred from schema, excellent | Medium |
-| Bundle/runtime weight | Heavier (engine) | Lighter | Low — this is a server |
+| Criterion                 | Prisma                                                                                                                           | Drizzle                                                        | Weight                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Migration tooling         | `migrate dev` / `deploy` / `diff` / `resolve`; shadow-database drift detection                                                   | Improving, but less mature drift and rollback story            | **Decisive** — every schema change must be a reviewed, ordered, reversible artefact |
+| Decimal handling          | `Decimal` (decimal.js) end to end for `NUMERIC`                                                                                  | Returns `string`; safe but requires manual wrapping everywhere | High                                                                                |
+| Global tenant enforcement | **Client extensions** can inject `organizationId` into every query on tenant-scoped models and throw when the context is missing | Would require discipline at each call site                     | **Decisive** — makes INV-01 structural                                              |
+| Raw SQL when needed       | `$queryRaw` with tagged-template parameterisation                                                                                | Native, excellent                                              | Medium                                                                              |
+| Type inference            | Generated, exact                                                                                                                 | Inferred from schema, excellent                                | Medium                                                                              |
+| Bundle/runtime weight     | Heavier (engine)                                                                                                                 | Lighter                                                        | Low — this is a server                                                              |
 
 **Decision: Prisma.** The two decisive criteria are migration rigour and the ability to make
 tenant scoping a property of the data-access layer rather than a habit. Where Prisma's query
@@ -226,7 +226,7 @@ graph TB
 
 **The critical structural fact in this diagram:** `spend`, `expenses`, `bills`, and `procurement`
 all depend on `approvals` and `policies`. There is exactly one policy engine and exactly one
-approval state machine in the system. Phase 5 adds *inputs* to them, never a second
+approval state machine in the system. Phase 5 adds _inputs_ to them, never a second
 implementation. An architecture test asserts this by checking that no module outside
 `modules/policies` exports a function whose name matches `/evaluat(e|ion)/i` over a spend context.
 
@@ -234,15 +234,15 @@ implementation. An architecture test asserts this by checking that no module out
 
 Discipline that is not mechanised is not discipline. Enforced in CI:
 
-| Rule | Mechanism |
-|---|---|
-| No deep imports across modules — only `modules/<x>/index.ts` | `eslint-plugin-boundaries` |
-| Domain layer imports no infrastructure | `eslint-plugin-boundaries` |
-| `PrismaClient` imported only in `packages/db` and `platform/database` | `no-restricted-imports` |
-| BullMQ imported only in the queue adapter | `no-restricted-imports` |
-| No money arithmetic in `apps/web` | Custom lint rule over `Decimal`/`Money` usage |
-| Every controller route has a permission decorator | Custom test enumerating the Nest route table |
-| No `UPDATE`/`DELETE` against `audit_events` | Grant assertion + source scan |
+| Rule                                                                  | Mechanism                                     |
+| --------------------------------------------------------------------- | --------------------------------------------- |
+| No deep imports across modules — only `modules/<x>/index.ts`          | `eslint-plugin-boundaries`                    |
+| Domain layer imports no infrastructure                                | `eslint-plugin-boundaries`                    |
+| `PrismaClient` imported only in `packages/db` and `platform/database` | `no-restricted-imports`                       |
+| BullMQ imported only in the queue adapter                             | `no-restricted-imports`                       |
+| No money arithmetic in `apps/web`                                     | Custom lint rule over `Decimal`/`Money` usage |
+| Every controller route has a permission decorator                     | Custom test enumerating the Nest route table  |
+| No `UPDATE`/`DELETE` against `audit_events`                           | Grant assertion + source scan                 |
 
 ### 4.4 Request pipeline
 
@@ -261,15 +261,15 @@ sequenceDiagram
   C->>MW: HTTP request
   MW->>MW: correlation id · security headers · body limit
   MW->>MW: rate limit (Redis or in-memory)
-  MW->>G: 
+  MW->>G:
   G->>G: 1 AuthGuard — resolve session, load membership
   G->>G: 2 TenantGuard — bind organizationId to AsyncLocalStorage;<br/>reject any mismatched client-supplied org id
   G->>G: 3 PermissionGuard — required permission present?
   G->>G: 4 ScopeGuard — attach scope predicate to context
   G->>G: 5 StepUpGuard — high-risk action needs recent re-auth?
-  G->>I: 
+  G->>I:
   I->>I: IdempotencyInterceptor — replay or reserve the key
-  I->>P: 
+  I->>P:
   P->>P: ZodValidationPipe — parse from packages/contracts
   P->>CT: typed, validated DTO
   CT->>S: use case call
@@ -280,7 +280,7 @@ sequenceDiagram
   S->>R: write audit event (same transaction)
   S->>DB: COMMIT
   S-->>CT: result
-  CT-->>I: 
+  CT-->>I:
   I->>I: serialise · store idempotent response · emit metrics
   I-->>C: response + correlation id
 ```
@@ -346,13 +346,13 @@ cookie forwarded; subsequent interactions use TanStack Query from the client aga
 
 ## 6. Shared packages
 
-| Package | Contents | Depends on |
-|---|---|---|
-| `@financy/core` | `Money`, `Currency`, `Result`, domain error taxonomy, ID types, state-machine helper, date/period utilities. **Zero I/O, zero framework.** | nothing |
-| `@financy/contracts` | Zod schemas and inferred types for every request, response, and shared enum; error codes; pagination envelopes. | `core` |
-| `@financy/db` | Prisma schema, migrations, generated client, seed scripts, tenant client extension. | `core` |
-| `@financy/ui` | Design-system primitives and finance components (`DataTable`, `Money`, `StatusBadge`, `ApprovalTimeline`, `AuditTimeline`, `FilterBar`, `KpiCard`, empty/error/permission states). | `core` |
-| `@financy/config` | `tsconfig` bases, ESLint flat config with boundary rules, Tailwind preset, Vitest base. | nothing |
+| Package              | Contents                                                                                                                                                                           | Depends on |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `@financy/core`      | `Money`, `Currency`, `Result`, domain error taxonomy, ID types, state-machine helper, date/period utilities. **Zero I/O, zero framework.**                                         | nothing    |
+| `@financy/contracts` | Zod schemas and inferred types for every request, response, and shared enum; error codes; pagination envelopes.                                                                    | `core`     |
+| `@financy/db`        | Prisma schema, migrations, generated client, seed scripts, tenant client extension.                                                                                                | `core`     |
+| `@financy/ui`        | Design-system primitives and finance components (`DataTable`, `Money`, `StatusBadge`, `ApprovalTimeline`, `AuditTimeline`, `FilterBar`, `KpiCard`, empty/error/permission states). | `core`     |
+| `@financy/config`    | `tsconfig` bases, ESLint flat config with boundary rules, Tailwind preset, Vitest base.                                                                                            | nothing    |
 
 `@financy/contracts` is the joint that keeps the two applications honest: the server validates
 with the schema, the client infers types from the same schema, and a contract change that breaks
@@ -393,7 +393,7 @@ sequenceDiagram
 ```
 
 **The point of this diagram:** the policy decision, the request, the approval chain, the budget
-movement, and the audit events are one atomic unit. The notification is deliberately *outside*
+movement, and the audit events are one atomic unit. The notification is deliberately _outside_
 the transaction — it is not allowed to fail the financial write, and it is idempotent so a retry
 is safe.
 
@@ -405,23 +405,23 @@ A single taxonomy, defined once in `@financy/core` and surfaced identically ever
 
 ```typescript
 abstract class AppError extends Error {
-  abstract readonly code: string;        // stable, machine-readable
+  abstract readonly code: string; // stable, machine-readable
   abstract readonly httpStatus: number;
   readonly details?: Record<string, unknown>;
   readonly correlationId: string;
 }
 ```
 
-| Family | HTTP | Examples |
-|---|---|---|
-| `AuthenticationError` | 401 | `UNAUTHENTICATED`, `SESSION_EXPIRED`, `MFA_REQUIRED` |
-| `AuthorizationError` | 403 | `FORBIDDEN`, `SELF_APPROVAL_FORBIDDEN`, `STEP_UP_REQUIRED` |
-| `NotFoundError` | 404 | `RESOURCE_NOT_FOUND` (also returned for cross-tenant access) |
-| `ConflictError` | 409 | `INVALID_STATE_TRANSITION`, `POSTED_RECORD_IMMUTABLE`, `LAST_ADMIN`, `IDEMPOTENCY_KEY_REUSED` |
-| `ValidationError` | 422 | `VALIDATION_FAILED` with a field-keyed map |
-| `RateLimitError` | 429 | `RATE_LIMITED` with `Retry-After` |
-| `ProviderError` | 502 | `PROVIDER_ERROR`, `PROVIDER_TIMEOUT` |
-| `InternalError` | 500 | `INTERNAL_ERROR` — never leaks internals to the client |
+| Family                | HTTP | Examples                                                                                      |
+| --------------------- | ---- | --------------------------------------------------------------------------------------------- |
+| `AuthenticationError` | 401  | `UNAUTHENTICATED`, `SESSION_EXPIRED`, `MFA_REQUIRED`                                          |
+| `AuthorizationError`  | 403  | `FORBIDDEN`, `SELF_APPROVAL_FORBIDDEN`, `STEP_UP_REQUIRED`                                    |
+| `NotFoundError`       | 404  | `RESOURCE_NOT_FOUND` (also returned for cross-tenant access)                                  |
+| `ConflictError`       | 409  | `INVALID_STATE_TRANSITION`, `POSTED_RECORD_IMMUTABLE`, `LAST_ADMIN`, `IDEMPOTENCY_KEY_REUSED` |
+| `ValidationError`     | 422  | `VALIDATION_FAILED` with a field-keyed map                                                    |
+| `RateLimitError`      | 429  | `RATE_LIMITED` with `Retry-After`                                                             |
+| `ProviderError`       | 502  | `PROVIDER_ERROR`, `PROVIDER_TIMEOUT`                                                          |
+| `InternalError`       | 500  | `INTERNAL_ERROR` — never leaks internals to the client                                        |
 
 A global exception filter maps these to the envelope in `10-API-SPECIFICATION.md §6`, logs with
 the correlation ID, and reports unexpected errors to error tracking. Codes are part of the public
@@ -478,11 +478,11 @@ there is no way for the worker's copy of a business rule to drift from the API's
 
 ## 11. Deferred, with the trigger that would revisit it
 
-| Deferred | Revisit when |
-|---|---|
-| Microservices | A module needs independent scaling or an independent release cadence, *and* its boundary has proven stable for two quarters |
-| Event sourcing | Audit requirements exceed what the append-only audit log provides |
-| CQRS with separate read models | Reporting queries degrade past NFR-PERF-004 on a read replica |
-| GraphQL | Client query shapes become genuinely dynamic |
-| Multi-region | A customer contract requires data residency in a second region |
-| Table partitioning | `transactions` or `audit_events` exceeds 50 million rows |
+| Deferred                       | Revisit when                                                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Microservices                  | A module needs independent scaling or an independent release cadence, _and_ its boundary has proven stable for two quarters |
+| Event sourcing                 | Audit requirements exceed what the append-only audit log provides                                                           |
+| CQRS with separate read models | Reporting queries degrade past NFR-PERF-004 on a read replica                                                               |
+| GraphQL                        | Client query shapes become genuinely dynamic                                                                                |
+| Multi-region                   | A customer contract requires data residency in a second region                                                              |
+| Table partitioning             | `transactions` or `audit_events` exceeds 50 million rows                                                                    |

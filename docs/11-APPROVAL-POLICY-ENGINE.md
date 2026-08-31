@@ -21,7 +21,7 @@ if (request.amount > 1000 && request.department === 'engineering') {
 
 Conditionals scattered through controllers are untestable in combination, impossible to audit
 ("which rule applied to this approval in March?"), impossible to change without a deploy, and
-guaranteed to diverge between spend types. A finance customer will ask *"why was this approved?"*
+guaranteed to diverge between spend types. A finance customer will ask _"why was this approved?"_
 and the honest answer must be a record, not an archaeology exercise.
 
 **The design response**, in four parts:
@@ -29,7 +29,7 @@ and the honest answer must be a record, not an archaeology exercise.
 1. **Policy is data.** Rules are rows, authored in the UI, versioned, effective-dated.
 2. **Evaluation is pure.** A deterministic function of `(context, policy versions) → decision`,
    with no I/O, exhaustively testable.
-3. **The decision is snapshotted.** The verdict, the matched rule IDs, and the policy *version*
+3. **The decision is snapshotted.** The verdict, the matched rule IDs, and the policy _version_
    IDs are frozen onto the record. Editing a policy tomorrow never rewrites yesterday's history.
 4. **One engine, five spend types.** Spend requests, expenses, reimbursements, bills, and purchase
    orders differ by a `spendType` discriminator and nothing else.
@@ -78,16 +78,16 @@ interface PolicyContext {
   readonly organizationId: OrganizationId;
   readonly spendType: 'CARD' | 'REIMBURSEMENT' | 'BILL' | 'PURCHASE_ORDER' | 'SPEND_REQUEST';
 
-  readonly amount: Money;                       // decimal + currency, never a number
-  readonly amountInBaseCurrency: Money;         // converted at a stored, recorded rate
+  readonly amount: Money; // decimal + currency, never a number
+  readonly amountInBaseCurrency: Money; // converted at a stored, recorded rate
 
   readonly requester: {
     membershipId: MembershipId;
     roleKey: RoleKey;
     departmentId: DepartmentId | null;
-    departmentPath: string;                     // materialised path, enables subtree matching
+    departmentPath: string; // materialised path, enables subtree matching
     entityId: EntityId;
-    managerChain: readonly MembershipId[];      // nearest first
+    managerChain: readonly MembershipId[]; // nearest first
     tenureDays: number;
   };
 
@@ -101,8 +101,11 @@ interface PolicyContext {
 
   readonly budget: {
     budgetLineId: BudgetLineId | null;
-    allocated: Money; committed: Money; actual: Money; remaining: Money;
-    utilizationAfterThisSpend: number;           // 0..n, where 1.0 is fully consumed
+    allocated: Money;
+    committed: Money;
+    actual: Money;
+    remaining: Money;
+    utilizationAfterThisSpend: number; // 0..n, where 1.0 is fully consumed
     wouldExceed: boolean;
   } | null;
 
@@ -114,7 +117,7 @@ interface PolicyContext {
   };
 
   readonly temporal: {
-    now: Date;                                   // injected — never Date.now() inside the evaluator
+    now: Date; // injected — never Date.now() inside the evaluator
     neededBy: Date | null;
     fiscalPeriod: string;
   };
@@ -144,11 +147,11 @@ type Condition = ComparisonCondition | ConditionGroup;
 
 interface ConditionGroup {
   operator: 'ALL' | 'ANY' | 'NONE';
-  conditions: Condition[];                       // nesting limited to depth 3
+  conditions: Condition[]; // nesting limited to depth 3
 }
 
 interface ComparisonCondition {
-  field: PolicyField;                            // a closed union — not an arbitrary path
+  field: PolicyField; // a closed union — not an arbitrary path
   operator: ComparisonOperator;
   value: PolicyValue;
 }
@@ -156,27 +159,27 @@ interface ComparisonCondition {
 
 **Fields** (closed set — a typo is a validation error, not a rule that never fires):
 
-| Group | Fields |
-|---|---|
-| Amount | `amount`, `amountInBaseCurrency`, `currency` |
-| Requester | `requester.roleKey`, `requester.departmentId`, `requester.departmentPath`, `requester.entityId`, `requester.tenureDays`, `requester.managerChainDepth` |
-| Classification | `category.id`, `category.path`, `project.id`, `vendor.id`, `merchant.name` |
-| Budget | `budget.remaining`, `budget.utilizationAfter`, `budget.wouldExceed`, `budget.exists` |
-| Evidence | `evidence.hasReceipt`, `evidence.hasMemo`, `evidence.memoLength` |
-| Temporal | `temporal.dayOfWeek`, `temporal.dayOfMonth`, `temporal.fiscalPeriod` |
-| History | `history.requesterSpendThisMonth`, `history.similarRequestsLast30Days` |
-| Type | `spendType` |
+| Group          | Fields                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Amount         | `amount`, `amountInBaseCurrency`, `currency`                                                                                                           |
+| Requester      | `requester.roleKey`, `requester.departmentId`, `requester.departmentPath`, `requester.entityId`, `requester.tenureDays`, `requester.managerChainDepth` |
+| Classification | `category.id`, `category.path`, `project.id`, `vendor.id`, `merchant.name`                                                                             |
+| Budget         | `budget.remaining`, `budget.utilizationAfter`, `budget.wouldExceed`, `budget.exists`                                                                   |
+| Evidence       | `evidence.hasReceipt`, `evidence.hasMemo`, `evidence.memoLength`                                                                                       |
+| Temporal       | `temporal.dayOfWeek`, `temporal.dayOfMonth`, `temporal.fiscalPeriod`                                                                                   |
+| History        | `history.requesterSpendThisMonth`, `history.similarRequestsLast30Days`                                                                                 |
+| Type           | `spendType`                                                                                                                                            |
 
 **Operators**, typed to the field's type:
 
-| Type | Operators |
-|---|---|
-| Money | `EQ` `NEQ` `GT` `GTE` `LT` `LTE` `BETWEEN` |
-| Number | `EQ` `NEQ` `GT` `GTE` `LT` `LTE` `BETWEEN` |
-| String / ID | `EQ` `NEQ` `IN` `NOT_IN` |
+| Type        | Operators                                                                           |
+| ----------- | ----------------------------------------------------------------------------------- |
+| Money       | `EQ` `NEQ` `GT` `GTE` `LT` `LTE` `BETWEEN`                                          |
+| Number      | `EQ` `NEQ` `GT` `GTE` `LT` `LTE` `BETWEEN`                                          |
+| String / ID | `EQ` `NEQ` `IN` `NOT_IN`                                                            |
 | Path (tree) | `EQ` `IN` `IS_DESCENDANT_OF` — so "Engineering and everything under it" is one rule |
-| Boolean | `IS_TRUE` `IS_FALSE` |
-| Nullable | `IS_NULL` `IS_NOT_NULL` |
+| Boolean     | `IS_TRUE` `IS_FALSE`                                                                |
+| Nullable    | `IS_NULL` `IS_NOT_NULL`                                                             |
 
 **Money comparisons are currency-aware.** Comparing `1000 USD` to `1000 EUR` raises
 `CurrencyMismatchError` at evaluation time rather than silently comparing magnitudes. Rules
@@ -190,8 +193,14 @@ type Outcome =
   | { type: 'ALLOW' }
   | { type: 'BLOCK'; reasonCode: string; message: string }
   | { type: 'AUTO_APPROVE' }
-  | { type: 'REQUIRE_APPROVER'; approver: ApproverSpec; stepType: StepType; sequence: number;
-      timeoutHours?: number; escalation?: EscalationSpec }
+  | {
+      type: 'REQUIRE_APPROVER';
+      approver: ApproverSpec;
+      stepType: StepType;
+      sequence: number;
+      timeoutHours?: number;
+      escalation?: EscalationSpec;
+    }
   | { type: 'REQUIRE_RECEIPT' }
   | { type: 'REQUIRE_MEMO'; minLength?: number }
   | { type: 'REQUIRE_FINANCE_REVIEW' }
@@ -241,17 +250,17 @@ Multiple rules across multiple policies can fire. The merge is the part that mus
 unambiguous, because ambiguity here means the same request could be approved differently on two
 days.
 
-| Rule | Behaviour |
-|---|---|
-| **1. BLOCK dominates** | If any outcome is `BLOCK`, the verdict is `BLOCK`. Every blocking reason is returned, not just the first — the user should fix all of them at once. |
-| **2. Approvers union** | `REQUIRE_APPROVER` outcomes are unioned and de-duplicated by resolved approver identity, then grouped by `sequence`. |
-| **3. Sequence groups become steps** | Same `sequence` ⇒ one step. Its `stepType` is the strictest present (`PARALLEL_ALL` > `QUORUM` > `PARALLEL_ANY`). |
-| **4. Evidence: strictest wins** | If any rule requires a receipt, a receipt is required. `REQUIRE_MEMO` takes the maximum `minLength`. |
-| **5. AUTO_APPROVE is conditional** | Applies only if **no** rule required an approver. An explicit approval requirement always beats an auto-approval. |
-| **6. Finance review is sticky** | Once required by any rule, it cannot be cleared by another. |
-| **7. Timeouts: shortest wins** | Two rules on the same step ⇒ the shorter timeout applies. |
-| **8. Validity: shortest wins** | The most conservative expiry applies. |
-| **9. Exceptions accumulate** | All `FLAG_EXCEPTION` codes are retained. |
+| Rule                                | Behaviour                                                                                                                                           |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1. BLOCK dominates**              | If any outcome is `BLOCK`, the verdict is `BLOCK`. Every blocking reason is returned, not just the first — the user should fix all of them at once. |
+| **2. Approvers union**              | `REQUIRE_APPROVER` outcomes are unioned and de-duplicated by resolved approver identity, then grouped by `sequence`.                                |
+| **3. Sequence groups become steps** | Same `sequence` ⇒ one step. Its `stepType` is the strictest present (`PARALLEL_ALL` > `QUORUM` > `PARALLEL_ANY`).                                   |
+| **4. Evidence: strictest wins**     | If any rule requires a receipt, a receipt is required. `REQUIRE_MEMO` takes the maximum `minLength`.                                                |
+| **5. AUTO_APPROVE is conditional**  | Applies only if **no** rule required an approver. An explicit approval requirement always beats an auto-approval.                                   |
+| **6. Finance review is sticky**     | Once required by any rule, it cannot be cleared by another.                                                                                         |
+| **7. Timeouts: shortest wins**      | Two rules on the same step ⇒ the shorter timeout applies.                                                                                           |
+| **8. Validity: shortest wins**      | The most conservative expiry applies.                                                                                                               |
+| **9. Exceptions accumulate**        | All `FLAG_EXCEPTION` codes are retained.                                                                                                            |
 
 Every one of these nine rules has a dedicated unit test with an explicitly constructed conflict.
 
@@ -273,7 +282,7 @@ interface PolicyDecision {
     matchedRuleIds: PolicyRuleId[];
     policyVersionIds: PolicyVersionId[];
     evaluatedAt: string;
-    engineVersion: string;                 // bump on any semantic change to the evaluator
+    engineVersion: string; // bump on any semantic change to the evaluator
     durationMs: number;
   };
 }
@@ -290,7 +299,7 @@ recomputed for display. The screen showing "why was this approved?" reads the sn
 
 ## 6. Approval chain resolution
 
-Turning approver *specifications* into approver *people*.
+Turning approver _specifications_ into approver _people_.
 
 ```mermaid
 flowchart TD
@@ -367,12 +376,12 @@ stateDiagram-v2
 
 ### 7.3 Completion rules
 
-| Step type | Completes when |
-|---|---|
-| `SEQUENTIAL` | Its single approver approves |
-| `PARALLEL_ALL` | Every eligible approver has approved |
-| `PARALLEL_ANY` | Any one eligible approver approves |
-| `QUORUM(n)` | `n` distinct eligible approvers have approved |
+| Step type      | Completes when                                |
+| -------------- | --------------------------------------------- |
+| `SEQUENTIAL`   | Its single approver approves                  |
+| `PARALLEL_ALL` | Every eligible approver has approved          |
+| `PARALLEL_ANY` | Any one eligible approver approves            |
+| `QUORUM(n)`    | `n` distinct eligible approvers have approved |
 
 A rejection at any step terminates the entire instance immediately, regardless of step type.
 
@@ -403,8 +412,8 @@ double-advanced approval chain. Covered by FR-APR-011's concurrency test.
 
 ### 8.1 The brief's example, expressed as data
 
-> *Engineering + Software + amount > 2000 → Manager + Finance*
-> *Engineering + Software + amount ≤ 2000 → Manager*
+> _Engineering + Software + amount > 2000 → Manager + Finance_
+> _Engineering + Software + amount ≤ 2000 → Manager_
 
 ```jsonc
 {
@@ -417,37 +426,64 @@ double-advanced approval chain. Covered by FR-APR-011's concurrency test.
       "conditions": {
         "operator": "ALL",
         "conditions": [
-          { "field": "requester.departmentPath", "operator": "IS_DESCENDANT_OF", "value": "/engineering" },
-          { "field": "category.path",            "operator": "IS_DESCENDANT_OF", "value": "/software" },
-          { "field": "amountInBaseCurrency",     "operator": "GT",  "value": { "amount": "2000.0000", "currency": "USD" } }
-        ]
+          {
+            "field": "requester.departmentPath",
+            "operator": "IS_DESCENDANT_OF",
+            "value": "/engineering",
+          },
+          { "field": "category.path", "operator": "IS_DESCENDANT_OF", "value": "/software" },
+          {
+            "field": "amountInBaseCurrency",
+            "operator": "GT",
+            "value": { "amount": "2000.0000", "currency": "USD" },
+          },
+        ],
       },
       "outcomes": [
-        { "type": "REQUIRE_APPROVER", "sequence": 1, "stepType": "SEQUENTIAL",
-          "approver": { "kind": "MANAGER_CHAIN", "position": 0 }, "timeoutHours": 48,
-          "escalation": { "action": "ESCALATE", "to": { "kind": "MANAGER_CHAIN", "position": 1 } } },
-        { "type": "REQUIRE_APPROVER", "sequence": 2, "stepType": "SEQUENTIAL",
-          "approver": { "kind": "ROLE", "roleKey": "FINANCE_ADMIN", "scope": "ENTITY" }, "timeoutHours": 72 },
-        { "type": "REQUIRE_RECEIPT" }
+        {
+          "type": "REQUIRE_APPROVER",
+          "sequence": 1,
+          "stepType": "SEQUENTIAL",
+          "approver": { "kind": "MANAGER_CHAIN", "position": 0 },
+          "timeoutHours": 48,
+          "escalation": { "action": "ESCALATE", "to": { "kind": "MANAGER_CHAIN", "position": 1 } },
+        },
+        {
+          "type": "REQUIRE_APPROVER",
+          "sequence": 2,
+          "stepType": "SEQUENTIAL",
+          "approver": { "kind": "ROLE", "roleKey": "FINANCE_ADMIN", "scope": "ENTITY" },
+          "timeoutHours": 72,
+        },
+        { "type": "REQUIRE_RECEIPT" },
       ],
-      "isTerminal": true
+      "isTerminal": true,
     },
     {
       "sequence": 2,
       "conditions": {
         "operator": "ALL",
         "conditions": [
-          { "field": "requester.departmentPath", "operator": "IS_DESCENDANT_OF", "value": "/engineering" },
-          { "field": "category.path",            "operator": "IS_DESCENDANT_OF", "value": "/software" }
-        ]
+          {
+            "field": "requester.departmentPath",
+            "operator": "IS_DESCENDANT_OF",
+            "value": "/engineering",
+          },
+          { "field": "category.path", "operator": "IS_DESCENDANT_OF", "value": "/software" },
+        ],
       },
       "outcomes": [
-        { "type": "REQUIRE_APPROVER", "sequence": 1, "stepType": "SEQUENTIAL",
-          "approver": { "kind": "MANAGER_CHAIN", "position": 0 }, "timeoutHours": 48 }
+        {
+          "type": "REQUIRE_APPROVER",
+          "sequence": 1,
+          "stepType": "SEQUENTIAL",
+          "approver": { "kind": "MANAGER_CHAIN", "position": 0 },
+          "timeoutHours": 48,
+        },
       ],
-      "isTerminal": true
-    }
-  ]
+      "isTerminal": true,
+    },
+  ],
 }
 ```
 
@@ -461,17 +497,30 @@ the editor makes that ordering visible.
   "name": "Reimbursements require evidence",
   "spendTypes": ["REIMBURSEMENT"],
   "priority": 900,
-  "rules": [{
-    "sequence": 1,
-    "conditions": { "operator": "ALL", "conditions": [
-      { "field": "evidence.hasReceipt", "operator": "IS_FALSE" },
-      { "field": "amountInBaseCurrency", "operator": "GTE",
-        "value": { "amount": "25.0000", "currency": "USD" } }
-    ]},
-    "outcomes": [{ "type": "BLOCK", "reasonCode": "RECEIPT_REQUIRED",
-                   "message": "A receipt is required for reimbursements of $25 or more." }],
-    "isTerminal": true
-  }]
+  "rules": [
+    {
+      "sequence": 1,
+      "conditions": {
+        "operator": "ALL",
+        "conditions": [
+          { "field": "evidence.hasReceipt", "operator": "IS_FALSE" },
+          {
+            "field": "amountInBaseCurrency",
+            "operator": "GTE",
+            "value": { "amount": "25.0000", "currency": "USD" },
+          },
+        ],
+      },
+      "outcomes": [
+        {
+          "type": "BLOCK",
+          "reasonCode": "RECEIPT_REQUIRED",
+          "message": "A receipt is required for reimbursements of $25 or more.",
+        },
+      ],
+      "isTerminal": true,
+    },
+  ],
 }
 ```
 
@@ -484,17 +533,23 @@ High priority (900) so it evaluates before departmental rules and short-circuits
   "name": "Budget overspend control",
   "spendTypes": ["SPEND_REQUEST", "PURCHASE_ORDER", "BILL"],
   "priority": 800,
-  "rules": [{
-    "sequence": 1,
-    "conditions": { "field": "budget.wouldExceed", "operator": "IS_TRUE" },
-    "outcomes": [
-      { "type": "REQUIRE_APPROVER", "sequence": 99, "stepType": "SEQUENTIAL",
-        "approver": { "kind": "ROLE", "roleKey": "FINANCE_ADMIN", "scope": "ORGANIZATION" } },
-      { "type": "FLAG_EXCEPTION", "exceptionCode": "BUDGET_EXCEEDED" },
-      { "type": "REQUIRE_FINANCE_REVIEW" }
-    ],
-    "isTerminal": false
-  }]
+  "rules": [
+    {
+      "sequence": 1,
+      "conditions": { "field": "budget.wouldExceed", "operator": "IS_TRUE" },
+      "outcomes": [
+        {
+          "type": "REQUIRE_APPROVER",
+          "sequence": 99,
+          "stepType": "SEQUENTIAL",
+          "approver": { "kind": "ROLE", "roleKey": "FINANCE_ADMIN", "scope": "ORGANIZATION" },
+        },
+        { "type": "FLAG_EXCEPTION", "exceptionCode": "BUDGET_EXCEEDED" },
+        { "type": "REQUIRE_FINANCE_REVIEW" },
+      ],
+      "isTerminal": false,
+    },
+  ],
 }
 ```
 
@@ -508,19 +563,19 @@ other policies contribute. Merge rule 2 unions it in.
 This subsystem carries the highest coverage floor in the codebase: **95 % branch coverage**, and
 CI fails below it.
 
-| Layer | What is tested |
-|---|---|
-| **Field/operator matrix** | Every `(field, operator)` pair, including null handling and type mismatch |
-| **Merge semantics** | Each of the nine precedence rules in §5.1, with a constructed conflict |
-| **Determinism** | Property-based: 10,000 generated contexts × shuffled policy insertion order ⇒ identical decisions |
-| **Currency safety** | Cross-currency comparison raises rather than silently comparing magnitudes |
-| **Resolution** | Every `ApproverSpec` kind; the fallback ladder; `UNRESOLVABLE_APPROVER` |
-| **INV-02** | Self-approval blocked directly, via delegation, via role membership, and via department-head resolution |
-| **State machine** | Every legal transition succeeds; **every illegal transition is enumerated and asserted to fail** |
-| **Concurrency** | Simultaneous approvals on one step: exactly one succeeds |
-| **Versioning** | Editing a policy does not change a persisted decision |
-| **Cross-type** | All five spend types provably reach the same evaluator entry point |
-| **Performance** | 100 policies / 1,000 rules evaluates within 50 ms p95 |
+| Layer                     | What is tested                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Field/operator matrix** | Every `(field, operator)` pair, including null handling and type mismatch                               |
+| **Merge semantics**       | Each of the nine precedence rules in §5.1, with a constructed conflict                                  |
+| **Determinism**           | Property-based: 10,000 generated contexts × shuffled policy insertion order ⇒ identical decisions       |
+| **Currency safety**       | Cross-currency comparison raises rather than silently comparing magnitudes                              |
+| **Resolution**            | Every `ApproverSpec` kind; the fallback ladder; `UNRESOLVABLE_APPROVER`                                 |
+| **INV-02**                | Self-approval blocked directly, via delegation, via role membership, and via department-head resolution |
+| **State machine**         | Every legal transition succeeds; **every illegal transition is enumerated and asserted to fail**        |
+| **Concurrency**           | Simultaneous approvals on one step: exactly one succeeds                                                |
+| **Versioning**            | Editing a policy does not change a persisted decision                                                   |
+| **Cross-type**            | All five spend types provably reach the same evaluator entry point                                      |
+| **Performance**           | 100 policies / 1,000 rules evaluates within 50 ms p95                                                   |
 
 **Golden-file tests.** A directory of `(context, policies) → expected decision` fixtures in JSON.
 Any change to the evaluator that alters a fixture's output fails the build and must be

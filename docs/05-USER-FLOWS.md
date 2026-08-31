@@ -216,7 +216,7 @@ stateDiagram-v2
   EXPIRED --> [*]
 ```
 
-`BLOCKED` is distinct from `REJECTED`: blocked is the *policy* refusing, rejected is a *human*
+`BLOCKED` is distinct from `REJECTED`: blocked is the _policy_ refusing, rejected is a _human_
 refusing. The distinction matters for reporting on policy effectiveness.
 
 ---
@@ -261,12 +261,12 @@ sequenceDiagram
 
 **Step types**
 
-| Type | Completion rule |
-|---|---|
-| `SEQUENTIAL` | Steps activate in order; each must complete before the next |
-| `PARALLEL_ALL` | All approvers in the step must approve |
-| `PARALLEL_ANY` | Any one approver completes the step |
-| `QUORUM(n)` | `n` of the eligible approvers must approve |
+| Type           | Completion rule                                             |
+| -------------- | ----------------------------------------------------------- |
+| `SEQUENTIAL`   | Steps activate in order; each must complete before the next |
+| `PARALLEL_ALL` | All approvers in the step must approve                      |
+| `PARALLEL_ANY` | Any one approver completes the step                         |
+| `QUORUM(n)`    | `n` of the eligible approvers must approve                  |
 
 A rejection at any step terminates the whole instance immediately.
 
@@ -293,7 +293,7 @@ flowchart TD
 ```
 
 The evaluation is **pure**: same context plus same policy versions always yields the same
-decision. The decision, the matched rule IDs, and the policy *versions* used are snapshotted onto
+decision. The decision, the matched rule IDs, and the policy _versions_ used are snapshotted onto
 the request so that a later policy edit never changes the history of a past approval.
 
 ---
@@ -597,15 +597,15 @@ is trusted.
 
 Every flow above inherits these branches without restating them.
 
-| Condition | Response |
-|---|---|
-| Session missing or expired | `401 UNAUTHENTICATED` → login, preserving the return URL |
-| Permission absent | `403 FORBIDDEN` → permission state (§4.9 of `04`) |
-| Resource in another organisation | `404 NOT_FOUND` — **never `403`**, which would confirm existence |
-| Optimistic concurrency conflict | `409 CONFLICT` with the current version → reload prompt |
-| Invalid state transition | `409 INVALID_STATE_TRANSITION` naming current and attempted states |
-| Validation failure | `422 VALIDATION_FAILED` with a field-keyed error map |
-| Duplicate idempotency key, same payload | The original response is replayed |
-| Duplicate idempotency key, different payload | `409 IDEMPOTENCY_KEY_REUSED` |
-| Rate limit exceeded | `429` with `Retry-After` |
-| Upstream provider failure | `502 PROVIDER_ERROR`, job retried with exponential backoff, dead-lettered after 5 attempts |
+| Condition                                    | Response                                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Session missing or expired                   | `401 UNAUTHENTICATED` → login, preserving the return URL                                   |
+| Permission absent                            | `403 FORBIDDEN` → permission state (§4.9 of `04`)                                          |
+| Resource in another organisation             | `404 NOT_FOUND` — **never `403`**, which would confirm existence                           |
+| Optimistic concurrency conflict              | `409 CONFLICT` with the current version → reload prompt                                    |
+| Invalid state transition                     | `409 INVALID_STATE_TRANSITION` naming current and attempted states                         |
+| Validation failure                           | `422 VALIDATION_FAILED` with a field-keyed error map                                       |
+| Duplicate idempotency key, same payload      | The original response is replayed                                                          |
+| Duplicate idempotency key, different payload | `409 IDEMPOTENCY_KEY_REUSED`                                                               |
+| Rate limit exceeded                          | `429` with `Retry-After`                                                                   |
+| Upstream provider failure                    | `502 PROVIDER_ERROR`, job retried with exponential backoff, dead-lettered after 5 attempts |

@@ -86,7 +86,7 @@ export const architectureRules = {
         {
           group: ['**/modules/*/!(index)', '**/modules/*/**'],
           message:
-            'Import a module through its public index.ts only. Deep imports couple you to another module\'s internals. See docs/08-ARCHITECTURE.md §4.3.',
+            "Import a module through its public index.ts only. Deep imports couple you to another module's internals. See docs/08-ARCHITECTURE.md §4.3.",
         },
         {
           group: ['**/platform/database/prisma*'],

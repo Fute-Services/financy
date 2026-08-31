@@ -12,7 +12,11 @@
     "./tsconfig/react": "./tsconfig/react.json",
     "./vitest": "./vitest/base.js"
   },
-  "files": ["eslint", "tsconfig", "vitest"],
+  "files": [
+    "eslint",
+    "tsconfig",
+    "vitest"
+  ],
   "scripts": {
     "lint": "echo \"@financy/config: no sources to lint\"",
     "typecheck": "echo \"@financy/config: no sources to typecheck\"",

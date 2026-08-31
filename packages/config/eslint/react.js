@@ -42,7 +42,8 @@ export function createReactConfig(options) {
               'Money arithmetic must not happen in the browser. The server sends computed figures; the browser formats them. See ADR-0013.',
           },
           {
-            selector: "CallExpression[callee.property.name=/^(add|subtract|minus|plus|times|dividedBy)$/][callee.object.name=/[Mm]oney|[Aa]mount|[Tt]otal/]",
+            selector:
+              'CallExpression[callee.property.name=/^(add|subtract|minus|plus|times|dividedBy)$/][callee.object.name=/[Mm]oney|[Aa]mount|[Tt]otal/]',
             message:
               'Money arithmetic must not happen in the browser. Request a server-computed total. See ADR-0013.',
           },

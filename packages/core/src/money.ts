@@ -224,7 +224,10 @@ export class Money {
     for (const weight of weights) {
       // Truncate toward zero so the remainder is always non-negative in
       // magnitude and can be handed out deterministically below.
-      const share = totalMinor.times(weight).dividedBy(total).toDecimalPlaces(0, Decimal.ROUND_DOWN);
+      const share = totalMinor
+        .times(weight)
+        .dividedBy(total)
+        .toDecimalPlaces(0, Decimal.ROUND_DOWN);
       shares.push(share);
       distributed = distributed.plus(share);
     }

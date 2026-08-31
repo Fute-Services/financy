@@ -23,6 +23,7 @@ Copied into every pull request as a template. Items that genuinely do not apply 
 with a one-line reason — never silently dropped.
 
 ### Data
+
 - [ ] Prisma schema updated; every new tenant-scoped table carries `organization_id`
 - [ ] Composite unique key on the parent and composite FK on the child, so cross-tenant references are impossible
 - [ ] Every foreign key indexed; composite indexes lead with `organization_id`
@@ -35,6 +36,7 @@ with a one-line reason — never silently dropped.
 - [ ] Seed updated if the feature needs reference data; the system seed remains idempotent
 
 ### API
+
 - [ ] Zod schemas in `packages/contracts` for every request and response
 - [ ] Endpoint documented in `10-API-SPECIFICATION.md`
 - [ ] `@RequirePermission()` (or an explicit `@Public()`) on every route
@@ -48,6 +50,7 @@ with a one-line reason — never silently dropped.
 - [ ] Response contains no secret, hash, token, PAN, CVV, or encrypted blob
 
 ### Domain
+
 - [ ] Business logic lives in a domain or application service — **not** in a controller
 - [ ] State transitions go through an explicit state machine; illegal transitions throw
 - [ ] Money handled by the `Money` value object; no `+`/`-`/`*` on a monetary value
@@ -59,6 +62,7 @@ with a one-line reason — never silently dropped.
 - [ ] Approval or policy behaviour reuses the **existing** engine — no second implementation
 
 ### Security
+
 - [ ] Organisation resolved from the session; a client-supplied `organizationId` is rejected
 - [ ] Repository queries carry the tenant predicate — no post-fetch filtering
 - [ ] Cross-tenant access returns `404`, never `403`
@@ -69,6 +73,7 @@ with a one-line reason — never silently dropped.
 - [ ] Nothing sensitive logged; redaction verified
 
 ### Audit and observability
+
 - [ ] Every financial, permission, policy, or configuration mutation writes an audit event
 - [ ] The audit event is written **in the same transaction** as the change
 - [ ] The actor is recorded — a user membership, or an explicit `SYSTEM` actor with the job name
@@ -79,6 +84,7 @@ with a one-line reason — never silently dropped.
 - [ ] Errors carry a correlation ID that the UI surfaces
 
 ### Frontend
+
 - [ ] Loading state — skeleton matching the final geometry, not a spinner
 - [ ] Empty state — the correct one of the three kinds (first-run / filtered / scope)
 - [ ] Error state — code + correlation ID + retry
@@ -94,6 +100,7 @@ with a one-line reason — never silently dropped.
 - [ ] All strings from the message catalogue
 
 ### Tests
+
 - [ ] Unit tests for domain logic, including **every illegal state transition**
 - [ ] Integration tests against a real database for constraints, transactions, and audit atomicity
 - [ ] API tests: unauthenticated, unauthorised, out-of-scope, cross-tenant, invalid, valid, idempotent replay
@@ -105,6 +112,7 @@ with a one-line reason — never silently dropped.
 - [ ] No test is skipped, `.only`, or quarantined without a linked issue
 
 ### Documentation
+
 - [ ] `10-API-SPECIFICATION.md` updated
 - [ ] `09-DATABASE-DESIGN.md` updated if the schema changed
 - [ ] `06-FUNCTIONAL-REQUIREMENTS.md` updated or the implemented `FR-*` referenced
@@ -116,6 +124,7 @@ with a one-line reason — never silently dropped.
 - [ ] `.env.example` updated for any new configuration
 
 ### Delivery
+
 - [ ] Branch named `<type>/<task-id>-<slug>`
 - [ ] Conventional commits referencing the task ID
 - [ ] CI green: lint, typecheck, unit, integration, API, security, critical E2E, build, audit, secret scan, coverage, bundle size, architecture lint
@@ -165,18 +174,18 @@ A phase is done only when every task is done **and**:
 
 Any of these means the work is **not** done, regardless of the checklist:
 
-| Anti-pattern | Why it fails |
-|---|---|
-| A screen with no backend | It teaches users to trust something that does not exist |
-| An endpoint with no permission check | One missing guard is a full breach |
-| A financial mutation with no audit event | The record becomes indefensible |
-| Business logic in a controller | Untestable, unreusable, and it will be duplicated |
-| A second approval or policy implementation | Guaranteed divergence; the whole design exists to prevent it |
-| A hard-coded dashboard number | A lie with a chart around it |
-| Money as a JavaScript `number` | Silent, unrecoverable precision loss |
-| A client-computed total accepted by the server | The entire authorisation model is bypassed |
-| An `UPDATE` to a posted financial value | Destroys the audit trail |
-| A job with no idempotency test | At-least-once delivery *will* run it twice |
-| "I'll add tests later" | Later does not arrive; the tests that matter are the ones written with the code |
-| "It works locally" | The three environments differ by design; that is what CI is for |
-| A skipped test with no linked issue | A known failure that has been made invisible |
+| Anti-pattern                                   | Why it fails                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------------- |
+| A screen with no backend                       | It teaches users to trust something that does not exist                         |
+| An endpoint with no permission check           | One missing guard is a full breach                                              |
+| A financial mutation with no audit event       | The record becomes indefensible                                                 |
+| Business logic in a controller                 | Untestable, unreusable, and it will be duplicated                               |
+| A second approval or policy implementation     | Guaranteed divergence; the whole design exists to prevent it                    |
+| A hard-coded dashboard number                  | A lie with a chart around it                                                    |
+| Money as a JavaScript `number`                 | Silent, unrecoverable precision loss                                            |
+| A client-computed total accepted by the server | The entire authorisation model is bypassed                                      |
+| An `UPDATE` to a posted financial value        | Destroys the audit trail                                                        |
+| A job with no idempotency test                 | At-least-once delivery _will_ run it twice                                      |
+| "I'll add tests later"                         | Later does not arrive; the tests that matter are the ones written with the code |
+| "It works locally"                             | The three environments differ by design; that is what CI is for                 |
+| A skipped test with no linked issue            | A known failure that has been made invisible                                    |

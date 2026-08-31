@@ -15,11 +15,7 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}): React.JSX.Element {
+export default function RootLayout({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen antialiased">{children}</body>
