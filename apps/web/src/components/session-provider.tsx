@@ -1,44 +1,51 @@
 'use client';
 
 import { createContext, useContext, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { getSession, type Session } from '@/lib/session';
-import type { RoleKey } from '@/lib/permissions';
+
+import type { SessionResponse } from '@financy/contracts';
+
+import type { Session } from '@/lib/session';
 
 /**
- * Session context for the application shell.
+ * Makes the server-resolved session available to the client components in the
+ * shell — the sidebar, the command palette, the organisation switcher.
  *
- * **Why a client context rather than a server-resolved prop:** layouts in the
- * App Router deliberately do not receive `searchParams` — they are not
- * re-rendered when the query string changes, so Next.js does not pass it.
- * Reading the role preview parameter in the layout silently yielded the
- * default role for every user, which made the permission-aware navigation
- * look like it was working when it was not.
+ * It resolves nothing itself. The session is fetched in the layout, on the
+ * server, with the `httpOnly` cookie the browser cannot read; this only
+ * carries it down. An earlier version derived the role from a query parameter
+ * so the permission-aware navigation could be demonstrated before the API
+ * existed, which meant the shell could show a role nobody actually held.
  *
- * In Phase 1 (roadmap task 1.3.4) `getSession()` becomes a fetch of
- * `GET /v1/auth/session` against the httpOnly session cookie, and the query
- * parameter disappears. The context boundary stays exactly where it is, so
- * that swap touches this file and `lib/session.ts` and nothing else.
- *
- * Nothing here is a security boundary — the permission set drives rendering
- * only, and every endpoint re-checks server-side (docs/03 §7).
+ * The permission set drives rendering only. Every endpoint re-checks
+ * server-side (docs/03 §7).
  */
 
 const SessionContext = createContext<Session | null>(null);
 
-export function SessionProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
-  const params = useSearchParams();
-  const roleKey = (params.get('role') as RoleKey | null) ?? 'ORG_ADMIN';
+export function SessionProvider({
+  session,
+  children,
+}: {
+  session: SessionResponse;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  // `permissions` crosses the server/client boundary as an array and is
+  // rebuilt as a Set here — a Set does not survive serialisation, and the
+  // components downstream want membership checks, not a linear scan.
+  const value = useMemo<Session>(
+    () => ({ ...session, permissions: new Set(session.permissions) }),
+    [session],
+  );
 
-  const session = useMemo(() => getSession(roleKey), [roleKey]);
-
-  return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
 export function useSession(): Session {
   const session = useContext(SessionContext);
-  if (!session) {
+
+  if (session === null) {
     throw new Error('useSession must be used inside a SessionProvider.');
   }
+
   return session;
 }

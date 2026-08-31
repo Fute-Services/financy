@@ -1,69 +1,77 @@
-import { ROLE_PERMISSIONS, type RoleKey } from './permissions';
+import 'server-only';
+
+import type { SessionResponse } from '@financy/contracts';
+
+import { ApiError, apiFetch } from './api';
 
 /**
- * Session accessor.
+ * The caller's session, from the API.
  *
- * The shape below is **exactly** `SessionResponse` from `@financy/contracts`,
- * which is what `GET /v1/auth/session` returns. That endpoint now exists and
- * works; wiring the browser to it is the next step (task 1.7.10), and keeping
- * the shapes identical means that swap touches this file and nothing else.
+ * `GET /v1/auth/session` returns the user, the active membership, and the
+ * **server-resolved** permission set — resolved from what was actually granted
+ * in the database, not from the constant in `@financy/contracts`. If the two
+ * ever drift, the UI follows the database, which is the runtime authority.
  *
- * Nothing here is a security boundary. The permission set drives *rendering*
- * only — every endpoint re-checks server-side, independently
- * (docs/03-USER-ROLES-PERMISSIONS.md §7).
+ * `server-only` at the top is load-bearing: this module reads the `httpOnly`
+ * session cookie, and importing it into a client component would be a build
+ * error rather than a subtle leak.
+ *
+ * Nothing here is a security boundary. The permission set decides what is
+ * *rendered*; every endpoint re-checks independently, and the API suite proves
+ * each denial without involving the frontend at all (docs/03 §7).
  */
 
-export interface SessionUser {
-  id: string;
-  fullName: string;
-  email: string;
-}
-
-export interface SessionOrganization {
-  id: string;
-  slug: string;
-  name: string;
-  baseCurrency: string;
-}
-
-export interface Session {
-  user: SessionUser;
-  organization: SessionOrganization;
-  /** Every organisation this user belongs to, for the switcher. */
-  organizations: Array<{ id: string; slug: string; name: string; roleKey: RoleKey }>;
-  roleKey: RoleKey;
+/**
+ * The session as the UI wants it: identical to the wire shape except that
+ * `permissions` is a Set. A Set cannot cross the server/client boundary, so
+ * the array is what travels and `SessionProvider` rebuilds it.
+ */
+export type Session = Omit<SessionResponse, 'permissions'> & {
   permissions: ReadonlySet<string>;
-  /** True while any provider is a mock or sandbox adapter (ADR-0014). */
-  isSandbox: boolean;
+};
+
+/**
+ * Whether the caller holds a permission.
+ *
+ * Accepts either shape, because a server component has the array and a client
+ * component has the Set, and making every call site know which it holds is how
+ * one of them ends up checking the wrong thing.
+ *
+ * Rendering only. Never a control — the endpoint decides.
+ */
+export function can(
+  session: { permissions: readonly string[] | ReadonlySet<string> },
+  permission: string,
+): boolean {
+  const granted = session.permissions;
+
+  return granted instanceof Set
+    ? granted.has(permission)
+    : (granted as readonly string[]).includes(permission);
 }
 
-/** Roles the developer preview can switch between, to exercise the RBAC UI. */
-export const PREVIEW_ROLES: RoleKey[] = [
-  'ORG_ADMIN',
-  'FINANCE_ADMIN',
-  'MANAGER',
-  'EMPLOYEE',
-  'AUDITOR',
-];
+/**
+ * Returns `null` when there is no valid session, rather than throwing.
+ *
+ * Not being signed in is an ordinary state — it is most of the internet — and
+ * the layout's response to it is a redirect, not an error page.
+ */
+/**
+ * Returns the wire shape, not the Set-bearing one. It is passed straight into
+ * a client component, and a Set does not survive serialisation — returning one
+ * here produced an empty permission set in the browser with no error anywhere.
+ */
+export async function getSession(): Promise<SessionResponse | null> {
+  try {
+    return await apiFetch<SessionResponse>('/auth/session');
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      return null;
+    }
 
-export function getSession(roleKey: RoleKey = 'ORG_ADMIN'): Session {
-  return {
-    user: {
-      id: '01936d2a-0000-7000-8000-000000000001',
-      fullName: 'Preview User',
-      email: 'preview@financy.local',
-    },
-    organization: {
-      id: '01936d2a-0000-7000-8000-0000000000ff',
-      slug: 'acme',
-      name: 'Acme Ltd',
-      baseCurrency: 'USD',
-    },
-    organizations: [
-      { id: '01936d2a-0000-7000-8000-0000000000ff', slug: 'acme', name: 'Acme Ltd', roleKey },
-    ],
-    roleKey,
-    permissions: new Set(ROLE_PERMISSIONS[roleKey]),
-    isSandbox: true,
-  };
+    // Anything else — the API being down, a 500 — is a real failure and must
+    // not be silently rendered as "signed out". That would send a signed-in
+    // user to the login screen and make an outage look like a session bug.
+    throw error;
+  }
 }

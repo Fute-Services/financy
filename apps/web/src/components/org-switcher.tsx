@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { cn } from '@financy/ui';
 
 import { Icon } from './icons';
@@ -20,8 +21,31 @@ import type { Session } from '@/lib/session';
  * they are about to approve spend in.
  */
 export function OrgSwitcher({ session }: { session: Session }): React.JSX.Element {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Signing out revokes the session server-side, not just in the browser.
+   * Clearing the cookie alone would leave a token that still works for anyone
+   * who captured it, which is the whole reason sessions are server-held.
+   *
+   * `refresh()` before `replace()`: the shell resolves the session on the
+   * server, and without it Next would serve the cached signed-in render of a
+   * session that no longer exists.
+   */
+  async function signOut(): Promise<void> {
+    setSigningOut(true);
+
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.refresh();
+      // `replace`, so the back button does not return to a signed-in page.
+      router.replace('/login');
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -107,18 +131,22 @@ export function OrgSwitcher({ session }: { session: Session }): React.JSX.Elemen
 
           <p className="px-3 py-1.5 text-[12px] text-ink-500">
             Signed in as{' '}
-            <span className="font-medium text-ink-700">{ROLE_LABELS[session.roleKey]}</span>
+            <span className="font-medium text-ink-700">
+              {ROLE_LABELS[session.membership.roleKey]}
+            </span>
           </p>
 
-          <form action="/api/logout" method="post">
-            <button
-              type="submit"
-              role="menuitem"
-              className="w-full px-3 py-2 text-left text-[13px] text-ink-700 hover:bg-ink-50"
-            >
-              Sign out
-            </button>
-          </form>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={signingOut}
+            onClick={() => {
+              void signOut();
+            }}
+            className="w-full px-3 py-2 text-left text-[13px] text-ink-700 hover:bg-ink-50 disabled:opacity-60"
+          >
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </button>
         </div>
       )}
     </div>

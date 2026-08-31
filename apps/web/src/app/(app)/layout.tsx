@@ -1,36 +1,40 @@
-import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
+
 import { SessionProvider } from '@/components/session-provider';
 import { Shell } from '@/components/shell';
+import { getSession } from '@/lib/session';
 
 /**
- * Authenticated application shell.
+ * The authenticated shell.
  *
- * Fixed 240px sidebar, 56px top bar, fluid content region capped at 1600px
- * (docs/04-INFORMATION-ARCHITECTURE.md §1).
+ * The session is resolved **here**, on the server, before anything renders.
+ * Two consequences worth stating:
  *
- * The layout stays a server component and does no session work itself: the
- * App Router does not pass `searchParams` to layouts, so anything derived from
- * the query string has to happen below a client boundary. `SessionProvider`
- * is that boundary. `children` is still rendered on the server and passed
- * through, so pages remain server components.
+ * - There is no logged-out flash and no loading skeleton for the chrome. The
+ *   first byte the browser receives already has the right organisation name in
+ *   it.
+ * - Every page under this layout can assume a session exists. A page that had
+ *   to handle "maybe signed in" would handle it slightly differently each
+ *   time, and one of those would be wrong.
  *
- * `Suspense` is required because `SessionProvider` calls `useSearchParams`.
+ * The redirect is a convenience, not a control. It is the API that refuses an
+ * unauthenticated request; this only saves the user from a screen full of
+ * empty states.
  */
-export default function AppLayout({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return (
-    <Suspense fallback={<ShellFallback />}>
-      <SessionProvider>
-        <Shell>{children}</Shell>
-      </SessionProvider>
-    </Suspense>
-  );
-}
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}): Promise<React.JSX.Element> {
+  const session = await getSession();
 
-function ShellFallback(): React.JSX.Element {
+  if (session === null) {
+    redirect('/login');
+  }
+
   return (
-    <div className="flex h-screen overflow-hidden">
-      <div className="w-60 shrink-0 bg-[var(--surface-nav)]" />
-      <div className="flex-1 border-b border-[var(--border-default)]" />
-    </div>
+    <SessionProvider session={session}>
+      <Shell>{children}</Shell>
+    </SessionProvider>
   );
 }

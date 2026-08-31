@@ -3,8 +3,7 @@ import { notFound } from 'next/navigation';
 import { Card, CardBody, PermissionState, Badge } from '@financy/ui';
 import { PageHeader } from '@/components/page-header';
 import { NAV_ITEMS } from '@/lib/navigation';
-import { getSession } from '@/lib/session';
-import type { RoleKey } from '@/lib/permissions';
+import { can, getSession } from '@/lib/session';
 
 /**
  * Catch-all for modules that are on the roadmap but not yet built.
@@ -27,7 +26,6 @@ import type { RoleKey } from '@/lib/permissions';
 
 interface Props {
   params: Promise<{ slug: string[] }>;
-  searchParams: Promise<{ role?: string }>;
 }
 
 const PHASE_CONTENT: Record<number, string[]> = {
@@ -73,19 +71,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: item?.label ?? 'Not found' };
 }
 
-export default async function ModulePage({
-  params,
-  searchParams,
-}: Props): Promise<React.JSX.Element> {
+export default async function ModulePage({ params }: Props): Promise<React.JSX.Element> {
   const { slug } = await params;
-  const { role } = await searchParams;
 
   const item = findNavItem(slug);
   if (!item) notFound();
 
-  const session = getSession((role as RoleKey | undefined) ?? 'ORG_ADMIN');
+  const session = await getSession();
 
-  if (item.permission !== null && !session.permissions.has(item.permission)) {
+  // The layout redirects when there is no session, so this is defensive only.
+  if (session !== null && item.permission !== null && !can(session, item.permission)) {
     return (
       <>
         <PageHeader title={item.label} />
