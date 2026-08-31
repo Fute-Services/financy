@@ -1,0 +1,114 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  Financy — local infrastructure
+#
+#  This file is CI's stack and an OPTIONAL convenience locally. It is never
+#  the only supported path: the reference development host has neither Docker
+#  nor WSL (audit findings P3/P4), which is why the application ships an
+#  in-process queue adapter and a filesystem document provider and runs
+#  perfectly well against a natively installed PostgreSQL. See ADR-0006/0007.
+#
+#    docker compose -f infra/docker-compose.yml up -d
+#
+#  Ports are deliberately non-default: 5432 and 3000 are already occupied on
+#  the reference host, and a container silently failing to bind is a worse
+#  problem than an unfamiliar port number.
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: financy
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: financy-postgres
+    restart: unless-stopped
+    environment:
+      # Local only. These credentials never leave this file, and the
+      # application still connects as a least-privilege role rather than as
+      # the superuser — the init script below creates it.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      # C collation makes index behaviour and sort order match production
+      # regardless of the host's locale.
+      POSTGRES_INITDB_ARGS: '--locale=C --encoding=UTF8'
+    ports:
+      - '${POSTGRES_PORT:-5442}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # `pg_isready` alone returns true while the init scripts are still
+      # running, so a dependent service can start against a database that has
+      # no roles yet. Querying the role we actually need closes that window.
+      test:
+        [
+          'CMD-SHELL',
+          'psql -U postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname=\047financy_app\047" | grep -q 1',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: financy-redis
+    restart: unless-stopped
+    # Persistence on, because BullMQ holds queued jobs here and losing them on
+    # a container restart is exactly the failure mode local development is
+    # supposed to reveal rather than hide.
+    command: ['redis-server', '--appendonly', 'yes', '--save', '60', '1']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3-compatible storage, so the S3 document provider can be exercised
+  # locally rather than only in staging.
+  minio:
+    image: minio/minio:latest
+    container_name: financy-minio
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: financy
+      MINIO_ROOT_PASSWORD: financy-local-secret
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # A catch-all SMTP sink with a web UI. Nothing sent in development can reach
+  # a real address, which is the property that matters: an invitation email
+  # accidentally delivered to a real person is not recoverable.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: financy-mailpit
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '${MAILPIT_UI_PORT:-8025}:8025'
+    healthcheck:
+      test: ['CMD', 'sh', '-c', 'wget -q -O - http://localhost:8025/readyz || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

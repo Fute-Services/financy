@@ -1,7 +1,7 @@
 # 03 — User Roles and Permissions
 
 **Status:** Baseline v1.0 — 2026-08-29
-**Authority:** This document is the *specification*. The runtime authority is the seeded
+**Authority:** This document is the _specification_. The runtime authority is the seeded
 `permissions` / `role_permissions` tables and the server-side guard. The frontend uses
 permissions only to decide what to render — never to decide what is allowed.
 
@@ -23,11 +23,11 @@ graph LR
 
 Three ideas, kept strictly separate:
 
-| Concept | Meaning | Example |
-|---|---|---|
-| **Identity** | Who you are, globally. One `User` row per human. | `aisha@acme.com` |
+| Concept        | Meaning                                                              | Example                       |
+| -------------- | -------------------------------------------------------------------- | ----------------------------- |
+| **Identity**   | Who you are, globally. One `User` row per human.                     | `aisha@acme.com`              |
 | **Membership** | Your relationship to one organisation. A user may belong to several. | Aisha @ Acme, role `EMPLOYEE` |
-| **Permission** | A single verb-on-noun capability. | `transaction:review` |
+| **Permission** | A single verb-on-noun capability.                                    | `transaction:review`          |
 
 **A user has no permissions. A membership does.** Every authorisation decision therefore begins
 by resolving the membership from the session — which is also what makes tenant isolation
@@ -47,14 +47,14 @@ Actions: `read` · `read_all` · `create` · `update` · `delete` · `approve` �
 
 ### 1.2 Scope qualifiers
 
-Beyond the permission itself, three scope levels narrow *which rows* a permission applies to:
+Beyond the permission itself, three scope levels narrow _which rows_ a permission applies to:
 
-| Scope | Rows visible | Typical roles |
-|---|---|---|
-| `SELF` | Only records where the member is the owner/requester/cardholder | Employee |
-| `DEPARTMENT` | Records belonging to the member's department and its descendants | Manager |
-| `ENTITY` | Records belonging to assigned legal entities | Entity-scoped Finance |
-| `ORGANISATION` | All records in the organisation | Finance Admin, Org Admin, Auditor |
+| Scope          | Rows visible                                                     | Typical roles                     |
+| -------------- | ---------------------------------------------------------------- | --------------------------------- |
+| `SELF`         | Only records where the member is the owner/requester/cardholder  | Employee                          |
+| `DEPARTMENT`   | Records belonging to the member's department and its descendants | Manager                           |
+| `ENTITY`       | Records belonging to assigned legal entities                     | Entity-scoped Finance             |
+| `ORGANISATION` | All records in the organisation                                  | Finance Admin, Org Admin, Auditor |
 
 Scope is stored on the membership and applied by the repository layer as a mandatory `WHERE`
 clause. It is never optional and never client-supplied.
@@ -70,7 +70,7 @@ The system owner. Configures the organisation and controls access.
 **Responsibilities:** organisation profile, entities, departments, users, roles, integrations,
 security settings.
 
-**Deliberate limitation:** an Org Admin can *configure* spend policy but is **not** automatically
+**Deliberate limitation:** an Org Admin can _configure_ spend policy but is **not** automatically
 an approver of spend and cannot mark a reimbursement paid. Configuration authority and
 transaction authority are separated so that no single role can both write the rule and execute
 the payment. Both capabilities can be held by one person only by explicitly granting them both
@@ -128,32 +128,32 @@ Legend: **✔** granted · **○** granted, scope-limited (see column note) · *
 
 ### 3.1 Organisation and access
 
-| Permission | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
-|---|:--:|:--:|:--:|:--:|:--:|
-| `organization:read` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `organization:update` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `entity:read` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `entity:manage` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `department:read` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `department:manage` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `user:read` | ✔ | ✔ | ○ dept | ✖ | ✔ |
-| `user:invite` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `user:update` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `user:deactivate` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `membership:manage_role` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `session:revoke_any` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `security_event:read` | ✔ | ✖ | ✖ | ✖ | ✔ |
+| Permission               | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
+| ------------------------ | :-------: | :-----------: | :-----: | :------: | :-----: |
+| `organization:read`      |     ✔     |       ✔       |    ✔    |    ✔     |    ✔    |
+| `organization:update`    |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `entity:read`            |     ✔     |       ✔       |    ✔    |    ✔     |    ✔    |
+| `entity:manage`          |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `department:read`        |     ✔     |       ✔       |    ✔    |    ✔     |    ✔    |
+| `department:manage`      |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `user:read`              |     ✔     |       ✔       | ○ dept  |    ✖     |    ✔    |
+| `user:invite`            |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `user:update`            |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `user:deactivate`        |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `membership:manage_role` |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `session:revoke_any`     |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `security_event:read`    |     ✔     |       ✖       |    ✖    |    ✖     |    ✔    |
 
 ### 3.2 Policy and approvals
 
-| Permission | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
-|---|:--:|:--:|:--:|:--:|:--:|
-| `policy:read` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `policy:manage` | ✔ | ✔ | ✖ | ✖ | ✖ |
-| `approval:read` | ✔ | ✔ | ○ own queue | ○ own requests | ✔ |
-| `approval:act` | ✖ | ✔ | ○ dept | ✖ | ✖ |
-| `approval:delegate` | ✔ | ✔ | ✔ | ✖ | ✖ |
-| `approval:override` | ✖ | ✔ | ✖ | ✖ | ✖ |
+| Permission          | ORG_ADMIN | FINANCE_ADMIN |   MANAGER   |    EMPLOYEE    | AUDITOR |
+| ------------------- | :-------: | :-----------: | :---------: | :------------: | :-----: |
+| `policy:read`       |     ✔     |       ✔       |      ✔      |       ✔        |    ✔    |
+| `policy:manage`     |     ✔     |       ✔       |      ✖      |       ✖        |    ✖    |
+| `approval:read`     |     ✔     |       ✔       | ○ own queue | ○ own requests |    ✔    |
+| `approval:act`      |     ✖     |       ✔       |   ○ dept    |       ✖        |    ✖    |
+| `approval:delegate` |     ✔     |       ✔       |      ✔      |       ✖        |    ✖    |
+| `approval:override` |     ✖     |       ✔       |      ✖      |       ✖        |    ✖    |
 
 > `approval:override` lets Finance force a decision on a stalled chain. It always writes an audit
 > event of type `approval.overridden` carrying a mandatory reason. Org Admin does **not** hold it,
@@ -161,73 +161,73 @@ Legend: **✔** granted · **○** granted, scope-limited (see column note) · *
 
 ### 3.3 Spend, cards, transactions
 
-| Permission | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
-|---|:--:|:--:|:--:|:--:|:--:|
-| `spend_request:create` | ✔ | ✔ | ✔ | ✔ | ✖ |
-| `spend_request:read` | ✔ | ✔ | ○ dept | ○ self | ✔ |
-| `spend_request:read_all` | ✔ | ✔ | ✖ | ✖ | ✔ |
-| `spend_request:update` | ○ own draft | ○ own draft | ○ own draft | ○ own draft | ✖ |
-| `spend_request:cancel` | ○ own | ✔ | ○ dept | ○ self | ✖ |
-| `card:read` | ✔ | ✔ | ○ dept | ○ self | ✔ |
-| `card:create` | ✔ | ✔ | ✖ | ✖ | ✖ |
-| `card:update_limit` | ✖ | ✔ | ✖ | ✖ | ✖ |
-| `card:lock` | ✔ | ✔ | ○ dept | ○ self | ✖ |
-| `card:terminate` | ✔ | ✔ | ✖ | ✖ | ✖ |
-| `transaction:read` | ✔ | ✔ | ○ dept | ○ self | ✔ |
-| `transaction:read_all` | ✔ | ✔ | ✖ | ✖ | ✔ |
-| `transaction:categorize` | ✖ | ✔ | ○ dept | ○ self | ✖ |
-| `transaction:review` | ✖ | ✔ | ✖ | ✖ | ✖ |
-| `transaction:import` | ✔ | ✔ | ✖ | ✖ | ✖ |
+| Permission               |  ORG_ADMIN  | FINANCE_ADMIN |   MANAGER   |  EMPLOYEE   | AUDITOR |
+| ------------------------ | :---------: | :-----------: | :---------: | :---------: | :-----: |
+| `spend_request:create`   |      ✔      |       ✔       |      ✔      |      ✔      |    ✖    |
+| `spend_request:read`     |      ✔      |       ✔       |   ○ dept    |   ○ self    |    ✔    |
+| `spend_request:read_all` |      ✔      |       ✔       |      ✖      |      ✖      |    ✔    |
+| `spend_request:update`   | ○ own draft |  ○ own draft  | ○ own draft | ○ own draft |    ✖    |
+| `spend_request:cancel`   |    ○ own    |       ✔       |   ○ dept    |   ○ self    |    ✖    |
+| `card:read`              |      ✔      |       ✔       |   ○ dept    |   ○ self    |    ✔    |
+| `card:create`            |      ✔      |       ✔       |      ✖      |      ✖      |    ✖    |
+| `card:update_limit`      |      ✖      |       ✔       |      ✖      |      ✖      |    ✖    |
+| `card:lock`              |      ✔      |       ✔       |   ○ dept    |   ○ self    |    ✖    |
+| `card:terminate`         |      ✔      |       ✔       |      ✖      |      ✖      |    ✖    |
+| `transaction:read`       |      ✔      |       ✔       |   ○ dept    |   ○ self    |    ✔    |
+| `transaction:read_all`   |      ✔      |       ✔       |      ✖      |      ✖      |    ✔    |
+| `transaction:categorize` |      ✖      |       ✔       |   ○ dept    |   ○ self    |    ✖    |
+| `transaction:review`     |      ✖      |       ✔       |      ✖      |      ✖      |    ✖    |
+| `transaction:import`     |      ✔      |       ✔       |      ✖      |      ✖      |    ✖    |
 
 ### 3.4 Expenses, receipts, reimbursements
 
-| Permission | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
-|---|:--:|:--:|:--:|:--:|:--:|
-| `expense:create` | ✔ | ✔ | ✔ | ✔ | ✖ |
-| `expense:read` | ✔ | ✔ | ○ dept | ○ self | ✔ |
-| `expense:approve` | ✖ | ✔ | ○ dept | ✖ | ✖ |
-| `receipt:upload` | ✔ | ✔ | ✔ | ✔ | ✖ |
-| `receipt:read` | ✔ | ✔ | ○ dept | ○ self | ✔ |
-| `receipt:delete` | ✖ | ✔ | ✖ | ○ own, unattached | ✖ |
-| `reimbursement:create` | ✔ | ✔ | ✔ | ✔ | ✖ |
-| `reimbursement:read` | ✔ | ✔ | ○ dept | ○ self | ✔ |
-| `reimbursement:approve` | ✖ | ✔ | ○ dept | ✖ | ✖ |
-| `reimbursement:mark_paid` | ✖ | ✔ | ✖ | ✖ | ✖ |
+| Permission                | ORG_ADMIN | FINANCE_ADMIN | MANAGER |     EMPLOYEE      | AUDITOR |
+| ------------------------- | :-------: | :-----------: | :-----: | :---------------: | :-----: |
+| `expense:create`          |     ✔     |       ✔       |    ✔    |         ✔         |    ✖    |
+| `expense:read`            |     ✔     |       ✔       | ○ dept  |      ○ self       |    ✔    |
+| `expense:approve`         |     ✖     |       ✔       | ○ dept  |         ✖         |    ✖    |
+| `receipt:upload`          |     ✔     |       ✔       |    ✔    |         ✔         |    ✖    |
+| `receipt:read`            |     ✔     |       ✔       | ○ dept  |      ○ self       |    ✔    |
+| `receipt:delete`          |     ✖     |       ✔       |    ✖    | ○ own, unattached |    ✖    |
+| `reimbursement:create`    |     ✔     |       ✔       |    ✔    |         ✔         |    ✖    |
+| `reimbursement:read`      |     ✔     |       ✔       | ○ dept  |      ○ self       |    ✔    |
+| `reimbursement:approve`   |     ✖     |       ✔       | ○ dept  |         ✖         |    ✖    |
+| `reimbursement:mark_paid` |     ✖     |       ✔       |    ✖    |         ✖         |    ✖    |
 
 ### 3.5 Budgets, reports, accounting
 
-| Permission | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
-|---|:--:|:--:|:--:|:--:|:--:|
-| `budget:read` | ✔ | ✔ | ○ dept | ✖ | ✔ |
-| `budget:manage` | ✖ | ✔ | ✖ | ✖ | ✖ |
-| `report:read` | ✔ | ✔ | ○ dept | ✖ | ✔ |
-| `report:export` | ✔ | ✔ | ○ dept | ✖ | ✔ |
-| `accounting_code:manage` | ✖ | ✔ | ✖ | ✖ | ✖ |
-| `accounting:export` | ✖ | ✔ | ✖ | ✖ | ✖ |
+| Permission               | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
+| ------------------------ | :-------: | :-----------: | :-----: | :------: | :-----: |
+| `budget:read`            |     ✔     |       ✔       | ○ dept  |    ✖     |    ✔    |
+| `budget:manage`          |     ✖     |       ✔       |    ✖    |    ✖     |    ✖    |
+| `report:read`            |     ✔     |       ✔       | ○ dept  |    ✖     |    ✔    |
+| `report:export`          |     ✔     |       ✔       | ○ dept  |    ✖     |    ✔    |
+| `accounting_code:manage` |     ✖     |       ✔       |    ✖    |    ✖     |    ✖    |
+| `accounting:export`      |     ✖     |       ✔       |    ✖    |    ✖     |    ✖    |
 
 ### 3.6 Vendors, bills, procurement (Phase 5)
 
-| Permission | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
-|---|:--:|:--:|:--:|:--:|:--:|
-| `vendor:read` | ✔ | ✔ | ✔ | ✔ | ✔ |
-| `vendor:manage` | ✔ | ✔ | ✖ | ✖ | ✖ |
-| `bill:read` | ✔ | ✔ | ○ dept | ✖ | ✔ |
-| `bill:create` | ✔ | ✔ | ✖ | ✖ | ✖ |
-| `bill:approve` | ✖ | ✔ | ○ dept | ✖ | ✖ |
-| `bill:mark_paid` | ✖ | ✔ | ✖ | ✖ | ✖ |
-| `purchase_order:create` | ✔ | ✔ | ✔ | ✔ | ✖ |
-| `purchase_order:read` | ✔ | ✔ | ○ dept | ○ self | ✔ |
-| `purchase_order:approve` | ✖ | ✔ | ○ dept | ✖ | ✖ |
+| Permission               | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
+| ------------------------ | :-------: | :-----------: | :-----: | :------: | :-----: |
+| `vendor:read`            |     ✔     |       ✔       |    ✔    |    ✔     |    ✔    |
+| `vendor:manage`          |     ✔     |       ✔       |    ✖    |    ✖     |    ✖    |
+| `bill:read`              |     ✔     |       ✔       | ○ dept  |    ✖     |    ✔    |
+| `bill:create`            |     ✔     |       ✔       |    ✖    |    ✖     |    ✖    |
+| `bill:approve`           |     ✖     |       ✔       | ○ dept  |    ✖     |    ✖    |
+| `bill:mark_paid`         |     ✖     |       ✔       |    ✖    |    ✖     |    ✖    |
+| `purchase_order:create`  |     ✔     |       ✔       |    ✔    |    ✔     |    ✖    |
+| `purchase_order:read`    |     ✔     |       ✔       | ○ dept  |  ○ self  |    ✔    |
+| `purchase_order:approve` |     ✖     |       ✔       | ○ dept  |    ✖     |    ✖    |
 
 ### 3.7 Audit and integrations
 
-| Permission | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
-|---|:--:|:--:|:--:|:--:|:--:|
-| `audit_event:read` | ✔ | ✔ | ✖ | ✖ | ✔ |
-| `audit_event:export` | ✔ | ✖ | ✖ | ✖ | ✔ |
-| `integration:read` | ✔ | ✔ | ✖ | ✖ | ✔ |
-| `integration:manage` | ✔ | ✖ | ✖ | ✖ | ✖ |
-| `notification:read_own` | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Permission              | ORG_ADMIN | FINANCE_ADMIN | MANAGER | EMPLOYEE | AUDITOR |
+| ----------------------- | :-------: | :-----------: | :-----: | :------: | :-----: |
+| `audit_event:read`      |     ✔     |       ✔       |    ✖    |    ✖     |    ✔    |
+| `audit_event:export`    |     ✔     |       ✖       |    ✖    |    ✖     |    ✔    |
+| `integration:read`      |     ✔     |       ✔       |    ✖    |    ✖     |    ✔    |
+| `integration:manage`    |     ✔     |       ✖       |    ✖    |    ✖     |    ✖    |
+| `notification:read_own` |     ✔     |       ✔       |    ✔    |    ✔     |    ✔    |
 
 > **No role holds `audit_event:create`, `audit_event:update`, or `audit_event:delete`.** Those
 > permissions do not exist. Audit events are written only by the application's audit service, on
@@ -240,18 +240,18 @@ Legend: **✔** granted · **○** granted, scope-limited (see column note) · *
 These are the rules that must never be violable. Each maps to a security test in
 `16-TESTING-STRATEGY.md`.
 
-| ID | Invariant |
-|---|---|
+| ID     | Invariant                                                                                                                                                                                           |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | INV-01 | Every request is scoped to exactly one organisation, resolved from the session's membership. A client-supplied `organizationId` is ignored, and if present and mismatched, the request is rejected. |
-| INV-02 | A user cannot approve their own spend request, expense, reimbursement, bill, or purchase order — at any step, under any policy, including as a delegate. |
-| INV-03 | A user cannot grant themselves a permission they do not hold, nor elevate their own role. |
-| INV-04 | The last remaining `ORG_ADMIN` membership in an organisation cannot be demoted, deactivated, or deleted. |
-| INV-05 | `AUDITOR` memberships are rejected on all non-`GET` requests, independent of permissions. |
-| INV-06 | Audit events are append-only. No code path issues `UPDATE` or `DELETE` against `audit_events`; the database role holds only `INSERT` and `SELECT` on that table. |
-| INV-07 | Scope-limited permissions are applied as a mandatory `WHERE` clause in the repository, not as a post-fetch filter. |
-| INV-08 | Any change to a role, permission, or membership writes a `security_event` in addition to an audit event. |
-| INV-09 | Permission checks occur on the server for every endpoint, including those a frontend would not normally call. |
-| INV-10 | A deactivated membership's sessions are revoked immediately, and its pending approval steps are reassigned or escalated. |
+| INV-02 | A user cannot approve their own spend request, expense, reimbursement, bill, or purchase order — at any step, under any policy, including as a delegate.                                            |
+| INV-03 | A user cannot grant themselves a permission they do not hold, nor elevate their own role.                                                                                                           |
+| INV-04 | The last remaining `ORG_ADMIN` membership in an organisation cannot be demoted, deactivated, or deleted.                                                                                            |
+| INV-05 | `AUDITOR` memberships are rejected on all non-`GET` requests, independent of permissions.                                                                                                           |
+| INV-06 | Audit events are append-only. No code path issues `UPDATE` or `DELETE` against `audit_events`; the database role holds only `INSERT` and `SELECT` on that table.                                    |
+| INV-07 | Scope-limited permissions are applied as a mandatory `WHERE` clause in the repository, not as a post-fetch filter.                                                                                  |
+| INV-08 | Any change to a role, permission, or membership writes a `security_event` in addition to an audit event.                                                                                            |
+| INV-09 | Permission checks occur on the server for every endpoint, including those a frontend would not normally call.                                                                                       |
+| INV-10 | A deactivated membership's sessions are revoked immediately, and its pending approval steps are reassigned or escalated.                                                                            |
 
 ---
 
@@ -262,7 +262,7 @@ An approver may delegate their approval authority for a bounded period (holiday,
 - Delegation is `from_membership` → `to_membership`, with `starts_at`, `ends_at`, optional scope.
 - The delegate acts **as themselves**, recorded as `acted_by = delegate`,
   `acted_on_behalf_of = delegator`. The audit trail never loses the real actor.
-- INV-02 applies to both parties: a delegate cannot approve their *own* request even when the
+- INV-02 applies to both parties: a delegate cannot approve their _own_ request even when the
   delegator could have.
 - Delegation cannot chain. A delegate cannot re-delegate.
 - Creating, using, and expiring a delegation are all audited.

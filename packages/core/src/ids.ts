@@ -1,9 +1,7 @@
-import { randomBytes, randomUUID } from 'node:crypto';
-
 /**
  * Identifiers.
  *
- * Two things matter here:
+ * Three things matter here:
  *
  *  1. **UUID v7**, not v4. v7 embeds a millisecond timestamp in its high bits,
  *     so ids sort chronologically and index like a sequence — which keeps
@@ -16,7 +14,51 @@ import { randomBytes, randomUUID } from 'node:crypto';
  *     membership id are interchangeable to the compiler, and swapping them is
  *     a tenant-isolation bug that type-checks. Branding makes the swap a
  *     compile error.
+ *
+ *  3. **Web Crypto, not `node:crypto`.** This package is compiled into the
+ *     browser bundle as well as the API — it is the shared domain layer, and
+ *     `@financy/ui` and `@financy/contracts` both depend on it. A `node:`
+ *     import here fails the Next.js build the moment anything reaches this
+ *     module, which is a strange way to discover that a "framework-free"
+ *     package was not portable. `globalThis.crypto` is standard in Node ≥ 19
+ *     and in every browser, and it is a CSPRNG in both (THR-03).
  */
+
+/**
+ * Cryptographically secure random bytes.
+ *
+ * `Math.random` is banned by lint precisely because a call site like this one
+ * is where it would do the most damage: these bytes become record ids that are
+ * exposed in URLs.
+ */
+function randomBytes(length: number): Uint8Array {
+  return globalThis.crypto.getRandomValues(new Uint8Array(length));
+}
+
+/**
+ * A `DataView` over the bytes, rather than indexing them directly.
+ *
+ * `noUncheckedIndexedAccess` types `bytes[6]` as `number | undefined`, so every
+ * read would need a `?? 0` that can never fire — sixteen unreachable branches
+ * in the one file that must stay at 100% coverage. `getUint8` returns a
+ * `number`, so the guards are not needed and the coverage figure keeps meaning
+ * something.
+ */
+function viewOf(bytes: Uint8Array): DataView {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+function toHex(bytes: Uint8Array): string {
+  let hex = '';
+  for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
+  return hex;
+}
+
+/** Format 16 bytes as `8-4-4-4-12`. */
+function formatUuid(bytes: Uint8Array): string {
+  const hex = toHex(bytes);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 declare const brand: unique symbol;
 
@@ -81,28 +123,26 @@ export function generateId(): string {
     }
   } else {
     lastTimestamp = now;
-    sequence = randomBytes(2).readUInt16BE(0) & 0xfff;
+    sequence = viewOf(randomBytes(2)).getUint16(0) & 0xfff;
   }
 
   const bytes = randomBytes(16);
+  const view = viewOf(bytes);
 
-  // 48-bit timestamp
-  bytes[0] = (now / 2 ** 40) & 0xff;
-  bytes[1] = (now / 2 ** 32) & 0xff;
-  bytes[2] = (now / 2 ** 24) & 0xff;
-  bytes[3] = (now / 2 ** 16) & 0xff;
-  bytes[4] = (now / 2 ** 8) & 0xff;
-  bytes[5] = now & 0xff;
+  // 48-bit big-endian millisecond timestamp, written as 16 + 32 bits because
+  // `setUint32` cannot hold all 48 and JavaScript bitwise operators truncate
+  // to 32 — `now << 8` would silently lose the top of the clock in 2038.
+  view.setUint16(0, Math.floor(now / 2 ** 32));
+  view.setUint32(2, now % 2 ** 32);
 
-  // version 7 + 12-bit monotonic counter
-  bytes[6] = 0x70 | ((sequence >> 8) & 0x0f);
-  bytes[7] = sequence & 0xff;
+  // Version 7, then the 12-bit monotonic counter.
+  view.setUint8(6, 0x70 | ((sequence >> 8) & 0x0f));
+  view.setUint8(7, sequence & 0xff);
 
-  // RFC 4122 variant
-  bytes[8] = 0x80 | ((bytes[8] ?? 0) & 0x3f);
+  // RFC 4122 variant, preserving the random low bits.
+  view.setUint8(8, 0x80 | (view.getUint8(8) & 0x3f));
 
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return formatUuid(bytes);
 }
 
 /** Typed id generator: `newId<OrganizationId>()`. */
@@ -127,10 +167,25 @@ export function idTimestamp(id: string): Date | null {
 
 /**
  * Correlation id for request tracing.
- * v4 is correct here — these are not stored or indexed, only propagated.
+ *
+ * v4 is correct here — these are not stored or indexed, only propagated, so
+ * there is nothing for v7's time ordering to help.
+ *
+ * Built from `getRandomValues` rather than `crypto.randomUUID()` because the
+ * latter is unavailable in a browser outside a secure context. This module is
+ * bundled for the browser, and a function that throws on `http://` in some
+ * environments and not others is a worse trade than eight lines of bit
+ * twiddling.
  */
 export function newCorrelationId(): CorrelationId {
-  return randomUUID() as CorrelationId;
+  const bytes = randomBytes(16);
+  const view = viewOf(bytes);
+
+  // Version 4, RFC 4122 variant.
+  view.setUint8(6, 0x40 | (view.getUint8(6) & 0x0f));
+  view.setUint8(8, 0x80 | (view.getUint8(8) & 0x3f));
+
+  return formatUuid(bytes) as CorrelationId;
 }
 
 /**

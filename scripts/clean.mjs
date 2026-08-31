@@ -15,10 +15,25 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT_TARGETS = ['.turbo', 'coverage', 'test-results', 'playwright-report'];
 
 /** Directories removed inside every workspace package. */
-const PACKAGE_TARGETS = ['dist', '.next', '.turbo', 'coverage', 'tsconfig.tsbuildinfo'];
+const PACKAGE_TARGETS = [
+  'dist',
+  '.next',
+  '.turbo',
+  'coverage',
+  'tsconfig.tsbuildinfo',
+  'tsconfig.build.tsbuildinfo',
+  'test-results',
+  'playwright-report',
+];
 
 /** Workspace roots, matching pnpm-workspace.yaml. */
 const WORKSPACE_ROOTS = ['apps', 'packages'];
+
+/**
+ * Single-package workspaces, which are directories rather than parents of
+ * directories. `tests` is one, so it is cleaned directly.
+ */
+const STANDALONE_PACKAGES = ['tests'];
 
 let removed = 0;
 
@@ -40,6 +55,12 @@ for (const workspace of WORKSPACE_ROOTS) {
     if (!statSync(packagePath).isDirectory()) continue;
     for (const target of PACKAGE_TARGETS) remove(join(packagePath, target));
   }
+}
+
+for (const packageName of STANDALONE_PACKAGES) {
+  const packagePath = join(ROOT, packageName);
+  if (!existsSync(packagePath)) continue;
+  for (const target of PACKAGE_TARGETS) remove(join(packagePath, target));
 }
 
 console.log(

@@ -35,16 +35,16 @@ graph LR
 
 ## 2. Port catalogue
 
-| Port | Purpose | MVP adapter | Later |
-|---|---|---|---|
-| `CardProvider` | Issue and control spend authorisations | **Mock** — deterministic, in-DB | Licensed issuer (Phase 7) |
-| `PaymentProvider` | Execute and track payouts | **Manual** — records a human-executed payment | Real rail (Phase 7) |
-| `AccountingProvider` | Push coded records to the book of record | **CSV** export | QuickBooks / Xero / NetSuite |
-| `NotificationProvider` | Deliver messages | **SMTP + in-app** | ESP, Slack, Teams |
-| `DocumentProvider` | Private object storage with signed URLs | **Filesystem** (local) / **S3** | S3, GCS, Azure Blob |
-| `OCRProvider` | Extract fields from receipts | **No-op** | Vision service (Phase 7) |
-| `IdentityProvider` | Authenticate a user | **Local** (password + TOTP) | OIDC, SAML, SCIM |
-| `FxRateProvider` | Currency conversion rates | **Static table** | Live rate feed |
+| Port                   | Purpose                                  | MVP adapter                                   | Later                        |
+| ---------------------- | ---------------------------------------- | --------------------------------------------- | ---------------------------- |
+| `CardProvider`         | Issue and control spend authorisations   | **Mock** — deterministic, in-DB               | Licensed issuer (Phase 7)    |
+| `PaymentProvider`      | Execute and track payouts                | **Manual** — records a human-executed payment | Real rail (Phase 7)          |
+| `AccountingProvider`   | Push coded records to the book of record | **CSV** export                                | QuickBooks / Xero / NetSuite |
+| `NotificationProvider` | Deliver messages                         | **SMTP + in-app**                             | ESP, Slack, Teams            |
+| `DocumentProvider`     | Private object storage with signed URLs  | **Filesystem** (local) / **S3**               | S3, GCS, Azure Blob          |
+| `OCRProvider`          | Extract fields from receipts             | **No-op**                                     | Vision service (Phase 7)     |
+| `IdentityProvider`     | Authenticate a user                      | **Local** (password + TOTP)                   | OIDC, SAML, SCIM             |
+| `FxRateProvider`       | Currency conversion rates                | **Static table**                              | Live rate feed               |
 
 ---
 
@@ -52,20 +52,20 @@ graph LR
 
 Every adapter obeys the same rules, so operational behaviour is uniform regardless of vendor.
 
-| Rule | Detail |
-|---|---|
-| **Idempotency** | Every mutating call takes an idempotency key. The adapter forwards it where the vendor supports it and enforces it locally where it does not. |
-| **Timeouts** | Every call has an explicit timeout. There is no unbounded wait anywhere. |
-| **Retries** | Exponential backoff with jitter, maximum 3, and **only for idempotent operations**. A non-idempotent call that times out is escalated, never blindly retried. |
-| **Circuit breaker** | Opens after 5 consecutive failures, half-opens after 30 seconds. |
-| **Error mapping** | Vendor errors map to the `ProviderError` taxonomy. A vendor error string never reaches a user. |
-| **Sandbox flag** | Every adapter declares `isSandbox`. The value propagates into API responses and the UI. |
-| **Observability** | Every call is a span with provider, operation, duration, and outcome. |
-| **No PII beyond need** | An adapter sends only the fields the operation requires. |
+| Rule                   | Detail                                                                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Idempotency**        | Every mutating call takes an idempotency key. The adapter forwards it where the vendor supports it and enforces it locally where it does not.                 |
+| **Timeouts**           | Every call has an explicit timeout. There is no unbounded wait anywhere.                                                                                      |
+| **Retries**            | Exponential backoff with jitter, maximum 3, and **only for idempotent operations**. A non-idempotent call that times out is escalated, never blindly retried. |
+| **Circuit breaker**    | Opens after 5 consecutive failures, half-opens after 30 seconds.                                                                                              |
+| **Error mapping**      | Vendor errors map to the `ProviderError` taxonomy. A vendor error string never reaches a user.                                                                |
+| **Sandbox flag**       | Every adapter declares `isSandbox`. The value propagates into API responses and the UI.                                                                       |
+| **Observability**      | Every call is a span with provider, operation, duration, and outcome.                                                                                         |
+| **No PII beyond need** | An adapter sends only the fields the operation requires.                                                                                                      |
 
 ```typescript
 interface ProviderAdapter {
-  readonly providerKey: string;      // 'mock' | 'stripe-issuing' | 'quickbooks' …
+  readonly providerKey: string; // 'mock' | 'stripe-issuing' | 'quickbooks' …
   readonly isSandbox: boolean;
   healthCheck(): Promise<HealthStatus>;
 }
@@ -86,9 +86,9 @@ interface CardProvider extends ProviderAdapter {
 
 interface IssuedCard {
   providerCardId: string;
-  lastFour: string;          // display only
+  lastFour: string; // display only
   network: 'VISA' | 'MASTERCARD' | 'MOCK';
-  expiryMonth: number;       // month/year only — never the full expiry with PAN
+  expiryMonth: number; // month/year only — never the full expiry with PAN
   expiryYear: number;
   status: 'PENDING' | 'ACTIVE';
 }
@@ -152,20 +152,25 @@ transport and format.
 
 ```typescript
 interface DocumentProvider extends ProviderAdapter {
-  createUploadUrl(key: string, contentType: string, maxBytes: number, ttlSeconds: number): Promise<SignedUrl>;
+  createUploadUrl(
+    key: string,
+    contentType: string,
+    maxBytes: number,
+    ttlSeconds: number,
+  ): Promise<SignedUrl>;
   createDownloadUrl(key: string, ttlSeconds: number, fileName: string): Promise<SignedUrl>;
   getObjectMetadata(key: string): Promise<ObjectMetadata>;
   deleteObject(key: string): Promise<void>;
 }
 ```
 
-| Adapter | Use | Notes |
-|---|---|---|
-| `S3DocumentProvider` | Staging, production | Private bucket, presigned URLs, SSE, separate origin from the app |
-| `LocalDocumentProvider` | Local development | Files under `.storage/`, "signed URLs" are HMAC-signed, expiring tokens served by an API route that re-checks authorisation |
+| Adapter                 | Use                 | Notes                                                                                                                       |
+| ----------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `S3DocumentProvider`    | Staging, production | Private bucket, presigned URLs, SSE, separate origin from the app                                                           |
+| `LocalDocumentProvider` | Local development   | Files under `.storage/`, "signed URLs" are HMAC-signed, expiring tokens served by an API route that re-checks authorisation |
 
 The local adapter exists because the audit found no S3 and no Docker on the development host
-(ADR-0008). It deliberately emulates the *security semantics* — expiry, signature, authorisation
+(ADR-0008). It deliberately emulates the _security semantics_ — expiry, signature, authorisation
 check — not just the storage, so that code which works locally is code that is safe in production.
 
 **Invariants for both adapters:** objects are never publicly readable; keys are generated UUIDs
@@ -217,7 +222,7 @@ sequenceDiagram
   else new
     API->>Q: 4 · enqueue webhook.process
     API-->>P: 202 Accepted
-    Q->>W: 
+    Q->>W:
     W->>W: 5 · map to a domain command
     W->>DB: 6 · apply idempotently (unique provider reference)
     W->>DB: 7 · audit event
@@ -253,12 +258,12 @@ demo configuration against real customers and believe otherwise.
 
 ## 11. Testing providers
 
-| Level | Approach |
-|---|---|
-| Unit | Domain services test against an in-memory fake implementing the port. No network, no vendor. |
-| Contract | A **shared test suite runs against every adapter of a port**, asserting identical semantics for success, failure, timeout, and idempotency. A new adapter is not done until it passes the existing suite unchanged. |
-| Integration | Adapters tested against the vendor's sandbox where one exists, in a nightly job, not in PR CI. |
-| Resilience | Fault injection: timeout, 500, malformed response, and slow response — asserting the circuit breaker opens and the domain degrades correctly. |
+| Level       | Approach                                                                                                                                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit        | Domain services test against an in-memory fake implementing the port. No network, no vendor.                                                                                                                        |
+| Contract    | A **shared test suite runs against every adapter of a port**, asserting identical semantics for success, failure, timeout, and idempotency. A new adapter is not done until it passes the existing suite unchanged. |
+| Integration | Adapters tested against the vendor's sandbox where one exists, in a nightly job, not in PR CI.                                                                                                                      |
+| Resilience  | Fault injection: timeout, 500, malformed response, and slow response — asserting the circuit breaker opens and the domain degrades correctly.                                                                       |
 
 The contract suite is what makes swapping providers safe. Without it, "implements the interface"
 means only that the types line up, which is the weakest possible guarantee.

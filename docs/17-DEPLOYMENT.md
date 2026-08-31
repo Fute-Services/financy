@@ -7,13 +7,13 @@
 
 ## 1. Environments
 
-| Environment | Purpose | Data | Providers | Who deploys |
-|---|---|---|---|---|
-| **local** | Development on a workstation | Seeded demo | All mock/local | Developer |
-| **test** | Automated suites (CI and local) | Ephemeral, per-run | All fake | CI |
-| **development** | Shared integration | Seeded, resettable | Mock + sandbox | Auto on merge to `main` |
-| **staging** | Production rehearsal | Anonymised production-shaped | Sandbox | Auto on merge to `main` |
-| **production** | Customers | Real | Real where configured | Manual approval, tagged release |
+| Environment     | Purpose                         | Data                         | Providers             | Who deploys                     |
+| --------------- | ------------------------------- | ---------------------------- | --------------------- | ------------------------------- |
+| **local**       | Development on a workstation    | Seeded demo                  | All mock/local        | Developer                       |
+| **test**        | Automated suites (CI and local) | Ephemeral, per-run           | All fake              | CI                              |
+| **development** | Shared integration              | Seeded, resettable           | Mock + sandbox        | Auto on merge to `main`         |
+| **staging**     | Production rehearsal            | Anonymised production-shaped | Sandbox               | Auto on merge to `main`         |
+| **production**  | Customers                       | Real                         | Real where configured | Manual approval, tagged release |
 
 **Staging is a rehearsal, not a demo.** Same topology, same migration path, same configuration
 mechanism, same deploy procedure. A release that has not run on staging does not go to production.
@@ -30,13 +30,13 @@ already running on `:5432` and ports `3000` and `5433` occupied by unrelated pro
 Rather than making Docker a prerequisite, local development uses the native PostgreSQL and the
 adapters designed for exactly this case:
 
-| Dependency | Local approach |
-|---|---|
-| PostgreSQL | Native install already present |
-| Redis / queue | `InlineQueueAdapter` — in-process, runs after commit (ADR-0006) |
-| Object storage | `LocalDocumentProvider` — filesystem with HMAC-signed expiring URLs (ADR-0008) |
-| Email | `ConsoleNotificationProvider` — renders to stdout and to a local outbox viewer |
-| Card / payment / OCR | Mock adapters |
+| Dependency           | Local approach                                                                 |
+| -------------------- | ------------------------------------------------------------------------------ |
+| PostgreSQL           | Native install already present                                                 |
+| Redis / queue        | `InlineQueueAdapter` — in-process, runs after commit (ADR-0006)                |
+| Object storage       | `LocalDocumentProvider` — filesystem with HMAC-signed expiring URLs (ADR-0008) |
+| Email                | `ConsoleNotificationProvider` — renders to stdout and to a local outbox viewer |
+| Card / payment / OCR | Mock adapters                                                                  |
 
 Docker is **supported but optional**. `infra/docker-compose.yml` gives PostgreSQL, Redis, MinIO,
 and Mailpit to developers who have Docker — and it is what CI uses. It is never the only path.
@@ -72,14 +72,14 @@ The application never connects as `postgres`, in any environment.
 
 **Ports** (audit finding P2 — `3000` and `5433` are occupied by unrelated processes):
 
-| Service | Port |
-|---|---|
-| Web | `3100` |
-| API | `4100` |
-| PostgreSQL | `5432` (existing) |
-| Redis (if Docker is used) | `6479` |
-| MinIO (if Docker is used) | `9100` / `9101` |
-| Mailpit (if Docker is used) | `8125` |
+| Service                     | Port              |
+| --------------------------- | ----------------- |
+| Web                         | `3100`            |
+| API                         | `4100`            |
+| PostgreSQL                  | `5432` (existing) |
+| Redis (if Docker is used)   | `6479`            |
+| MinIO (if Docker is used)   | `9100` / `9101`   |
+| Mailpit (if Docker is used) | `8125`            |
 
 All are environment-driven; nothing is hard-coded.
 
@@ -159,12 +159,12 @@ FEATURE_RLS_ENFORCED=false
 
 **Production guards, enforced at startup:**
 
-| Condition | Result |
-|---|---|
-| `APP_ENV=production` and no `REDIS_URL` | **Startup fails.** The inline adapter is a development convenience only. |
-| `APP_ENV=production` and `DOCUMENT_PROVIDER=local` | **Startup fails.** |
+| Condition                                              | Result                                                                           |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `APP_ENV=production` and no `REDIS_URL`                | **Startup fails.** The inline adapter is a development convenience only.         |
+| `APP_ENV=production` and `DOCUMENT_PROVIDER=local`     | **Startup fails.**                                                               |
 | `APP_ENV=production` and any sandbox provider selected | Prominent startup warning; `isSandbox: true` surfaces throughout the API and UI. |
-| Any secret shorter than its minimum length | **Startup fails.** |
+| Any secret shorter than its minimum length             | **Startup fails.**                                                               |
 
 **Secrets are never committed.** `.env` is git-ignored from the first commit; `.env.example`
 carries names and shapes but no values; secret scanning runs pre-commit and in CI.
@@ -225,8 +225,8 @@ Running them on boot means N instances race to migrate, and a failure leaves the
 indeterminate state. Because migrations are expand/contract (`09 §10`), the old code keeps working
 against the new schema during the roll.
 
-**Rollback.** The application rolls back by redeploying the previous image. The *database does
-not roll back* — this is why every migration must be backward-compatible with the previous
+**Rollback.** The application rolls back by redeploying the previous image. The _database does
+not roll back_ — this is why every migration must be backward-compatible with the previous
 release. A bad migration is corrected forward.
 
 ---
@@ -263,14 +263,14 @@ requirement in `14 §3`.
 
 ### 7.1 Recommended production topology
 
-| Component | Sizing (pilot) | Notes |
-|---|---|---|
-| Web | 2 × 1 vCPU / 1 GB | Stateless; CDN in front of static assets |
-| API | 2 × 2 vCPU / 2 GB | Stateless; no sticky sessions needed |
-| Workers | 2 × 1 vCPU / 2 GB | Split by queue class (`14 §5`) |
-| PostgreSQL | 2 vCPU / 8 GB, 100 GB SSD | Managed, with PITR |
-| Redis | 1 GB, managed | Persistence enabled |
-| Object storage | S3-compatible, private, versioned | Separate origin from the app |
+| Component      | Sizing (pilot)                    | Notes                                    |
+| -------------- | --------------------------------- | ---------------------------------------- |
+| Web            | 2 × 1 vCPU / 1 GB                 | Stateless; CDN in front of static assets |
+| API            | 2 × 2 vCPU / 2 GB                 | Stateless; no sticky sessions needed     |
+| Workers        | 2 × 1 vCPU / 2 GB                 | Split by queue class (`14 §5`)           |
+| PostgreSQL     | 2 vCPU / 8 GB, 100 GB SSD         | Managed, with PITR                       |
+| Redis          | 1 GB, managed                     | Persistence enabled                      |
+| Object storage | S3-compatible, private, versioned | Separate origin from the app             |
 
 Hosting is intentionally not prescribed — the architecture is standard containers plus managed
 PostgreSQL, Redis, and object storage, available from every major provider. The Vercel CLI present
@@ -289,13 +289,13 @@ container platform, since they are long-running and stateful in the queue sense.
 
 ## 8. Observability in production
 
-| Signal | Implementation |
-|---|---|
-| Logs | Structured JSON (Pino) to the platform collector; correlation ID on every line; 30-day retention |
-| Traces | OpenTelemetry OTLP; context propagated from request into jobs |
-| Metrics | Prometheus-compatible; the RED method for HTTP, plus the queue and business metrics in `07 §8` |
-| Errors | Sentry-compatible, release-tagged, with source maps |
-| Uptime | External probe against `/health/ready` from two regions |
+| Signal     | Implementation                                                                                                        |
+| ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| Logs       | Structured JSON (Pino) to the platform collector; correlation ID on every line; 30-day retention                      |
+| Traces     | OpenTelemetry OTLP; context propagated from request into jobs                                                         |
+| Metrics    | Prometheus-compatible; the RED method for HTTP, plus the queue and business metrics in `07 §8`                        |
+| Errors     | Sentry-compatible, release-tagged, with source maps                                                                   |
+| Uptime     | External probe against `/health/ready` from two regions                                                               |
 | Dashboards | Service health · queue health · database health · **business health** (approvals pending, exports run, policy blocks) |
 
 **On-call alerts** (page immediately): availability below target, error rate > 1 % for 5 minutes,
@@ -309,14 +309,14 @@ different class of urgency from a slow endpoint.
 
 ## 9. Backup and recovery
 
-| Aspect | Policy |
-|---|---|
-| Database | Nightly full + continuous WAL archiving; 30-day PITR |
-| Object storage | Versioning enabled; cross-region replication in production |
-| Retention | Daily for 30 days, weekly for 12 weeks, monthly for 12 months |
-| Encryption | All backups encrypted at rest |
+| Aspect                | Policy                                                             |
+| --------------------- | ------------------------------------------------------------------ |
+| Database              | Nightly full + continuous WAL archiving; 30-day PITR               |
+| Object storage        | Versioning enabled; cross-region replication in production         |
+| Retention             | Daily for 30 days, weekly for 12 weeks, monthly for 12 months      |
+| Encryption            | All backups encrypted at rest                                      |
 | **Restore rehearsal** | **Quarterly, into an isolated environment, with a written result** |
-| RPO / RTO | ≤ 5 minutes / ≤ 1 hour |
+| RPO / RTO             | ≤ 5 minutes / ≤ 1 hour                                             |
 
 The rehearsal is the policy. An untested backup is a belief, not a control, and the moment it
 matters is the worst possible moment to discover it does not restore.
@@ -327,31 +327,31 @@ matters is the worst possible moment to discover it does not restore.
 
 Each of these lives in `docs/runbooks/` and is written before the situation arises, not during it.
 
-| Runbook | Covers |
-|---|---|
-| `deploy.md` | Standard release and rollback |
-| `migration-failure.md` | A migration fails mid-deploy |
-| `db-restore.md` | Point-in-time restore |
-| `queue-backlog.md` | Depth alert: diagnose, scale, drain |
-| `dead-letter.md` | Inspect, fix, replay |
-| `incident-security.md` | The `12 §12` process, with contacts |
-| `provider-outage.md` | Circuit breaker open; degraded operation |
-| `budget-drift.md` | Integrity check failed — investigate, never silently repair |
-| `tenant-leak.md` | A cross-tenant rejection or context error fired |
+| Runbook                | Covers                                                      |
+| ---------------------- | ----------------------------------------------------------- |
+| `deploy.md`            | Standard release and rollback                               |
+| `migration-failure.md` | A migration fails mid-deploy                                |
+| `db-restore.md`        | Point-in-time restore                                       |
+| `queue-backlog.md`     | Depth alert: diagnose, scale, drain                         |
+| `dead-letter.md`       | Inspect, fix, replay                                        |
+| `incident-security.md` | The `12 §12` process, with contacts                         |
+| `provider-outage.md`   | Circuit breaker open; degraded operation                    |
+| `budget-drift.md`      | Integrity check failed — investigate, never silently repair |
+| `tenant-leak.md`       | A cross-tenant rejection or context error fired             |
 
 ---
 
 ## 11. Environment parity
 
-| Aspect | Local | CI | Staging | Production |
-|---|---|---|---|---|
-| PostgreSQL | Native 18 | Container 16 | Managed 16 | Managed 16 |
-| Queue | Inline | Inline + BullMQ suite | BullMQ | BullMQ |
-| Storage | Filesystem | MinIO | S3 | S3 |
-| Card / payment | Mock | Fake | Sandbox | Real (Phase 7) |
-| Email | Console | Fake | Mailpit | ESP |
-| RLS | Off | On (Phase 6) | On | On |
-| Debug endpoints | On | On | Off | Off |
+| Aspect          | Local      | CI                    | Staging    | Production     |
+| --------------- | ---------- | --------------------- | ---------- | -------------- |
+| PostgreSQL      | Native 18  | Container 16          | Managed 16 | Managed 16     |
+| Queue           | Inline     | Inline + BullMQ suite | BullMQ     | BullMQ         |
+| Storage         | Filesystem | MinIO                 | S3         | S3             |
+| Card / payment  | Mock       | Fake                  | Sandbox    | Real (Phase 7) |
+| Email           | Console    | Fake                  | Mailpit    | ESP            |
+| RLS             | Off        | On (Phase 6)          | On         | On             |
+| Debug endpoints | On         | On                    | Off        | Off            |
 
 The differences are deliberate and each one is a documented adapter boundary, not an accident. The
 things that must be identical — schema, migration path, domain code, authorisation, and audit —

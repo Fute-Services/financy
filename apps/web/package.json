@@ -12,6 +12,7 @@
     "clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "@financy/contracts": "workspace:*",
     "@financy/core": "workspace:*",
     "@financy/ui": "workspace:*",
     "next": "^15.1.3",

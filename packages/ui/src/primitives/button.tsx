@@ -12,13 +12,7 @@ import { cn } from '../lib/cn';
  *    jump and the user can still read what they clicked.
  */
 
-export type ButtonVariant =
-  | 'primary'
-  | 'secondary'
-  | 'ghost'
-  | 'danger'
-  | 'danger-subtle'
-  | 'link';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-subtle' | 'link';
 
 export type ButtonSize = 'sm' | 'md' | 'lg';
 

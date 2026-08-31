@@ -31,10 +31,7 @@ function EmptyShell({
 }: EmptyShellProps): React.JSX.Element {
   return (
     <div
-      className={cn(
-        'flex flex-col items-center justify-center px-6 py-16 text-center',
-        className,
-      )}
+      className={cn('flex flex-col items-center justify-center px-6 py-16 text-center', className)}
     >
       <div className="mb-4 text-ink-300">{icon}</div>
       <h3 className="text-base font-semibold text-ink-800">{title}</h3>
@@ -54,11 +51,7 @@ export function FirstRunEmptyState(props: {
 }
 
 /** Records exist; the current filters exclude all of them. */
-export function FilteredEmptyState({
-  onClear,
-}: {
-  onClear?: () => void;
-}): React.JSX.Element {
+export function FilteredEmptyState({ onClear }: { onClear?: () => void }): React.JSX.Element {
   return (
     <EmptyShell
       icon={<FilterIcon className="size-8" />}
@@ -88,7 +81,9 @@ export function ScopeEmptyState({
   title?: string;
   description?: string;
 }): React.JSX.Element {
-  return <EmptyShell icon={<InboxIcon className="size-8" />} title={title} description={description} />;
+  return (
+    <EmptyShell icon={<InboxIcon className="size-8" />} title={title} description={description} />
+  );
 }
 
 // ── Loading ──────────────────────────────────────────────────────────────

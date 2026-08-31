@@ -1,0 +1,338 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  The pull request gate (docs/16 §10, docs/17 §5).
+#
+#  Everything that must be true before code reaches `main`, in under 15
+#  minutes (NFR-OPS-005). The jobs run in parallel and each is independently
+#  meaningful, so a red run names the problem rather than saying "CI failed".
+#
+#  The reference development host is Windows with no Docker (audit P3/P4).
+#  CI is Linux with containers, on purpose: it is where the platform-specific
+#  bugs a Windows-only workflow would hide get caught (risk R11).
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A new push supersedes the previous run for the same branch. Queueing runs
+# for commits nobody will merge wastes minutes that the 15-minute budget does
+# not have.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.x'
+  # Turbo prints its own summary; the CI log is for failures.
+  TURBO_TELEMETRY_DISABLED: '1'
+  DO_NOT_TRACK: '1'
+
+jobs:
+  # ── Static analysis ──────────────────────────────────────────────────────
+  # Lint, types, and format in one job: all three are fast, all three need the
+  # same install, and splitting them would spend more time on setup than on
+  # the work.
+  static:
+    name: Lint · typecheck · format
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        # Types across the workspace depend on it, so this precedes typecheck.
+        # It reads the schema only; no database is involved.
+        run: pnpm db:generate
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        # Includes the architecture rules: module boundaries, the Prisma
+        # import ban, and no money arithmetic in the browser (docs/08 §4.3).
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  # ── Build ────────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+  # ── Tests ────────────────────────────────────────────────────────────────
+  # Against a real PostgreSQL, because the guarantees under test *are*
+  # database guarantees — a unique index that prevents a double reimbursement
+  # cannot be demonstrated against a mock (docs/16 §4).
+  test:
+    name: Unit · integration · API
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # The application never connects as the superuser, here included.
+      DATABASE_URL: postgresql://financy_app:financy_app@localhost:5432/financy_test
+      DATABASE_TEST_URL: postgresql://financy_app:financy_app@localhost:5432/financy_test
+      APP_ENV: test
+      NODE_ENV: test
+      LOG_LEVEL: fatal
+      LOG_PRETTY: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Provision the database
+        # Mirrors infra/postgres/init — same role, same extensions — so the
+        # container service and docker-compose stay interchangeable.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+            CREATE ROLE financy_app WITH LOGIN PASSWORD 'financy_app';
+            CREATE DATABASE financy_test OWNER financy_app;
+          SQL
+          psql -h localhost -U postgres -d financy_test -v ON_ERROR_STOP=1 <<'SQL'
+            CREATE EXTENSION IF NOT EXISTS pgcrypto;
+            CREATE EXTENSION IF NOT EXISTS citext;
+            CREATE EXTENSION IF NOT EXISTS pg_trgm;
+            CREATE EXTENSION IF NOT EXISTS btree_gin;
+          SQL
+
+      - name: Build
+        # Before the migration and the seed, not after: the seed runs from
+        # source through tsx but imports `@financy/core` by its package entry,
+        # which resolves to `dist`. Unbuilt, it fails with a module-not-found
+        # that says nothing about ordering.
+        run: pnpm build
+
+      - name: Apply migrations
+        run: pnpm db:migrate:deploy
+
+      - name: Seed the permission catalogue
+        # The integration suite provisions organisations, and provisioning
+        # needs the catalogue to exist. Seeding the system data is also what
+        # every real environment does on deploy, so this is the same path
+        # rather than a test-only fixture.
+        run: pnpm db:seed:system
+
+      - name: Test with coverage
+        # Per-package floors are enforced by each package's own Vitest config
+        # (docs/16 §10), so this fails on a coverage regression too.
+        run: pnpm test:coverage
+
+      - name: Upload coverage
+        if: always()
+        # Never the reason a green test run reports failure. Artifact storage
+        # is an account-level quota that has nothing to do with the change
+        # under review, and a build that goes red for it teaches people to
+        # ignore red.
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: '**/coverage/'
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ── End-to-end ───────────────────────────────────────────────────────────
+  # The critical journeys only. The full suite runs nightly (docs/16 §8),
+  # because a 10-minute browser suite on every push would eat the budget on
+  # its own.
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://financy_app:financy_app@localhost:5432/financy_dev
+      APP_ENV: test
+      NODE_ENV: test
+      LOG_LEVEL: fatal
+      LOG_PRETTY: 'false'
+      API_PORT: '4100'
+      WEB_PORT: '3100'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate ephemeral secrets
+        # Real 32-byte keys, fresh per run, rather than a string that happens
+        # to decode to roughly the right length. Nothing can pass because it
+        # recognised a hard-coded value, and the config schema's length check
+        # is exercised honestly.
+        run: |
+          {
+            echo "SESSION_SECRET=$(openssl rand -base64 32)"
+            echo "ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "SIGNED_URL_SECRET=$(openssl rand -base64 32)"
+          } >> "$GITHUB_ENV"
+
+      - name: Provision the database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+            CREATE ROLE financy_app WITH LOGIN PASSWORD 'financy_app';
+            CREATE DATABASE financy_dev OWNER financy_app;
+          SQL
+          psql -h localhost -U postgres -d financy_dev -v ON_ERROR_STOP=1 <<'SQL'
+            CREATE EXTENSION IF NOT EXISTS pgcrypto;
+            CREATE EXTENSION IF NOT EXISTS citext;
+            CREATE EXTENSION IF NOT EXISTS pg_trgm;
+            CREATE EXTENSION IF NOT EXISTS btree_gin;
+          SQL
+
+      - name: Build
+        # First, for two reasons: Playwright starts the apps itself and they
+        # need their dependencies built, and the seed imports `@financy/core`
+        # by its package entry, which resolves to `dist`. `pnpm build` also
+        # generates the Prisma client, so no separate step for it.
+        run: pnpm build
+
+      - name: Apply migrations and seed
+        run: |
+          pnpm db:migrate:deploy
+          pnpm db:seed
+
+      - name: Install Chromium
+        run: pnpm --filter @financy/e2e install:browsers
+
+      - name: Run the end-to-end suite
+        run: pnpm --filter @financy/e2e test:e2e
+
+      - name: Upload the report
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ── Supply chain ─────────────────────────────────────────────────────────
+  audit:
+    name: Dependency audit · secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Gitleaks diffs the range being pushed, which needs more than the
+          # single commit a shallow clone provides.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit dependencies
+        # Critical and high only. Failing on every low-severity advisory in a
+        # transitive dev dependency trains people to bypass the gate, which
+        # costs more than it saves.
+        run: pnpm audit --audit-level high --prod
+
+      - name: Secret scan
+        # The gitleaks **binary** is MIT-licensed and free; only the Action
+        # wrapper requires a paid licence for organisations, which is what this
+        # repository is. Running the release directly is the same scanner
+        # without the licence gate, and pinning the version means a new
+        # upstream release cannot change what the gate accepts overnight.
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          # `git` rather than `dir`: the question is whether a secret was ever
+          # **committed**, and `dir` answers a different one — it walks the
+          # working tree including gitignored build output, which produced 27
+          # false positives from webpack cache packs the first time this ran.
+          #
+          # `--redact` so a finding does not print the secret it found into a
+          # build log, which would leak it a second time. `fetch-depth: 0` on
+          # the checkout above is what makes the whole history visible here.
+          /tmp/gitleaks git . --redact --exit-code 1

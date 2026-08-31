@@ -1,0 +1,54 @@
+{
+  "name": "@financy/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Financy data access — Prisma schema, migrations, seeds, and the tenant client extension.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "prisma",
+    "prisma.config.ts"
+  ],
+  "scripts": {
+    "generate": "prisma generate",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:reset": "prisma migrate reset --skip-seed",
+    "studio": "prisma studio",
+    "seed": "tsx src/seed/index.ts",
+    "seed:system": "tsx src/seed/index.ts --system",
+    "seed:demo": "tsx src/seed/index.ts --demo",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "verify:constraints": "vitest run test/constraints.integration.test.ts"
+  },
+  "dependencies": {
+    "@financy/contracts": "workspace:*",
+    "@financy/core": "workspace:*",
+    "@prisma/client": "^6.19.3"
+  },
+  "devDependencies": {
+    "@financy/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^3.2.7",
+    "dotenv": "^16.4.7",
+    "eslint": "^9.17.0",
+    "prisma": "^6.19.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
+  }
+}

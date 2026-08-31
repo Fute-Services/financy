@@ -1,0 +1,11 @@
+{
+  "extends": "@financy/config/tsconfig/node",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist",
+    "types": ["node", "vitest/globals"],
+    "baseUrl": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -31,11 +31,33 @@ describe('ids — UUID v7', () => {
   });
 
   it('stays ordered within a single millisecond via the monotonic counter', () => {
-    const ids: string[] = [];
-    const start = Date.now();
-    while (Date.now() === start && ids.length < 500) ids.push(generateId());
-    expect(ids.length).toBeGreaterThan(1);
-    expect([...ids].sort()).toEqual(ids);
+    /**
+     * Sampling "everything generated during one millisecond" races the clock:
+     * if the tick lands just after the loop starts, the batch is a single id
+     * and the assertion fails for a reason that has nothing to do with
+     * ordering. Retrying until a batch is genuinely big enough keeps the test
+     * about the monotonic counter — a test that fails one run in fifty teaches
+     * people to re-run rather than investigate (docs/16 §11).
+     */
+    let batch: string[] = [];
+
+    for (let attempt = 0; attempt < 50 && batch.length < 2; attempt += 1) {
+      const ids: string[] = [];
+      const start = Date.now();
+
+      // Wait for a fresh tick, so the whole millisecond is ours to fill.
+      while (Date.now() === start) {
+        /* spin — at most 1 ms */
+      }
+
+      const tick = Date.now();
+      while (Date.now() === tick && ids.length < 500) ids.push(generateId());
+
+      batch = ids;
+    }
+
+    expect(batch.length).toBeGreaterThan(1);
+    expect([...batch].sort()).toEqual(batch);
   });
 
   it('embeds a recoverable creation timestamp', () => {

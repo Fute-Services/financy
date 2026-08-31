@@ -4,7 +4,7 @@
 **Derives from:** `01-PRODUCT-REQUIREMENTS.md`
 **Governs:** `18-DEVELOPMENT-ROADMAP.md`
 
-This document is the contract on *what gets built when*. Anything not listed as In Scope for the
+This document is the contract on _what gets built when_. Anything not listed as In Scope for the
 current phase is out of scope for the current phase, regardless of how easy it looks.
 
 ---
@@ -14,23 +14,23 @@ current phase is out of scope for the current phase, regardless of how easy it l
 The product is designed around fifteen domains. They are **designed** together (so the domain
 model is coherent) and **built** in dependency order.
 
-| # | Module | Phase built | MVP? | One-line purpose |
-|---|---|---|---|---|
-| 1 | Overview (dashboard) | 4 | Yes | Answer "where do we stand" in one screen. |
-| 2 | Spend Management (requests) | 2 | Yes | Authorise spend before it happens. |
-| 3 | Cards | 2 (abstraction) / 7 (real) | Abstraction only | A named, limited, policy-bound spend authorisation. |
-| 4 | Transactions | 2–3 | Yes | The immutable record of money spent. |
-| 5 | Expenses & Reimbursements | 3 | Yes | Out-of-pocket spend and paying it back. |
-| 6 | Budgets | 4 | Yes | Allocated vs committed vs actual, continuously. |
-| 7 | Bills / Accounts Payable | 5 | No | Supplier invoices through the same approval engine. |
-| 8 | Procurement | 5 | No | Purchase requests and purchase orders. |
-| 9 | Vendors | 5 | No | The supplier master record. |
-| 10 | Reports | 4 | Yes | Backend-computed analysis and export. |
-| 11 | Accounting | 6 | No | Coding, mapping, and export to the book of record. |
-| 12 | People | 1 | Yes | Users, memberships, roles, managers, departments. |
-| 13 | Policies | 2 | Yes | Data-driven spend rules and approval chains. |
-| 14 | Settings | 1 (core) / ongoing | Partial | Organisation, entities, categories, integrations. |
-| 15 | Audit Log | 1 | Yes | Immutable history of everything that matters. |
+| #   | Module                      | Phase built                | MVP?             | One-line purpose                                    |
+| --- | --------------------------- | -------------------------- | ---------------- | --------------------------------------------------- |
+| 1   | Overview (dashboard)        | 4                          | Yes              | Answer "where do we stand" in one screen.           |
+| 2   | Spend Management (requests) | 2                          | Yes              | Authorise spend before it happens.                  |
+| 3   | Cards                       | 2 (abstraction) / 7 (real) | Abstraction only | A named, limited, policy-bound spend authorisation. |
+| 4   | Transactions                | 2–3                        | Yes              | The immutable record of money spent.                |
+| 5   | Expenses & Reimbursements   | 3                          | Yes              | Out-of-pocket spend and paying it back.             |
+| 6   | Budgets                     | 4                          | Yes              | Allocated vs committed vs actual, continuously.     |
+| 7   | Bills / Accounts Payable    | 5                          | No               | Supplier invoices through the same approval engine. |
+| 8   | Procurement                 | 5                          | No               | Purchase requests and purchase orders.              |
+| 9   | Vendors                     | 5                          | No               | The supplier master record.                         |
+| 10  | Reports                     | 4                          | Yes              | Backend-computed analysis and export.               |
+| 11  | Accounting                  | 6                          | No               | Coding, mapping, and export to the book of record.  |
+| 12  | People                      | 1                          | Yes              | Users, memberships, roles, managers, departments.   |
+| 13  | Policies                    | 2                          | Yes              | Data-driven spend rules and approval chains.        |
+| 14  | Settings                    | 1 (core) / ongoing         | Partial          | Organisation, entities, categories, integrations.   |
+| 15  | Audit Log                   | 1                          | Yes              | Immutable history of everything that matters.       |
 
 ---
 
@@ -56,7 +56,7 @@ The foundation every other module depends on. No spend features.
 **In scope**
 
 - Authentication: registration of the first organisation, login, logout, session lifecycle.
-- Password hashing (argon2id), password reset, MFA-*ready* schema (TOTP tables and step-up hooks
+- Password hashing (argon2id), password reset, MFA-_ready_ schema (TOTP tables and step-up hooks
   present; enrolment UI deferred to Phase 6).
 - Sessions: opaque server-side tokens, revocation, per-session device metadata, "sign out
   everywhere".
@@ -165,7 +165,7 @@ performed by a user is recorded in the audit log with its filter parameters.
   scheduling, marking paid, credit notes.
 - Procurement: purchase requests, purchase orders, PO lines, receiving, and three-way match
   foundations (PO ↔ receipt ↔ bill).
-- Commitment accounting: an approved PO consumes budget as *committed*.
+- Commitment accounting: an approved PO consumes budget as _committed_.
 
 **Constraint:** no new approval logic. Bills and POs are additional `spendType` inputs to the
 Phase 2 engine. A second approval implementation is a design failure.
@@ -205,17 +205,17 @@ regulatory and partner posture for each rail. No real-money rail ships without i
 
 ## 3. Explicitly out of scope (all phases, unless re-decided)
 
-| Item | Why |
-|---|---|
-| Holding customer funds | Requires licensing Financy will not hold. |
-| Being the general ledger | The accounting system is the book of record. |
-| Payroll | Different domain, different compliance surface. |
-| Tax filing or determination | Requires certified tax engines and jurisdiction logic. |
-| Consumer/personal finance | Wrong customer. |
-| Real-time FX trading or hedging | Out of category. |
-| Any compliance certification claim | We do not claim what we have not obtained. |
-| Microservices | Explicitly rejected — see ADR-0002. |
-| Native mobile apps | Responsive web first; native reconsidered after Phase 6. |
+| Item                               | Why                                                      |
+| ---------------------------------- | -------------------------------------------------------- |
+| Holding customer funds             | Requires licensing Financy will not hold.                |
+| Being the general ledger           | The accounting system is the book of record.             |
+| Payroll                            | Different domain, different compliance surface.          |
+| Tax filing or determination        | Requires certified tax engines and jurisdiction logic.   |
+| Consumer/personal finance          | Wrong customer.                                          |
+| Real-time FX trading or hedging    | Out of category.                                         |
+| Any compliance certification claim | We do not claim what we have not obtained.               |
+| Microservices                      | Explicitly rejected — see ADR-0002.                      |
+| Native mobile apps                 | Responsive web first; native reconsidered after Phase 6. |
 
 ---
 

@@ -10,7 +10,7 @@
 ## 1. Originality statement
 
 Financy is an original product. It sits in the same product category as other corporate spend
-management tools, which are used only as *category references* to understand the problem space.
+management tools, which are used only as _category references_ to understand the problem space.
 No third-party branding, source code, proprietary interface, copy, trademark, or visual design
 is reproduced here. The product name, information architecture, domain model, policy engine
 design, API surface, and visual identity in these documents are original to this project.
@@ -61,18 +61,18 @@ Tier 4 — Execution
 
 ## 3. Source-of-truth rules
 
-| Question | Authoritative document | Never authoritative |
-|---|---|---|
-| What does the product do? | `01`, `02`, `06` | Code comments, UI copy |
-| Who may do it? | `03` (matrix), enforced in code | Frontend route guards |
-| What is a screen supposed to show? | `04` | A prior screenshot |
-| What shape is the data? | `09` and the Prisma schema | Any hand-written SQL |
-| What shape is a request? | `10` and `packages/contracts` | A frontend fetch call |
-| Is a spend allowed? | `11` and the policy engine | Any controller `if` statement |
-| Is a feature done? | `19` | "The UI renders" |
-| Why is it built this way? | `20` | Tribal memory |
+| Question                           | Authoritative document          | Never authoritative           |
+| ---------------------------------- | ------------------------------- | ----------------------------- |
+| What does the product do?          | `01`, `02`, `06`                | Code comments, UI copy        |
+| Who may do it?                     | `03` (matrix), enforced in code | Frontend route guards         |
+| What is a screen supposed to show? | `04`                            | A prior screenshot            |
+| What shape is the data?            | `09` and the Prisma schema      | Any hand-written SQL          |
+| What shape is a request?           | `10` and `packages/contracts`   | A frontend fetch call         |
+| Is a spend allowed?                | `11` and the policy engine      | Any controller `if` statement |
+| Is a feature done?                 | `19`                            | "The UI renders"              |
+| Why is it built this way?          | `20`                            | Tribal memory                 |
 
-**Conflict resolution:** if the Prisma schema and `09-DATABASE-DESIGN.md` disagree, the *schema*
+**Conflict resolution:** if the Prisma schema and `09-DATABASE-DESIGN.md` disagree, the _schema_
 is what runs, so the document is stale and must be corrected in the same pull request. The same
 rule applies to `packages/contracts` versus `10-API-SPECIFICATION.md`. Documentation drift is
 treated as a bug, not as housekeeping.

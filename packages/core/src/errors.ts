@@ -124,7 +124,10 @@ export class MfaRequiredError extends UnauthenticatedError {
 export class ForbiddenError extends AppError {
   readonly code: ErrorCode = 'FORBIDDEN';
   readonly httpStatus = 403;
-  constructor(message = 'You do not have permission to perform this action.', options?: AppErrorOptions) {
+  constructor(
+    message = 'You do not have permission to perform this action.',
+    options?: AppErrorOptions,
+  ) {
     super(message, options);
   }
 }
@@ -292,7 +295,10 @@ export class MembershipExistsError extends ConflictError {
 
 export class PolicyBlockedError extends ConflictError {
   override readonly code: ErrorCode = 'POLICY_BLOCKED';
-  constructor(reasons: ReadonlyArray<{ reasonCode: string; message: string }>, options?: AppErrorOptions) {
+  constructor(
+    reasons: ReadonlyArray<{ reasonCode: string; message: string }>,
+    options?: AppErrorOptions,
+  ) {
     super(reasons[0]?.message ?? 'This spend is not permitted by policy.', {
       ...options,
       details: { ...options?.details, blocks: reasons },

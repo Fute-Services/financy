@@ -41,23 +41,23 @@ set. An item the user cannot use is not shown; a route they navigate to directly
 permission-denied state (§4.9) rather than a 404 — hiding the existence of a feature is a
 usability choice, not a security control.
 
-| Order | Label | Route | Icon intent | Required permission | Phase |
-|---|---|---|---|---|---|
-| 1 | Overview | `/overview` | dashboard | *(any membership)* | 4 |
-| 2 | Spend | `/spend` | send-money | `spend_request:read` | 2 |
-| 3 | Cards | `/cards` | card | `card:read` | 2 |
-| 4 | Transactions | `/transactions` | list | `transaction:read` | 2 |
-| 5 | Expenses | `/expenses` | receipt | `expense:read` | 3 |
-| 6 | Budgets | `/budgets` | gauge | `budget:read` | 4 |
-| 7 | Bills | `/bills` | invoice | `bill:read` | 5 |
-| 8 | Procurement | `/procurement` | cart | `purchase_order:read` | 5 |
-| 9 | Vendors | `/vendors` | building | `vendor:read` | 5 |
-| 10 | Reports | `/reports` | chart | `report:read` | 4 |
-| 11 | Accounting | `/accounting` | ledger | `accounting_code:manage` | 6 |
-| 12 | People | `/people` | users | `user:read` | 1 |
-| 13 | Policies | `/policies` | shield | `policy:read` | 2 |
-| 14 | Settings | `/settings` | cog | `organization:read` | 1 |
-| 15 | Audit Log | `/audit` | history | `audit_event:read` | 1 |
+| Order | Label        | Route           | Icon intent | Required permission      | Phase |
+| ----- | ------------ | --------------- | ----------- | ------------------------ | ----- |
+| 1     | Overview     | `/overview`     | dashboard   | _(any membership)_       | 4     |
+| 2     | Spend        | `/spend`        | send-money  | `spend_request:read`     | 2     |
+| 3     | Cards        | `/cards`        | card        | `card:read`              | 2     |
+| 4     | Transactions | `/transactions` | list        | `transaction:read`       | 2     |
+| 5     | Expenses     | `/expenses`     | receipt     | `expense:read`           | 3     |
+| 6     | Budgets      | `/budgets`      | gauge       | `budget:read`            | 4     |
+| 7     | Bills        | `/bills`        | invoice     | `bill:read`              | 5     |
+| 8     | Procurement  | `/procurement`  | cart        | `purchase_order:read`    | 5     |
+| 9     | Vendors      | `/vendors`      | building    | `vendor:read`            | 5     |
+| 10    | Reports      | `/reports`      | chart       | `report:read`            | 4     |
+| 11    | Accounting   | `/accounting`   | ledger      | `accounting_code:manage` | 6     |
+| 12    | People       | `/people`       | users       | `user:read`              | 1     |
+| 13    | Policies     | `/policies`     | shield      | `policy:read`            | 2     |
+| 14    | Settings     | `/settings`     | cog         | `organization:read`      | 1     |
+| 15    | Audit Log    | `/audit`        | history     | `audit_event:read`       | 1     |
 
 **Grouping in the sidebar**
 
@@ -155,7 +155,7 @@ Standard tabs, in this order, omitting those that do not apply:
 - Complex records (spend request, budget, policy, bill, PO): a full page with a stepper, an
   explicit draft that is saved server-side, and a review step before submission.
 - **Policy preview:** creation flows for spend requests, expenses, bills, and POs call the policy
-  engine in *dry-run* mode as the user types, showing the anticipated verdict and approval chain
+  engine in _dry-run_ mode as the user types, showing the anticipated verdict and approval chain
   before submission. The dry-run result is advisory; the authoritative evaluation happens on
   submit.
 
@@ -163,8 +163,8 @@ Standard tabs, in this order, omitting those that do not apply:
 
 - Only fields that are legally mutable in the record's current state are editable; everything
   else renders read-only with a tooltip naming the reason.
-- **Posted financial values are never editable.** The action offered instead is *Create
-  adjustment*.
+- **Posted financial values are never editable.** The action offered instead is _Create
+  adjustment_.
 - Every successful edit produces an audit event with a field-level before/after diff.
 
 ### 4.5 Approval flow
@@ -182,11 +182,11 @@ required) · **Delegate**.
 
 Three distinct kinds, never conflated:
 
-| Kind | Trigger | Content |
-|---|---|---|
-| **First-run** | No records exist at all | Explanation of the module's purpose + primary CTA + link to docs |
-| **Filtered-empty** | Records exist, filters exclude all | "No results for these filters" + *Clear filters* |
-| **Scope-empty** | Records exist but none in the user's scope | "Nothing assigned to you" — no CTA implying broken access |
+| Kind               | Trigger                                    | Content                                                          |
+| ------------------ | ------------------------------------------ | ---------------------------------------------------------------- |
+| **First-run**      | No records exist at all                    | Explanation of the module's purpose + primary CTA + link to docs |
+| **Filtered-empty** | Records exist, filters exclude all         | "No results for these filters" + _Clear filters_                 |
+| **Scope-empty**    | Records exist but none in the user's scope | "Nothing assigned to you" — no CTA implying broken access        |
 
 ### 4.7 Loading state
 
@@ -197,13 +197,13 @@ transitions.
 
 ### 4.8 Error state
 
-| Kind | Presentation |
-|---|---|
-| Field validation | Inline, below the field, with the server's message |
-| Form-level | Banner at the top of the form, listing each failed field as an anchor link |
-| Page load failure | Full-region error panel with the error code, a correlation ID, and *Retry* |
-| Background failure | Toast, non-blocking, with *Retry* where the action is idempotent |
-| Conflict (409) | Explicit "this record changed since you loaded it" panel with *Reload* |
+| Kind               | Presentation                                                               |
+| ------------------ | -------------------------------------------------------------------------- |
+| Field validation   | Inline, below the field, with the server's message                         |
+| Form-level         | Banner at the top of the form, listing each failed field as an anchor link |
+| Page load failure  | Full-region error panel with the error code, a correlation ID, and _Retry_ |
+| Background failure | Toast, non-blocking, with _Retry_ where the action is idempotent           |
+| Conflict (409)     | Explicit "this record changed since you loaded it" panel with _Reload_     |
 
 Every error surface displays the machine-readable `code` and the request `correlationId` from
 `10-API-SPECIFICATION.md`, so a user can quote it in a support request.
@@ -236,7 +236,7 @@ for the batch.
 
 ### 4.12 Export
 
-Exports honour the *currently applied filters* and the user's scope. Every export is
+Exports honour the _currently applied filters_ and the user's scope. Every export is
 permission-checked (`report:export` or module-specific), audit-logged with its parameters and row
 count, rate-limited, and generated server-side. Exports over 5,000 rows are queued and delivered
 via a signed, expiring download link rather than a synchronous response.
@@ -254,6 +254,7 @@ receipt attached to it, the budget it consumed, the approval instance that autho
 Only what differs from §4 is listed.
 
 ### 5.1 Overview — `/overview`
+
 KPI row (total spend MTD, pending approvals, uncategorised transactions, budget utilisation,
 outstanding reimbursements) → spend trend chart → budget-vs-actual bars → "needs your attention"
 queues → recent activity. Every value comes from a backend aggregate endpoint; **no client-side
@@ -261,6 +262,7 @@ computation of any figure**. Role-aware: an Employee sees their own spend and re
 sees their department; Finance sees the organisation.
 
 ### 5.2 Spend — `/spend`
+
 Columns: Reference · Requester · Department · Category · Amount · Requested for · Policy verdict ·
 Approval state · Age.
 Search: reference, requester name, memo, vendor.
@@ -270,6 +272,7 @@ Bulk: approve, reject, remind approver.
 Detail tabs: Details · Approvals · Documents · Related · History.
 
 ### 5.3 Cards — `/cards`
+
 Columns: Name · Type (physical/virtual/mock) · Holder · Limit · Used · Available · Status ·
 Expires. Availability rendered as an inline meter.
 Actions: issue (mock provider), lock, unlock, terminate, change limit (Finance only).
@@ -277,6 +280,7 @@ Actions: issue (mock provider), lock, unlock, terminate, change limit (Finance o
 Detail: transactions on the card, limit change history, the governing policy, provider reference.
 
 ### 5.4 Transactions — `/transactions`
+
 The densest table in the product. Columns: Date · Merchant · Amount · Card/Method · Person ·
 Department · Category · Receipt · Policy · Review · Accounting.
 Four status columns are deliberate — each is an independent axis of completeness and each is
@@ -287,12 +291,14 @@ Bulk: categorise, request receipt, mark reviewed, export.
 `R` to mark reviewed, `E` to flag exception.
 
 ### 5.5 Expenses & Reimbursements — `/expenses`
+
 Tabs: `Mine` · `To approve` · `All` (permission-gated) · `Reimbursements`.
 Creation is receipt-first: upload, then confirm the parsed or entered fields.
 Reimbursement batches group approved expenses per person per period, with a single payable total,
 and enforce the duplicate-prevention rule at the database level.
 
 ### 5.6 Budgets — `/budgets`
+
 Columns: Name · Scope (dept/entity/project/category) · Period · Allocated · Committed · Actual ·
 Remaining · Utilisation.
 Utilisation is a meter with semantic thresholds (`<75%` normal, `75–90%` caution, `90–100%` warn,
@@ -301,30 +307,36 @@ Detail: the period breakdown, the contributing transactions and commitments, ale
 and overspend behaviour.
 
 ### 5.7 Bills / AP — `/bills`
+
 Columns: Vendor · Bill number · Issue date · Due date · Amount · Approval · Payment · Accounting.
 Ageing buckets (current, 1–30, 31–60, 61–90, 90+) as a summary strip.
 Detail: line items with per-line coding, the vendor, the linked PO, documents, approvals.
 
 ### 5.8 Procurement — `/procurement`
+
 Two lists: purchase requests and purchase orders. PO detail shows lines, received quantities, and
 matched bills — the three-way match view.
 
 ### 5.9 Vendors — `/vendors`
+
 Columns: Name · Category · Status · Spend YTD · Open bills · Last transaction.
 Detail: profile, contacts, redacted payment details, bills, POs, transactions, spend trend.
 Duplicate detection on create, by normalised name and tax identifier.
 
 ### 5.10 Reports — `/reports`
+
 A gallery of report cards → a report page with the shared filter bar, a visualisation, a data
 table, and export. Reports are defined by a server-side registry keyed by `reportKey`; adding a
 report does not require a new route.
 
 ### 5.11 Accounting — `/accounting`
+
 Three sub-pages: `Codes` (chart of accounts, cost centres, tax codes), `Mappings` (rules from
 category/department/entity/vendor to GL account and dimensions, with a test harness), `Exports`
 (history, status, re-download, and the unexported-items queue).
 
 ### 5.12 People — `/people`
+
 Columns: Name · Email · Role · Department · Manager · Status · Last active.
 Detail: profile, role and scope, manager chain, cards, spend, approval delegations, sessions with
 individual revoke, and security events.
@@ -332,6 +344,7 @@ Invite flow: email, role, department, entity scope, manager — with a preview o
 permissions before sending.
 
 ### 5.13 Policies — `/policies`
+
 Columns: Name · Applies to · Priority · Rules · Status · Last modified.
 The policy editor is a rule builder: condition groups (all/any) over typed fields, producing
 typed outcomes. It is not a free-text expression box.
@@ -340,11 +353,13 @@ request and shows exactly which rules fire and what chain results. This is the s
 important trust-building screen in the product.
 
 ### 5.14 Settings — `/settings/*`
+
 Organisation profile · Entities · Departments · Categories · Approval defaults · Security
 (session policy, MFA requirement, IP allowlist) · Integrations · Notification preferences.
 Every settings mutation is audited and shows its blast radius before confirmation.
 
 ### 5.15 Audit Log — `/audit`
+
 Reverse-chronological, cursor-paginated stream. Columns: Timestamp · Actor · Action · Resource ·
 Summary.
 Filters: date range, actor, action type, resource type, resource ID, IP address.
@@ -355,13 +370,13 @@ Detail shows the full before/after payload, request correlation ID, IP, and user
 
 ## 6. Global surfaces
 
-| Surface | Trigger | Behaviour |
-|---|---|---|
-| Command palette | `Cmd/Ctrl-K` | Navigate, search across modules, run permitted actions |
-| Global search | Top bar | Cross-module server-side search, grouped results, scope-respecting |
-| Notification centre | Bell icon | Unread count, grouped by type, deep links, mark-read |
-| Org switcher | Top bar | Only for users with multiple memberships; switching resets all scoped state |
-| Keyboard shortcuts | `?` | Overlay listing shortcuts for the current context |
+| Surface             | Trigger      | Behaviour                                                                   |
+| ------------------- | ------------ | --------------------------------------------------------------------------- |
+| Command palette     | `Cmd/Ctrl-K` | Navigate, search across modules, run permitted actions                      |
+| Global search       | Top bar      | Cross-module server-side search, grouped results, scope-respecting          |
+| Notification centre | Bell icon    | Unread count, grouped by type, deep links, mark-read                        |
+| Org switcher        | Top bar      | Only for users with multiple memberships; switching resets all scoped state |
+| Keyboard shortcuts  | `?`          | Overlay listing shortcuts for the current context                           |
 
 ---
 

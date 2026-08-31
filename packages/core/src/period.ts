@@ -93,7 +93,9 @@ export function periodsInFiscalYear(
 
   for (let i = 0; i < count; i += 1) {
     const start = utc(year.start.getUTCFullYear(), year.start.getUTCMonth() + i * step);
-    periods.push(granularity === 'MONTH' ? monthPeriod(start) : quarterPeriod(start, fiscalYearStartMonth));
+    periods.push(
+      granularity === 'MONTH' ? monthPeriod(start) : quarterPeriod(start, fiscalYearStartMonth),
+    );
   }
   return periods;
 }

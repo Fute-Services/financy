@@ -10,8 +10,8 @@
 ## 1. Vision
 
 > Most companies discover their spending after it has already happened. Financy moves the
-> decision forward: spend is authorised against a written policy *before* money leaves the
-> business, evidence is captured *as* it is spent, and reconciliation becomes a review of an
+> decision forward: spend is authorised against a written policy _before_ money leaves the
+> business, evidence is captured _as_ it is spent, and reconciliation becomes a review of an
 > already-complete record rather than an archaeological dig.
 
 Financy is the **control and orchestration layer** for company spending. It is deliberately not
@@ -43,13 +43,13 @@ A feature that does not help answer one of these questions is not a Financy feat
 
 Finance operations in a growing company fail in a predictable sequence:
 
-| Stage | What breaks | Cost |
-|---|---|---|
-| **Before spend** | Policy lives in a wiki page nobody reads. Approvals happen in chat. | Unbudgeted commitments; no enforcement. |
-| **At spend** | Shared cards, personal cards, ad-hoc invoices. No context captured. | Nobody knows what a charge was *for*. |
-| **After spend** | Receipts chased by email weeks later. Categorisation done from memory. | Month-end close takes days; errors are systemic. |
-| **Reporting** | Spreadsheets exported from four systems and manually merged. | Numbers are stale and contested. |
-| **Audit** | History is reconstructed from inboxes. | Audit findings; no defensible trail. |
+| Stage            | What breaks                                                            | Cost                                             |
+| ---------------- | ---------------------------------------------------------------------- | ------------------------------------------------ |
+| **Before spend** | Policy lives in a wiki page nobody reads. Approvals happen in chat.    | Unbudgeted commitments; no enforcement.          |
+| **At spend**     | Shared cards, personal cards, ad-hoc invoices. No context captured.    | Nobody knows what a charge was _for_.            |
+| **After spend**  | Receipts chased by email weeks later. Categorisation done from memory. | Month-end close takes days; errors are systemic. |
+| **Reporting**    | Spreadsheets exported from four systems and manually merged.           | Numbers are stale and contested.                 |
+| **Audit**        | History is reconstructed from inboxes.                                 | Audit findings; no defensible trail.             |
 
 The root cause is that **control, evidence, and record live in different systems** — and
 frequently in no system at all. Financy's thesis is that these three must be one system, joined
@@ -72,7 +72,7 @@ spending but cannot yet afford a full ERP deployment. They typically have:
 employee companies using Financy for a single division.
 
 **Explicitly not the design target:** consumer personal finance, sole traders, or companies
-wanting Financy to *be* their general ledger.
+wanting Financy to _be_ their general ledger.
 
 ---
 
@@ -108,7 +108,7 @@ Engineering or Marketing lead with budget responsibility. Approves; does not adm
 - **Frustrations:** approval requests with no justification; being the bottleneck; no mobile access.
 - **Success looks like:** a request he can decide on in under thirty seconds without asking a
   follow-up question.
-- **Design implication:** the approval surface must carry *complete decision context* — amount,
+- **Design implication:** the approval surface must carry _complete decision context_ — amount,
   purpose, policy verdict, remaining budget, requester history — on one screen.
 
 ### 5.4 Aisha — Employee
@@ -119,7 +119,7 @@ pressure.
 - **Cares about:** getting the thing she needs, and being reimbursed quickly.
 - **Frustrations:** not knowing whether something is allowed, or where a request is stuck.
 - **Success looks like:** requesting spend in under a minute and always knowing the status.
-- **Design implication:** minimal forms, policy feedback *before* submission, visible status,
+- **Design implication:** minimal forms, policy feedback _before_ submission, visible status,
   frictionless receipt capture.
 
 ### 5.5 Robert — Auditor / Read-only
@@ -138,18 +138,18 @@ periods.
 
 ## 6. Jobs to be done
 
-| # | Job story | Persona | Phase |
-|---|---|---|---|
-| JTBD-01 | When I need to buy something for work, I want to know *before I commit* whether it is allowed, so I do not create a problem for finance. | Aisha | 2 |
-| JTBD-02 | When a request reaches me, I want the full context in one place, so I can approve responsibly and fast. | Marcus | 2 |
-| JTBD-03 | When money is spent, I want the reason and evidence captured at that moment, so I never have to reconstruct it. | Priya | 3 |
-| JTBD-04 | When I review the month, I want every transaction already categorised and coded, so close is a review not a rebuild. | Priya | 3–6 |
-| JTBD-05 | When I set a budget, I want to see commitments and actuals against it continuously, so I find overspend before it happens. | Marcus / Priya | 4 |
-| JTBD-06 | When I onboard someone, I want their access, limits, and approval chain correct by default. | Daniel | 1 |
-| JTBD-07 | When I pay a supplier, I want the same approval discipline as card spend, in one system. | Priya | 5 |
-| JTBD-08 | When I close the books, I want a clean export my accounting system accepts on the first attempt. | Priya | 6 |
-| JTBD-09 | When I am audited, I want to trace any number to its full history without asking anyone. | Robert | 1+ |
-| JTBD-10 | When policy changes, I want to change it as configuration, not as an engineering ticket. | Daniel / Priya | 2 |
+| #       | Job story                                                                                                                                | Persona        | Phase |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ----- |
+| JTBD-01 | When I need to buy something for work, I want to know _before I commit_ whether it is allowed, so I do not create a problem for finance. | Aisha          | 2     |
+| JTBD-02 | When a request reaches me, I want the full context in one place, so I can approve responsibly and fast.                                  | Marcus         | 2     |
+| JTBD-03 | When money is spent, I want the reason and evidence captured at that moment, so I never have to reconstruct it.                          | Priya          | 3     |
+| JTBD-04 | When I review the month, I want every transaction already categorised and coded, so close is a review not a rebuild.                     | Priya          | 3–6   |
+| JTBD-05 | When I set a budget, I want to see commitments and actuals against it continuously, so I find overspend before it happens.               | Marcus / Priya | 4     |
+| JTBD-06 | When I onboard someone, I want their access, limits, and approval chain correct by default.                                              | Daniel         | 1     |
+| JTBD-07 | When I pay a supplier, I want the same approval discipline as card spend, in one system.                                                 | Priya          | 5     |
+| JTBD-08 | When I close the books, I want a clean export my accounting system accepts on the first attempt.                                         | Priya          | 6     |
+| JTBD-09 | When I am audited, I want to trace any number to its full history without asking anyone.                                                 | Robert         | 1+    |
+| JTBD-10 | When policy changes, I want to change it as configuration, not as an engineering ticket.                                                 | Daniel / Priya | 2     |
 
 ---
 
@@ -214,13 +214,13 @@ Stating this prevents scope drift and prevents overstated claims.
 - **Not a bank or a money transmitter.** Financy holds no funds. Phase 1–6 record and orchestrate;
   they do not move money.
 - **Not a general ledger.** The customer's accounting system remains the book of record. Financy
-  produces coded, reviewed data *for* it.
+  produces coded, reviewed data _for_ it.
 - **Not a card network or issuer.** Cards in the MVP are a **control abstraction** — a named spend
   authorisation with a limit, an owner, and a policy — backed by a mock provider. Real issuing is
   Phase 7 and requires a licensed partner.
 - **Not compliant with any certification it has not obtained.** The product will not claim SOC 2,
   PCI DSS, ISO 27001, or any other certification. `07-NON-FUNCTIONAL-REQUIREMENTS.md` describes
-  the *engineering posture* that would support future certification; that is a different claim
+  the _engineering posture_ that would support future certification; that is a different claim
   and is worded as such.
 - **Not a personal finance or expense-report-only tool.** Expense reports are one input among
   several, not the product.
@@ -252,14 +252,14 @@ Admin creates organisation
 
 ### 10.2 Product outcome measures (post-pilot)
 
-| Measure | Target |
-|---|---|
-| Transactions with a receipt attached within 5 days | ≥ 90% |
-| Transactions still uncategorised at close | ≤ 2% |
-| Median time from spend request to decision | ≤ 8 business hours |
-| Spend occurring outside an approved policy path | ≤ 1% |
-| Month-end close duration | ≤ 3 business days |
-| Budget overspend detected before month end | 100% |
+| Measure                                            | Target             |
+| -------------------------------------------------- | ------------------ |
+| Transactions with a receipt attached within 5 days | ≥ 90%              |
+| Transactions still uncategorised at close          | ≤ 2%               |
+| Median time from spend request to decision         | ≤ 8 business hours |
+| Spend occurring outside an approved policy path    | ≤ 1%               |
+| Month-end close duration                           | ≤ 3 business days  |
+| Budget overspend detected before month end         | 100%               |
 
 ### 10.3 Qualitative bar
 
@@ -272,13 +272,13 @@ and they never find a screen that looks finished but does nothing.
 
 ## 11. Assumptions and open questions
 
-| # | Assumption | Risk if wrong | Revisit at |
-|---|---|---|---|
-| A1 | Customers accept a mock card provider during pilot, because the value is control and evidence rather than issuance. | Pilot stalls on "where are the real cards?" | Phase 5 pilot review |
-| A2 | Single base currency per legal entity is sufficient for MVP; FX is presentational. | Multi-currency customers blocked. | Phase 4 |
-| A3 | CSV export is an acceptable accounting integration for pilot. | Pilot demands live sync. | Phase 6 |
-| A4 | Approval chains are resolvable from department, entity, and manager relationships. | Complex matrix orgs need explicit chains. | Phase 2 |
-| A5 | Email plus in-app notification is sufficient; no Slack/Teams required for MVP. | Approval latency stays high. | Phase 4 |
+| #   | Assumption                                                                                                          | Risk if wrong                               | Revisit at           |
+| --- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | -------------------- |
+| A1  | Customers accept a mock card provider during pilot, because the value is control and evidence rather than issuance. | Pilot stalls on "where are the real cards?" | Phase 5 pilot review |
+| A2  | Single base currency per legal entity is sufficient for MVP; FX is presentational.                                  | Multi-currency customers blocked.           | Phase 4              |
+| A3  | CSV export is an acceptable accounting integration for pilot.                                                       | Pilot demands live sync.                    | Phase 6              |
+| A4  | Approval chains are resolvable from department, entity, and manager relationships.                                  | Complex matrix orgs need explicit chains.   | Phase 2              |
+| A5  | Email plus in-app notification is sufficient; no Slack/Teams required for MVP.                                      | Approval latency stays high.                | Phase 4              |
 
 Open questions requiring a business decision are tracked in `20-DECISIONS.md` under
-*Open Questions*.
+_Open Questions_.
