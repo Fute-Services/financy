@@ -12,14 +12,16 @@ These apply to every table without exception. They are what separates this schem
 CRUD schema.
 
 ### 1.1 Identity and keys
+
 - Primary keys are **UUID v7** (`uuid` column type), generated in the application. v7 is
   time-ordered, so it indexes like a sequence while remaining non-guessable and safe to expose.
 - No natural keys as primary keys. Business identifiers (`bill_number`, `reference`) are unique
-  *within an organisation*, never globally.
+  _within an organisation_, never globally.
 - Every foreign key is indexed. PostgreSQL does not create these automatically, and their absence
   is the most common cause of slow deletes and lock escalation.
 
 ### 1.2 Tenancy
+
 - Every business table carries `organization_id uuid NOT NULL` with an FK to `organizations`.
 - The **first column of every composite index is `organization_id`**, so every query is
   tenant-anchored at the index level.
@@ -30,6 +32,7 @@ CRUD schema.
   memberships in several organisations. Tenancy for a user is expressed by `memberships`.
 
 ### 1.3 Money
+
 - Every monetary column is `NUMERIC(20,4)`. Never `float`, `double precision`, `real`, or `money`.
 - Every monetary column is accompanied by a `*_currency char(3)` column. There is no implicit
   currency anywhere.
@@ -40,6 +43,7 @@ CRUD schema.
   invert meaning.
 
 ### 1.4 Time
+
 - All timestamps are `timestamptz`, stored in UTC.
 - Every table has `created_at timestamptz NOT NULL DEFAULT now()`.
 - Mutable tables have `updated_at timestamptz NOT NULL`.
@@ -47,30 +51,35 @@ CRUD schema.
   `timestamptz` — a due date has no timezone.
 
 ### 1.5 Deletion
+
 Three tiers, chosen per table and never mixed:
 
-| Tier | Mechanism | Applies to |
-|---|---|---|
-| **Immutable** | No delete path exists. The DB role has no `DELETE` grant. | `audit_events`, `approval_actions`, `budget_movements`, `security_events`, posted `transactions` |
-| **Archive** | `archived_at timestamptz`, excluded by default via repository predicate | `departments`, `entities`, `categories`, `vendors`, `policies`, `cards` |
-| **Soft delete** | `deleted_at timestamptz`, hidden everywhere | `spend_requests` (drafts only), `receipts` (unattached only), `notifications` |
+| Tier            | Mechanism                                                               | Applies to                                                                                       |
+| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Immutable**   | No delete path exists. The DB role has no `DELETE` grant.               | `audit_events`, `approval_actions`, `budget_movements`, `security_events`, posted `transactions` |
+| **Archive**     | `archived_at timestamptz`, excluded by default via repository predicate | `departments`, `entities`, `categories`, `vendors`, `policies`, `cards`                          |
+| **Soft delete** | `deleted_at timestamptz`, hidden everywhere                             | `spend_requests` (drafts only), `receipts` (unattached only), `notifications`                    |
 
 Nothing referenced by a financial record is ever hard-deleted.
 
 ### 1.6 Immutability of posted records
+
 A posted financial record's amount, currency, and date are immutable. Enforced by:
+
 1. Application state machines that offer no transition to edit them;
 2. A **database trigger** on `transactions` that raises when `status = 'POSTED'` and any of
    `amount`, `currency`, `merchant_name`, `occurred_at` changes;
 3. Corrections modelled as new linked rows (`adjusts_transaction_id`, credit notes), never edits.
 
 ### 1.7 Concurrency
+
 - Optimistic concurrency via a `version int NOT NULL DEFAULT 1` column on records that a user can
   edit from a stale view; a mismatched version returns `409`.
 - Pessimistic locking (`SELECT ... FOR UPDATE`) on `budget_lines` and `approval_steps` — the two
   places where a lost update would corrupt a financial figure.
 
 ### 1.8 Idempotency
+
 - `idempotency_keys` stores the key, the request fingerprint, and the stored response.
 - Provider-sourced records carry `(provider, provider_reference)` under a unique constraint, so a
   replayed webhook cannot create a second row.
@@ -582,73 +591,73 @@ Every table, its tenancy, its deletion tier, and its purpose. `org` = carries `o
 
 ### 6.1 Identity and access
 
-| Table | org | Deletion | Purpose |
-|---|:--:|---|---|
-| `organizations` | — | archive | The tenant root. |
-| `users` | ✗ | archive | Global identity. Email is `citext` and unique globally. |
-| `memberships` | ✓ | archive | User ↔ organisation, carrying role, department, manager, and scope. |
-| `roles` | ✓ (null for system) | — | Five system roles seeded with `is_system = true`; custom roles Phase 6. |
-| `permissions` | ✗ | — | Global catalogue, seeded, `key` unique. |
-| `role_permissions` | ✗ | — | Join. |
-| `invitations` | ✓ | soft | Hashed token, expiry, single-use, revocable. |
-| `sessions` | ✗ (via user) | — | Opaque token hash, idle + absolute expiry, revocation. |
-| `mfa_factors` | ✗ | — | TOTP secret (encrypted), backup codes (hashed), enrolment state. |
-| `security_events` | ✓ | **immutable** | Login, lockout, privilege change, session revocation. |
+| Table              |     org      | Deletion      | Purpose                                                                |
+| ------------------ | :----------: | ------------- | ---------------------------------------------------------------------- |
+| `organizations`    |      —       | archive       | The tenant root.                                                       |
+| `users`            |      ✗       | archive       | Global identity. Email is `citext` and unique globally.                |
+| `memberships`      |      ✓       | archive       | User ↔ organisation, carrying role, department, manager, and scope.    |
+| `roles`            |      ✓       | —             | Five roles per organisation, `is_system = true`; custom roles Phase 6. |
+| `permissions`      |      ✗       | —             | Global catalogue, seeded, `key` unique.                                |
+| `role_permissions` |      ✗       | —             | Join.                                                                  |
+| `invitations`      |      ✓       | soft          | Hashed token, expiry, single-use, revocable.                           |
+| `sessions`         | ✗ (via user) | —             | Opaque token hash, idle + absolute expiry, revocation.                 |
+| `mfa_factors`      |      ✗       | —             | TOTP secret (encrypted), backup codes (hashed), enrolment state.       |
+| `security_events`  |      ✓       | **immutable** | Login, lockout, privilege change, session revocation.                  |
 
 ### 6.2 Organisation structure
 
-| Table | org | Deletion | Purpose |
-|---|:--:|---|---|
-| `entities` | ✓ | archive | Legal entities; each has a functional currency. |
-| `departments` | ✓ | archive | Tree with `parent_id` and a materialised `path` for subtree queries. |
-| `projects` | ✓ | archive | Optional cost dimension. |
-| `categories` | ✓ | archive | Spend category tree, seeded with defaults. |
+| Table         | org | Deletion | Purpose                                                              |
+| ------------- | :-: | -------- | -------------------------------------------------------------------- |
+| `entities`    |  ✓  | archive  | Legal entities; each has a functional currency.                      |
+| `departments` |  ✓  | archive  | Tree with `parent_id` and a materialised `path` for subtree queries. |
+| `projects`    |  ✓  | archive  | Optional cost dimension.                                             |
+| `categories`  |  ✓  | archive  | Spend category tree, seeded with defaults.                           |
 
 ### 6.3 Policy and approval
 
-| Table | org | Deletion | Purpose |
-|---|:--:|---|---|
-| `policies` | ✓ | archive | Policy header: scope, priority, effective window, current version. |
-| `policy_versions` | ✓ | **immutable** | A frozen JSONB snapshot of the rule set. Referenced by decisions. |
-| `policy_rules` | ✓ | **immutable** | Rules belong to a version; conditions and outcomes as validated JSONB. |
-| `approval_workflows` | ✓ | archive | Reusable named chains referenced by policy outcomes. |
-| `approval_step_templates` | ✓ | archive | Step definitions within a workflow. |
-| `approval_instances` | ✓ | — | One per approvable subject; polymorphic `(subject_type, subject_id)`. |
-| `approval_steps` | ✓ | — | Ordered steps with type, quorum, due date, escalation. |
-| `approval_step_approvers` | ✓ | — | Resolved eligible approvers per step. |
-| `approval_actions` | ✓ | **immutable** | Every approve/reject/return/delegate, with actor and on-behalf-of. |
-| `approval_delegations` | ✓ | — | Time-bounded, non-chaining. |
+| Table                     | org | Deletion      | Purpose                                                                |
+| ------------------------- | :-: | ------------- | ---------------------------------------------------------------------- |
+| `policies`                |  ✓  | archive       | Policy header: scope, priority, effective window, current version.     |
+| `policy_versions`         |  ✓  | **immutable** | A frozen JSONB snapshot of the rule set. Referenced by decisions.      |
+| `policy_rules`            |  ✓  | **immutable** | Rules belong to a version; conditions and outcomes as validated JSONB. |
+| `approval_workflows`      |  ✓  | archive       | Reusable named chains referenced by policy outcomes.                   |
+| `approval_step_templates` |  ✓  | archive       | Step definitions within a workflow.                                    |
+| `approval_instances`      |  ✓  | —             | One per approvable subject; polymorphic `(subject_type, subject_id)`.  |
+| `approval_steps`          |  ✓  | —             | Ordered steps with type, quorum, due date, escalation.                 |
+| `approval_step_approvers` |  ✓  | —             | Resolved eligible approvers per step.                                  |
+| `approval_actions`        |  ✓  | **immutable** | Every approve/reject/return/delegate, with actor and on-behalf-of.     |
+| `approval_delegations`    |  ✓  | —             | Time-bounded, non-chaining.                                            |
 
 ### 6.4 Spend and cards
 
-| Table | org | Deletion | Purpose |
-|---|:--:|---|---|
-| `spend_requests` | ✓ | soft (draft only) | The pre-spend authorisation record with its immutable policy decision. |
-| `spend_request_items` | ✓ | soft (draft only) | Line items; the header amount is derived from them. |
-| `cards` | ✓ | archive | Spend authorisation abstraction. **No PAN, no CVV, no full expiry.** |
-| `spend_limits` | ✓ | **immutable** | Limit history; the current limit is the latest effective row. |
+| Table                 | org | Deletion          | Purpose                                                                |
+| --------------------- | :-: | ----------------- | ---------------------------------------------------------------------- |
+| `spend_requests`      |  ✓  | soft (draft only) | The pre-spend authorisation record with its immutable policy decision. |
+| `spend_request_items` |  ✓  | soft (draft only) | Line items; the header amount is derived from them.                    |
+| `cards`               |  ✓  | archive           | Spend authorisation abstraction. **No PAN, no CVV, no full expiry.**   |
+| `spend_limits`        |  ✓  | **immutable**     | Limit history; the current limit is the latest effective row.          |
 
 ### 6.5 Financial record
 
-| Table | org | Deletion | Purpose |
-|---|:--:|---|---|
-| `transactions` | ✓ | **immutable once POSTED** | The record of money spent. Four independent status axes. |
-| `transaction_adjustments` | ✓ | **immutable** | Corrections to posted transactions, as new linked rows. |
-| `receipts` | ✓ | soft (unattached only) | Storage key, checksum, scan status, OCR result. |
-| `receipt_attachments` | ✓ | — | Attach/detach history; the link, not the file. |
-| `expenses` | ✓ | soft (draft only) | Out-of-pocket or card-funded expense claims. |
-| `expense_items` | ✓ | soft (draft only) | Itemisation. |
-| `reimbursements` | ✓ | — | Payout batches with a server-computed total. |
-| `reimbursement_lines` | ✓ | — | `UNIQUE (expense_id)` — the duplicate-payment guarantee. |
+| Table                     | org | Deletion                  | Purpose                                                  |
+| ------------------------- | :-: | ------------------------- | -------------------------------------------------------- |
+| `transactions`            |  ✓  | **immutable once POSTED** | The record of money spent. Four independent status axes. |
+| `transaction_adjustments` |  ✓  | **immutable**             | Corrections to posted transactions, as new linked rows.  |
+| `receipts`                |  ✓  | soft (unattached only)    | Storage key, checksum, scan status, OCR result.          |
+| `receipt_attachments`     |  ✓  | —                         | Attach/detach history; the link, not the file.           |
+| `expenses`                |  ✓  | soft (draft only)         | Out-of-pocket or card-funded expense claims.             |
+| `expense_items`           |  ✓  | soft (draft only)         | Itemisation.                                             |
+| `reimbursements`          |  ✓  | —                         | Payout batches with a server-computed total.             |
+| `reimbursement_lines`     |  ✓  | —                         | `UNIQUE (expense_id)` — the duplicate-payment guarantee. |
 
 ### 6.6 Budgets
 
-| Table | org | Deletion | Purpose |
-|---|:--:|---|---|
-| `budgets` | ✓ | archive | Scope, period, currency, overspend behaviour, alert thresholds. |
-| `budget_lines` | ✓ | — | Per-period allocated / committed / actual, materialised, row-locked. |
-| `budget_movements` | ✓ | **immutable** | Append-only ledger. The line balance is always `SUM(movements)`. |
-| `budget_alerts` | ✓ | — | Threshold fired, once per threshold per period (idempotent). |
+| Table              | org | Deletion      | Purpose                                                              |
+| ------------------ | :-: | ------------- | -------------------------------------------------------------------- |
+| `budgets`          |  ✓  | archive       | Scope, period, currency, overspend behaviour, alert thresholds.      |
+| `budget_lines`     |  ✓  | —             | Per-period allocated / committed / actual, materialised, row-locked. |
+| `budget_movements` |  ✓  | **immutable** | Append-only ledger. The line balance is always `SUM(movements)`.     |
+| `budget_alerts`    |  ✓  | —             | Threshold fired, once per threshold per period (idempotent).         |
 
 ### 6.7 Payables (Phase 5)
 
@@ -662,16 +671,16 @@ Every table, its tenancy, its deletion tier, and its purpose. `org` = carries `o
 
 ### 6.9 Platform
 
-| Table | org | Deletion | Purpose |
-|---|:--:|---|---|
-| `audit_events` | ✓ | **immutable, INSERT-only grant** | The complete history. |
-| `notifications` | ✓ | soft | In-app notifications with read state. |
-| `notification_preferences` | ✓ | — | Per member, per event type, per channel. |
-| `idempotency_keys` | ✓ | TTL purge | Key, request fingerprint, stored response, expiry. |
-| `job_executions` | ✓ | TTL purge | Job runs, attempts, results, dead-letter state. |
-| `provider_accounts` | ✓ | archive | A configured provider instance per port. |
-| `integration_connections` | ✓ | archive | Credentials (encrypted), status, last sync. |
-| `webhook_events` | ✓ | TTL purge | Raw inbound events with signature verification and replay guard. |
+| Table                      | org | Deletion                         | Purpose                                                          |
+| -------------------------- | :-: | -------------------------------- | ---------------------------------------------------------------- |
+| `audit_events`             |  ✓  | **immutable, INSERT-only grant** | The complete history.                                            |
+| `notifications`            |  ✓  | soft                             | In-app notifications with read state.                            |
+| `notification_preferences` |  ✓  | —                                | Per member, per event type, per channel.                         |
+| `idempotency_keys`         |  ✓  | TTL purge                        | Key, request fingerprint, stored response, expiry.               |
+| `job_executions`           |  ✓  | TTL purge                        | Job runs, attempts, results, dead-letter state.                  |
+| `provider_accounts`        |  ✓  | archive                          | A configured provider instance per port.                         |
+| `integration_connections`  |  ✓  | archive                          | Credentials (encrypted), status, last sync.                      |
+| `webhook_events`           |  ✓  | TTL purge                        | Raw inbound events with signature verification and replay guard. |
 
 ---
 
@@ -763,7 +772,7 @@ CREATE TRIGGER trg_txn_immutable BEFORE UPDATE ON transactions
   FOR EACH ROW EXECUTE FUNCTION enforce_posted_transaction_immutability();
 ```
 
-Status, categorisation, review, and accounting columns remain mutable — those are *about* the
+Status, categorisation, review, and accounting columns remain mutable — those are _about_ the
 transaction, not the money itself.
 
 ### 7.3 `budget_lines` and `budget_movements`
@@ -822,6 +831,35 @@ One line. Two concurrent requests to reimburse the same expense: one commits, th
 a unique-violation which the service maps to `409 EXPENSE_ALREADY_REIMBURSED`. No application
 check can offer that guarantee, because any check-then-write has a window.
 
+### 7.4a Why roles are per-organisation
+
+An earlier version of this document specified `roles.organization_id` as **null for system roles** —
+one shared set of five, seeded once for the whole installation. That is incompatible with §1.2 and
+§7.5, and the contradiction is not subtle once it is written down:
+
+```sql
+-- memberships references its role through the composite key…
+FOREIGN KEY (role_id, organization_id) REFERENCES roles (id, organization_id)
+
+-- …but a system role's row is (id, NULL), and a membership's organisation is never NULL.
+-- No membership can hold a system role. Not "rarely" — never.
+```
+
+Both columns of the child key are `NOT NULL`, so `MATCH SIMPLE` enforces the constraint, and there
+is no parent row to match. Every membership insert in Phase 1 would have failed.
+
+The resolution is **not** to weaken the foreign key. That key is the only layer of tenant isolation
+that survives an application bug, and dropping it for `roles` specifically would mean a membership
+could be assigned another organisation's role — a privilege-escalation path across a tenant
+boundary, which is the most expensive class of bug in this system.
+
+So every organisation owns its own five roles, provisioned at registration from the one catalogue
+in `packages/contracts`. Five rows and roughly 185 grants per tenant, which is nothing, and it makes
+the custom roles of Phase 6 an insert rather than a migration.
+
+Caught by an integration test against a real PostgreSQL, not by review — which is the argument for
+that suite existing at all.
+
 ### 7.5 Cross-tenant foreign keys are impossible
 
 ```sql
@@ -854,7 +892,7 @@ CREATE POLICY tenant_isolation ON transactions
 The application sets `app.current_organization_id` once per connection checkout, from the
 authenticated membership. Applied to every tenant-scoped table.
 
-RLS is Phase 6 rather than Phase 1 because it must not be the *first* line of defence — if it
+RLS is Phase 6 rather than Phase 1 because it must not be the _first_ line of defence — if it
 were, a missing `SET` would silently return zero rows and look like a data bug. It is added once
 Layers 1 and 2 are proven, as the layer that survives an application defect.
 
@@ -904,6 +942,7 @@ flowchart LR
 migrations exist for local development only, where losing data is acceptable.
 
 **Seeds.** Two, kept strictly separate:
+
 - `seed:system` — permissions, system roles, default categories. **Idempotent**, run in every
   environment including production.
 - `seed:demo` — a realistic demo organisation with people, policies, transactions, and budgets.
@@ -913,26 +952,26 @@ migrations exist for local development only, where losing data is acceptable.
 
 ## 11. Extensions required
 
-| Extension | Used for |
-|---|---|
-| `pgcrypto` | `gen_random_uuid()` fallback, digest functions |
-| `citext` | Case-insensitive email and slug |
-| `pg_trgm` | Fuzzy merchant and vendor search |
-| `btree_gin` | Composite GIN indexes mixing scalar and JSONB |
+| Extension   | Used for                                       |
+| ----------- | ---------------------------------------------- |
+| `pgcrypto`  | `gen_random_uuid()` fallback, digest functions |
+| `citext`    | Case-insensitive email and slug                |
+| `pg_trgm`   | Fuzzy merchant and vendor search               |
+| `btree_gin` | Composite GIN indexes mixing scalar and JSONB  |
 
 ---
 
 ## 12. Capacity and growth
 
-| Table | Rows / 1,000-person org / year | Strategy |
-|---|---|---|
-| `transactions` | ~250,000 | Partition by `occurred_at` (monthly) past 50 M rows |
-| `audit_events` | ~2,000,000 | Partition by `created_at` (monthly); archive to cold storage after 2 years, retain 7 |
-| `notifications` | ~500,000 | Purge read notifications after 1 year |
-| `budget_movements` | ~500,000 | Retain fully — it is the ledger |
-| `sessions` | ~200,000 | Purge 90 days after expiry |
-| `idempotency_keys` | ~1,000,000 | TTL purge at 24 hours |
-| `webhook_events` | ~500,000 | TTL purge at 30 days after processing |
+| Table              | Rows / 1,000-person org / year | Strategy                                                                             |
+| ------------------ | ------------------------------ | ------------------------------------------------------------------------------------ |
+| `transactions`     | ~250,000                       | Partition by `occurred_at` (monthly) past 50 M rows                                  |
+| `audit_events`     | ~2,000,000                     | Partition by `created_at` (monthly); archive to cold storage after 2 years, retain 7 |
+| `notifications`    | ~500,000                       | Purge read notifications after 1 year                                                |
+| `budget_movements` | ~500,000                       | Retain fully — it is the ledger                                                      |
+| `sessions`         | ~200,000                       | Purge 90 days after expiry                                                           |
+| `idempotency_keys` | ~1,000,000                     | TTL purge at 24 hours                                                                |
+| `webhook_events`   | ~500,000                       | TTL purge at 30 days after processing                                                |
 
 Partitioning is designed for now and enabled later; the partition key is already the leading
 column of the relevant indexes, so switching requires no application change.

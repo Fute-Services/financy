@@ -11,8 +11,138 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ## [Unreleased]
 
+Phase 0 — foundation. A clean clone installs, lints, typechecks, tests, and builds. No product
+code: everything here is the scaffolding the product is built on, and every piece of it is the
+mechanised form of a rule the documentation already states.
+
 ### Added
-- Nothing yet. Phase 0 scaffolding is next.
+
+**Workspace**
+
+- pnpm workspace and Turborepo pipeline over `apps/*`, `packages/*`, and `tests` (P0-01).
+- `packages/config` — shared tsconfig bases (`strict`, `noUncheckedIndexedAccess`,
+  `exactOptionalPropertyTypes`), ESLint flat configs, and a Vitest base (P0-03).
+- Architecture lint rules (P0-04): `@prisma/client` importable only by `@financy/db`, `bullmq`
+  only by the queue adapter, no deep imports across module boundaries, and no money arithmetic in
+  the browser. Each carries the guarantee it protects in its own error message.
+
+**Domain and contract**
+
+- `packages/core` — `Money`, `Result`, the error taxonomy, UUID v7 ids, period helpers, and a
+  state-machine helper. Zero I/O, 100% coverage (P0-05).
+- `packages/contracts` — the shared API contract in executable form (P0-06): response envelopes,
+  the error-code-to-status map derived from the taxonomy so the two cannot diverge, cursor and
+  offset pagination, strict query filters that reject an unknown parameter rather than ignoring
+  it, and money as a string with `z.number()` deliberately absent.
+
+**Data access**
+
+- `packages/db` — Prisma initialisation, a client factory, and the tenant client extension
+  (P0-07). The scoping rules are a pure function, so every operation and every fail-closed path is
+  tested without a database. Models are classified as tenant-scoped or global in an explicit
+  registry; an unregistered model is refused at query time, and an architecture test reads the
+  generated client to assert none is missing.
+
+**API**
+
+- `apps/api` — NestJS bootstrap with `/v1`, Helmet, an explicit CORS origin list, a body limit, and
+  graceful shutdown (P0-08).
+- Startup configuration validation. A misconfigured process refuses to start and reports every
+  problem at once — including Redis absent in production (ADR-0006), the local document provider in
+  production (ADR-0008), a `.env.example` placeholder secret, two secrets sharing a value, and a
+  connection string using the `postgres` superuser (audit P1).
+- Request context via `AsyncLocalStorage`, carrying the correlation id and, from Phase 1, the
+  organisation. A client-supplied `X-Correlation-Id` is adopted when well-formed and replaced when
+  not.
+- A global exception filter: one error envelope for every failure, a stable code, a correlation id
+  in both the body and the header, and no internal detail in any response.
+- `ZodValidationPipe` over `packages/contracts`, so a request body is normalised as well as
+  validated and an unknown key is rejected.
+- Structured Pino logging with path-based redaction, explicit request and response serialisers,
+  health probes excluded from the access log, and 4xx separated from 5xx by level.
+- `GET /v1/health/live` and `GET /v1/health/ready`. Liveness touches nothing; readiness probes the
+  database with a timeout and returns `503` only when a required dependency is down.
+
+**Testing and delivery**
+
+- Test harness (P0-11): per-package Vitest projects with their own coverage floors, SWC configured
+  so NestJS dependency injection works under Vitest, a Supertest suite that boots the real
+  application, and a Playwright project in `tests/` that starts the whole stack itself.
+- CI workflow (P0-12): lint, typecheck, format, build, tests with coverage against a real
+  PostgreSQL, end-to-end, dependency audit, and secret scanning.
+- `infra/docker-compose.yml` (P0-13) — PostgreSQL, Redis, MinIO, and Mailpit, with an init script
+  that provisions the least-privilege role and the required extensions. Optional locally; it is
+  what CI's stack mirrors.
+
+**Phase 1 · epic 1.1 — data foundation**
+
+- The Prisma schema for identity, tenancy, and audit: 15 models across organisations, users,
+  memberships, roles, permissions, entities, departments, projects, categories, sessions, MFA
+  factors, invitations, audit events, and security events (tasks 1.1.1–1.1.4).
+- Cross-tenant references made structurally impossible: every tenant parent exposes
+  `(id, organization_id)` and every child references it through that composite key (task 1.1.5).
+- The initial migration, with the constraints Prisma cannot express appended by hand — the audit
+  actor `CHECK`, ISO-4217 and ISO-3166 format checks, hierarchy and path guards, the partial unique
+  index that makes a system role's key unique, and `REVOKE UPDATE, DELETE` on both immutable tables
+  (task 1.1.6). **Generated but not yet applied** — see _Known gaps_.
+- The permission catalogue as typed constants in `@financy/contracts`: 64 permissions, five roles,
+  and the grant matrix from `docs/03 §3`, with tests asserting the invariants that document states
+  — INV-05 (the auditor holds no mutating permission), the separation of configuration authority
+  from transaction authority, and the absence of `audit_event:create`/`:update`/`:delete`
+  (task 1.4.1, brought forward because the seed needs it).
+- The default spend category tree, applied at organisation creation rather than by the system seed,
+  because categories are tenant-scoped.
+- The idempotent system seed (task 1.1.7). It _converges_ rather than merely avoiding duplicates: a
+  permission removed from the catalogue has its grants withdrawn, so revoking a capability does not
+  require a hand-written migration.
+- The demo organisation seed — entities, the department tree, categories, and projects (task 1.1.8,
+  partial: see _Known gaps_).
+
+### Changed
+
+- `correlationIdSchema` accepts any well-formed correlation id rather than only a UUID, because the
+  API adopts one supplied by the web app so a single trace spans both. The pattern is shared
+  between the contract and the middleware that enforces it.
+- Prisma configuration moved from the `prisma` key in `package.json`, deprecated and removed in
+  Prisma 7, to `prisma.config.ts`.
+- `apps/web` no longer keeps its own copy of the permission matrix. It re-exports the catalogue
+  from `@financy/contracts`; `src/lib/permissions.ts` now holds only the rule that the frontend
+  uses permissions for rendering and never for access control.
+- The `dev` script for `apps/api` runs the Nest CLI watcher rather than `tsx`. esbuild cannot emit
+  `design:paramtypes`, so under `tsx` every injected dependency arrived as `undefined` and the
+  failure read as a bug in the service rather than a missing compiler feature.
+- `tsBuildInfoFile` moved inside `dist/` for every built package, so removing `dist` is a real
+  clean. Previously a stale build-info file left `tsc` believing an emptied output directory was up
+  to date, and the build silently produced only declarations.
+
+### Fixed
+
+- `spend_request:update` was granted to four roles by `docs/03 §3` and to none of them by the
+  frontend's copy of the matrix. Both now come from one definition, and a test asserts that every
+  role which can raise a spend request can also edit its own draft.
+- The Overview page's build-status panel listed `packages/contracts`, `packages/db`, and `apps/api`
+  as forthcoming after they had shipped.
+
+- Sixteen integration tests against a real PostgreSQL (`packages/db/test/`), asserting that each
+  hand-written constraint refuses what it exists to prevent. They skip when no database is
+  configured and always run in CI, so "skipped" cannot quietly become "never runs".
+
+**Corrected during 1.1**
+
+- **`roles.organization_id` was specified as nullable for system roles, and that design cannot
+  work.** A membership references its role through the composite key
+  `(role_id, organization_id)`; a shared system role's row is `(id, NULL)` and a membership's
+  organisation is never NULL, so no membership could have held a role at all. Weakening the foreign
+  key was not an option — it is what makes assigning another organisation's role impossible — so
+  every organisation now owns its five, provisioned at registration from the shared catalogue.
+  `docs/09 §7.4a` records the reasoning. Found by the integration suite, not by review.
+
+### Known gaps
+
+- **The demo seed creates no people.** A membership needs a user, a user needs an argon2id hash, and
+  the hasher belongs in `apps/api` with the rest of authentication (task 1.3.1) — it cannot live in
+  `@financy/core`, which is compiled into the browser bundle. Seeding an account that exists and
+  cannot sign in would be worse than seeding none.
 
 ---
 
@@ -24,18 +154,21 @@ version.
 ### Added
 
 **Audit**
+
 - `REPOSITORY_AUDIT.md` — baseline audit of an empty repository and a partially provisioned
   Windows host. Findings P1–P6 recorded, each with a mitigation that is reflected in an ADR.
 
 **Product definition**
+
 - `01-PRODUCT-REQUIREMENTS.md` — vision, mission, five personas, ten jobs-to-be-done, ten product
-  principles, success criteria, and an explicit statement of what Financy is *not*.
+  principles, success criteria, and an explicit statement of what Financy is _not_.
 - `02-PRODUCT-SCOPE.md` — fifteen modules mapped to seven phases, each with a hard exit criterion;
   the one-sentence MVP definition.
 - `03-USER-ROLES-PERMISSIONS.md` — five roles, the full permission matrix across seven domains,
   four scope levels, ten enforced invariants (INV-01…INV-10), and the delegation model.
 
 **Behaviour**
+
 - `04-INFORMATION-ARCHITECTURE.md` — navigation, the complete route map, and the module surface
   contract that every module must satisfy (list, detail, create, edit, approve, four states,
   search, filter, sort, paginate, bulk, export, audit, related).
@@ -47,6 +180,7 @@ version.
   constraints imposed by the development host.
 
 **Technical design**
+
 - `08-ARCHITECTURE.md` — the modular monolith, its layering, module map, request pipeline,
   boundary enforcement, error taxonomy, and deployment topology.
 - `09-DATABASE-DESIGN.md` — four ERDs, the full table catalogue, financial invariants, the
@@ -72,6 +206,7 @@ version.
   and specifications for every component including the data table and approval timeline.
 
 **Execution**
+
 - `16-TESTING-STRATEGY.md` — the test pyramid, coverage floors, fifteen financial correctness
   scenarios, twenty-four security scenarios, and the CI gate.
 - `17-DEPLOYMENT.md` — five environments, the local setup that requires no Docker, full
@@ -86,6 +221,7 @@ version.
 - `README.md` — the documentation hierarchy, source-of-truth rules, and change-management order.
 
 ### Decisions recorded
+
 ADR-0001 pnpm + Turborepo · ADR-0002 modular monolith · ADR-0003 Prisma over Drizzle ·
 ADR-0004 `NUMERIC(20,4)` + explicit currency · ADR-0005 opaque DB sessions ·
 ADR-0006 `QueuePort` with inline and BullMQ adapters · ADR-0007 Docker optional locally ·
@@ -96,6 +232,7 @@ ADR-0014 provider ports with honest sandbox labelling · ADR-0015 REST over Grap
 ADR-0016 audit inside the business transaction.
 
 ### Known gaps
+
 - **OQ-07** — PostgreSQL credentials for the application role are not yet available (audit P1).
   Documentation and schema authoring are unaffected; running migrations is blocked until resolved.
 

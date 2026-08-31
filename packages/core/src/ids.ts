@@ -1,9 +1,7 @@
-import { randomBytes, randomUUID } from 'node:crypto';
-
 /**
  * Identifiers.
  *
- * Two things matter here:
+ * Three things matter here:
  *
  *  1. **UUID v7**, not v4. v7 embeds a millisecond timestamp in its high bits,
  *     so ids sort chronologically and index like a sequence — which keeps
@@ -16,7 +14,34 @@ import { randomBytes, randomUUID } from 'node:crypto';
  *     membership id are interchangeable to the compiler, and swapping them is
  *     a tenant-isolation bug that type-checks. Branding makes the swap a
  *     compile error.
+ *
+ *  3. **Web Crypto, not `node:crypto`.** This package is compiled into the
+ *     browser bundle as well as the API — it is the shared domain layer, and
+ *     `@financy/ui` and `@financy/contracts` both depend on it. A `node:`
+ *     import here fails the Next.js build the moment anything reaches this
+ *     module, which is a strange way to discover that a "framework-free"
+ *     package was not portable. `globalThis.crypto` is standard in Node ≥ 19
+ *     and in every browser, and it is a CSPRNG in both (THR-03).
  */
+
+/**
+ * Cryptographically secure random bytes.
+ *
+ * `Math.random` is banned by lint precisely because a call site like this one
+ * is where it would do the most damage: these bytes become record ids that are
+ * exposed in URLs.
+ */
+function randomBytes(length: number): Uint8Array {
+  return globalThis.crypto.getRandomValues(new Uint8Array(length));
+}
+
+const HEX = Array.from({ length: 256 }, (_unused, byte) => byte.toString(16).padStart(2, '0'));
+
+function toHex(bytes: Uint8Array): string {
+  let hex = '';
+  for (const byte of bytes) hex += HEX[byte];
+  return hex;
+}
 
 declare const brand: unique symbol;
 
@@ -81,7 +106,8 @@ export function generateId(): string {
     }
   } else {
     lastTimestamp = now;
-    sequence = randomBytes(2).readUInt16BE(0) & 0xfff;
+    const seedBytes = randomBytes(2);
+    sequence = (((seedBytes[0] ?? 0) << 8) | (seedBytes[1] ?? 0)) & 0xfff;
   }
 
   const bytes = randomBytes(16);
@@ -101,7 +127,7 @@ export function generateId(): string {
   // RFC 4122 variant
   bytes[8] = 0x80 | ((bytes[8] ?? 0) & 0x3f);
 
-  const hex = bytes.toString('hex');
+  const hex = toHex(bytes);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
@@ -127,10 +153,25 @@ export function idTimestamp(id: string): Date | null {
 
 /**
  * Correlation id for request tracing.
- * v4 is correct here — these are not stored or indexed, only propagated.
+ *
+ * v4 is correct here — these are not stored or indexed, only propagated, so
+ * there is nothing for v7's time ordering to help.
+ *
+ * Built from `getRandomValues` rather than `crypto.randomUUID()` because the
+ * latter is unavailable in a browser outside a secure context. This module is
+ * bundled for the browser, and a function that throws on `http://` in some
+ * environments and not others is a worse trade than eight lines of bit
+ * twiddling.
  */
 export function newCorrelationId(): CorrelationId {
-  return randomUUID() as CorrelationId;
+  const bytes = randomBytes(16);
+
+  // Version 4, RFC 4122 variant.
+  bytes[6] = 0x40 | ((bytes[6] ?? 0) & 0x0f);
+  bytes[8] = 0x80 | ((bytes[8] ?? 0) & 0x3f);
+
+  const hex = toHex(bytes);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}` as CorrelationId;
 }
 
 /**

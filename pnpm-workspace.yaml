@@ -1,8 +1,20 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - 'tests'
 
-# esbuild fetches a platform binary in its postinstall. It is a direct
-# dependency of Vitest, so the test runner does not work without it.
+# Packages permitted to run install scripts. The default is to run none, so
+# anything needing a postinstall is listed here deliberately rather than by
+# blanket approval.
 allowBuilds:
+  # esbuild fetches a platform binary in its postinstall. It is a direct
+  # dependency of Vitest, so the test runner does not work without it.
   esbuild: true
+  # Prisma downloads its query engine binary and generates the client in a
+  # postinstall. Without it, `@prisma/client` imports fail at runtime.
+  prisma: true
+  '@prisma/client': true
+  '@prisma/engines': true
+  # @swc/core downloads a platform-native binary. Vitest needs it to emit the
+  # decorator metadata NestJS dependency injection is built on.
+  '@swc/core': true

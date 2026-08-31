@@ -103,25 +103,27 @@ export default function OverviewPage(): React.JSX.Element {
         <CardBody>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <StatusGroup
-              heading="Done"
+              heading="Done — Phase 0"
               tone="success"
               items={[
                 'Documentation: 24 documents, 25 diagrams',
                 '@financy/core — Money, errors, ids, state machines',
-                '319 tests, 100% line coverage on core',
-                'Design system tokens and primitives',
-                'Application shell and permission-aware navigation',
+                '@financy/contracts — Zod schemas shared by API and web',
+                '@financy/db — Prisma init and the tenant client extension',
+                'apps/api — NestJS, config validation, health, error envelope',
+                'Design system, app shell, permission-aware navigation',
+                '546 tests, CI gate, and the Playwright harness',
               ]}
             />
             <StatusGroup
-              heading="Next"
+              heading="Next — Phase 1"
               tone="pending"
               items={[
-                'packages/contracts — Zod schemas shared by API and web',
-                'packages/db — Prisma schema, ~45 tables',
-                'apps/api — NestJS bootstrap, guards, audit',
-                'Phase 1 — auth, organisation, RBAC, audit log, People',
-                'Phase 2 — policy engine and approvals',
+                'The Prisma schema and its first migration',
+                'Request context, audit service, queue and storage ports',
+                'Authentication, sessions, and the RBAC guards',
+                'Organisation, People, and the immutable audit log — the first real screens',
+                'Phase 2 — the policy engine and approvals',
               ]}
             />
           </div>
