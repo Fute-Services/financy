@@ -1,14 +1,17 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
 import {
   AppExceptionFilter,
+  AuditModule,
+  AuthGuard,
   ConfigModule,
   DatabaseModule,
   HealthModule,
   LoggingModule,
   RequestContextMiddleware,
 } from './platform/index.js';
+import { AuthModule } from './modules/auth/index.js';
 
 /**
  * The application root.
@@ -24,13 +27,20 @@ import {
  * first thing worth reading.
  */
 @Module({
-  imports: [ConfigModule, LoggingModule, DatabaseModule, HealthModule],
+  imports: [ConfigModule, LoggingModule, DatabaseModule, AuditModule, HealthModule, AuthModule],
   providers: [
     {
       // Registered here rather than with `app.useGlobalFilters` so it takes
       // part in dependency injection and can hold the logger.
       provide: APP_FILTER,
       useClass: AppExceptionFilter,
+    },
+    {
+      // Global, so authentication is the default and `@Public()` is the
+      // deliberate opt-out. A route that declares nothing is locked down
+      // rather than exposed, which is the failure mode worth having.
+      provide: APP_GUARD,
+      useClass: AuthGuard,
     },
   ],
 })

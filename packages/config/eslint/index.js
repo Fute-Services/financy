@@ -84,7 +84,11 @@ export const architectureRules = {
       ],
       patterns: [
         {
-          group: ['**/modules/*/!(index)', '**/modules/*/**'],
+          // The negations matter: `modules/auth/index.js` is the *public*
+          // entry and must stay importable. Without them the rule banned the
+          // one import it exists to permit, and the only way to satisfy it
+          // would be to stop using module boundaries at all.
+          group: ['**/modules/*/**', '!**/modules/*/index', '!**/modules/*/index.js'],
           message:
             "Import a module through its public index.ts only. Deep imports couple you to another module's internals. See docs/08-ARCHITECTURE.md §4.3.",
         },

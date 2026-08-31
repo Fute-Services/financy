@@ -18,6 +18,9 @@ allowBuilds:
   # @swc/core downloads a platform-native binary. Vitest needs it to emit the
   # decorator metadata NestJS dependency injection is built on.
   '@swc/core': true
+  # argon2 compiles or downloads a native binding in its postinstall. Password
+  # hashing does not work without it.
+  argon2: true
 
 # Transitive dependencies pinned above a published advisory. Each entry is a
 # vulnerability the direct dependency has not yet picked up itself; remove one

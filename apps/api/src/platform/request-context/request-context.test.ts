@@ -107,3 +107,65 @@ describe('enterContext', () => {
     }).toThrow(/outside a request context/);
   });
 });
+
+describe('enterContext across an await boundary', () => {
+  /**
+   * The regression test for the bug that made `GET /auth/session` return 401
+   * after a successful login.
+   *
+   * `AuthGuard` resolves the session and calls `enterContext`, then Nest awaits
+   * the guard and invokes the handler. With `storage.enterWith` the handler saw
+   * the pre-guard context and the membership was gone — a silent one, because
+   * every symptom pointed at the session lookup instead.
+   *
+   * This is the exact shape: mutate inside an awaited callee, read from the
+   * caller afterwards.
+   */
+  it('is visible to the caller after the callee resolves', async () => {
+    async function guard(): Promise<void> {
+      await Promise.resolve();
+      enterContext({ organizationId: 'org-a', membershipId: 'mem-1' });
+    }
+
+    await runWithContext(context, async () => {
+      await guard();
+
+      // The caller's frame, after the awaited callee returned.
+      expect(getOrganizationId()).toBe('org-a');
+      expect(getContext()?.membershipId).toBe('mem-1');
+    });
+  });
+
+  it('is visible to a sibling called afterwards, as a handler would be', async () => {
+    const seen: Array<string | undefined> = [];
+
+    await runWithContext(context, async () => {
+      await (async () => {
+        await Promise.resolve();
+        enterContext({ organizationId: 'org-b' });
+      })();
+
+      await (async () => {
+        await Promise.resolve();
+        seen.push(getOrganizationId());
+      })();
+    });
+
+    expect(seen).toEqual(['org-b']);
+  });
+
+  it('still does not leak between concurrent requests', async () => {
+    const observe = (organizationId: string) =>
+      runWithContext({ correlationId: organizationId, startedAt: Date.now() }, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        enterContext({ organizationId });
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return getOrganizationId();
+      });
+
+    await expect(Promise.all([observe('org-a'), observe('org-b')])).resolves.toEqual([
+      'org-a',
+      'org-b',
+    ]);
+  });
+});
