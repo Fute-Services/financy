@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  brandedId,
   compareDecimalStrings,
   currencyCodeSchema,
   dateOnlySchema,
@@ -164,5 +165,30 @@ describe('currency and version', () => {
   it('requires a version of at least 1', () => {
     expect(versionSchema.safeParse(0).success).toBe(false);
     expect(versionSchema.safeParse(1).success).toBe(true);
+  });
+});
+
+describe('brandedId', () => {
+  /**
+   * The brand exists only in the type system — swapping a `DepartmentId` for a
+   * `ProjectId` becomes a compile error, while the wire format stays a plain
+   * string. These assertions cover the runtime half: it must validate exactly
+   * as `idSchema` does, or a branded field would accept something an unbranded
+   * one rejects.
+   */
+  const schema = brandedId<'DepartmentId'>();
+
+  it('accepts a well-formed id', () => {
+    expect(schema.safeParse('0192f3a1-9c2b-7d4e-8f01-2a3b4c5d6e7f').success).toBe(true);
+  });
+
+  it('rejects what idSchema rejects', () => {
+    expect(schema.safeParse('not-a-uuid').success).toBe(false);
+  });
+
+  it('returns the value unchanged — the brand is compile-time only', () => {
+    expect(schema.parse('0192f3a1-9c2b-7d4e-8f01-2a3b4c5d6e7f')).toBe(
+      '0192f3a1-9c2b-7d4e-8f01-2a3b4c5d6e7f',
+    );
   });
 });

@@ -31,12 +31,13 @@ export interface PermissionDefinition {
 function define(key: string, description: string): PermissionDefinition {
   const [resource, action] = key.split(':');
 
-  /* c8 ignore next 3 -- unreachable: every literal below is well-formed, and
+  /* c8 ignore start -- unreachable: every literal below is well-formed, and
      the format test proves it. The guard exists so a future typo fails here
      rather than seeding a row with an undefined resource. */
   if (resource === undefined || action === undefined || action.includes(':')) {
     throw new Error(`Malformed permission key: ${key}`);
   }
+  /* c8 ignore stop */
 
   return { key, resource, action, description };
 }

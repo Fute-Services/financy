@@ -35,12 +35,29 @@ function randomBytes(length: number): Uint8Array {
   return globalThis.crypto.getRandomValues(new Uint8Array(length));
 }
 
-const HEX = Array.from({ length: 256 }, (_unused, byte) => byte.toString(16).padStart(2, '0'));
+/**
+ * A `DataView` over the bytes, rather than indexing them directly.
+ *
+ * `noUncheckedIndexedAccess` types `bytes[6]` as `number | undefined`, so every
+ * read would need a `?? 0` that can never fire — sixteen unreachable branches
+ * in the one file that must stay at 100% coverage. `getUint8` returns a
+ * `number`, so the guards are not needed and the coverage figure keeps meaning
+ * something.
+ */
+function viewOf(bytes: Uint8Array): DataView {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
 
 function toHex(bytes: Uint8Array): string {
   let hex = '';
-  for (const byte of bytes) hex += HEX[byte];
+  for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
   return hex;
+}
+
+/** Format 16 bytes as `8-4-4-4-12`. */
+function formatUuid(bytes: Uint8Array): string {
+  const hex = toHex(bytes);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 declare const brand: unique symbol;
@@ -106,29 +123,26 @@ export function generateId(): string {
     }
   } else {
     lastTimestamp = now;
-    const seedBytes = randomBytes(2);
-    sequence = (((seedBytes[0] ?? 0) << 8) | (seedBytes[1] ?? 0)) & 0xfff;
+    sequence = viewOf(randomBytes(2)).getUint16(0) & 0xfff;
   }
 
   const bytes = randomBytes(16);
+  const view = viewOf(bytes);
 
-  // 48-bit timestamp
-  bytes[0] = (now / 2 ** 40) & 0xff;
-  bytes[1] = (now / 2 ** 32) & 0xff;
-  bytes[2] = (now / 2 ** 24) & 0xff;
-  bytes[3] = (now / 2 ** 16) & 0xff;
-  bytes[4] = (now / 2 ** 8) & 0xff;
-  bytes[5] = now & 0xff;
+  // 48-bit big-endian millisecond timestamp, written as 16 + 32 bits because
+  // `setUint32` cannot hold all 48 and JavaScript bitwise operators truncate
+  // to 32 — `now << 8` would silently lose the top of the clock in 2038.
+  view.setUint16(0, Math.floor(now / 2 ** 32));
+  view.setUint32(2, now % 2 ** 32);
 
-  // version 7 + 12-bit monotonic counter
-  bytes[6] = 0x70 | ((sequence >> 8) & 0x0f);
-  bytes[7] = sequence & 0xff;
+  // Version 7, then the 12-bit monotonic counter.
+  view.setUint8(6, 0x70 | ((sequence >> 8) & 0x0f));
+  view.setUint8(7, sequence & 0xff);
 
-  // RFC 4122 variant
-  bytes[8] = 0x80 | ((bytes[8] ?? 0) & 0x3f);
+  // RFC 4122 variant, preserving the random low bits.
+  view.setUint8(8, 0x80 | (view.getUint8(8) & 0x3f));
 
-  const hex = toHex(bytes);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return formatUuid(bytes);
 }
 
 /** Typed id generator: `newId<OrganizationId>()`. */
@@ -165,13 +179,13 @@ export function idTimestamp(id: string): Date | null {
  */
 export function newCorrelationId(): CorrelationId {
   const bytes = randomBytes(16);
+  const view = viewOf(bytes);
 
   // Version 4, RFC 4122 variant.
-  bytes[6] = 0x40 | ((bytes[6] ?? 0) & 0x0f);
-  bytes[8] = 0x80 | ((bytes[8] ?? 0) & 0x3f);
+  view.setUint8(6, 0x40 | (view.getUint8(6) & 0x0f));
+  view.setUint8(8, 0x80 | (view.getUint8(8) & 0x3f));
 
-  const hex = toHex(bytes);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}` as CorrelationId;
+  return formatUuid(bytes) as CorrelationId;
 }
 
 /**

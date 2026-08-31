@@ -18,3 +18,13 @@ allowBuilds:
   # @swc/core downloads a platform-native binary. Vitest needs it to emit the
   # decorator metadata NestJS dependency injection is built on.
   '@swc/core': true
+
+# Transitive dependencies pinned above a published advisory. Each entry is a
+# vulnerability the direct dependency has not yet picked up itself; remove one
+# once its parent ships a fixed range, and never add one without the advisory
+# id in the comment.
+overrides:
+  # GHSA-7fh5-64p2-3v2j / GHSA-r28c-9q8g-f849 — reached via next.
+  postcss: '^8.5.26'
+  # GHSA-ggr8-5vv4-36mx — stack exhaustion, reached via prisma.
+  deepmerge-ts: '^8.0.2'

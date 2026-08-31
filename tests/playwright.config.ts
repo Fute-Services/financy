@@ -86,7 +86,11 @@ export default defineConfig({
    */
   webServer: [
     {
-      command: 'pnpm --filter @financy/api dev',
+      // CI runs the **built** artefact, because that is what deploys — a dev
+      // server has different bundling, different error handling, and no
+      // production build step to fail. Locally `dev` is used instead, so the
+      // suite picks up an edit without a rebuild.
+      command: isCI ? 'pnpm --filter @financy/api start' : 'pnpm --filter @financy/api dev',
       url: `${API_BASE_URL}/v1/health/live`,
       reuseExistingServer: !isCI,
       timeout: 120_000,
@@ -95,7 +99,13 @@ export default defineConfig({
       stderr: 'pipe',
     },
     {
-      command: 'pnpm --filter @financy/web dev',
+      // The port is passed explicitly rather than left to the package script,
+      // which hard-codes 3100. Playwright is the process that decides where to
+      // look, so it must also be the one that decides where the app binds —
+      // otherwise changing `WEB_PORT` moves the probe and not the server.
+      command: isCI
+        ? `pnpm --filter @financy/web exec next start --port ${String(WEB_PORT)}`
+        : `pnpm --filter @financy/web exec next dev --port ${String(WEB_PORT)}`,
       url: WEB_BASE_URL,
       reuseExistingServer: !isCI,
       timeout: 120_000,

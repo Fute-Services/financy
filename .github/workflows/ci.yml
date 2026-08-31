@@ -152,14 +152,22 @@ jobs:
             CREATE EXTENSION IF NOT EXISTS btree_gin;
           SQL
 
-      - name: Generate the Prisma client
-        run: pnpm db:generate
+      - name: Build
+        # Before the migration and the seed, not after: the seed runs from
+        # source through tsx but imports `@financy/core` by its package entry,
+        # which resolves to `dist`. Unbuilt, it fails with a module-not-found
+        # that says nothing about ordering.
+        run: pnpm build
 
       - name: Apply migrations
-        # No-op while the schema is empty (Phase 0). It is wired now so that
-        # the first migration is exercised by CI on the pull request that
-        # introduces it, rather than on the one after.
         run: pnpm db:migrate:deploy
+
+      - name: Seed the permission catalogue
+        # The integration suite provisions organisations, and provisioning
+        # needs the catalogue to exist. Seeding the system data is also what
+        # every real environment does on deploy, so this is the same path
+        # rather than a test-only fixture.
+        run: pnpm db:seed:system
 
       - name: Test with coverage
         # Per-package floors are enforced by each package's own Vitest config
@@ -168,6 +176,11 @@ jobs:
 
       - name: Upload coverage
         if: always()
+        # Never the reason a green test run reports failure. Artifact storage
+        # is an account-level quota that has nothing to do with the change
+        # under review, and a build that goes red for it teaches people to
+        # ignore red.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: coverage
@@ -208,11 +221,6 @@ jobs:
       LOG_PRETTY: 'false'
       API_PORT: '4100'
       WEB_PORT: '3100'
-      # Generated per run, so nothing can pass because it recognised a
-      # hard-coded key.
-      SESSION_SECRET: ${{ github.run_id }}-session-secret-padded-to-32-bytes-min
-      ENCRYPTION_KEY: ${{ github.run_id }}-encryption-key-padded-to-32-bytes-min
-      SIGNED_URL_SECRET: ${{ github.run_id }}-signed-url-secret-padded-to-32-bytes
 
     steps:
       - uses: actions/checkout@v4
@@ -224,6 +232,18 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Generate ephemeral secrets
+        # Real 32-byte keys, fresh per run, rather than a string that happens
+        # to decode to roughly the right length. Nothing can pass because it
+        # recognised a hard-coded value, and the config schema's length check
+        # is exercised honestly.
+        run: |
+          {
+            echo "SESSION_SECRET=$(openssl rand -base64 32)"
+            echo "ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "SIGNED_URL_SECRET=$(openssl rand -base64 32)"
+          } >> "$GITHUB_ENV"
 
       - name: Provision the database
         env:
@@ -240,18 +260,17 @@ jobs:
             CREATE EXTENSION IF NOT EXISTS btree_gin;
           SQL
 
-      - name: Generate the Prisma client
-        run: pnpm db:generate
+      - name: Build
+        # First, for two reasons: Playwright starts the apps itself and they
+        # need their dependencies built, and the seed imports `@financy/core`
+        # by its package entry, which resolves to `dist`. `pnpm build` also
+        # generates the Prisma client, so no separate step for it.
+        run: pnpm build
 
       - name: Apply migrations and seed
         run: |
           pnpm db:migrate:deploy
           pnpm db:seed
-
-      - name: Build
-        # Playwright starts the apps itself; they need their dependencies
-        # built first.
-        run: pnpm build
 
       - name: Install Chromium
         run: pnpm --filter @financy/e2e install:browsers
@@ -261,6 +280,7 @@ jobs:
 
       - name: Upload the report
         if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
