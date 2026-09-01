@@ -450,17 +450,57 @@ SEC-19, SEC-22) · E2E (`auth`, `permissions`).
 
 ### Epic 2.1 — Policy engine
 
-| ID    | Task                                                                         | FR             |
-| ----- | ---------------------------------------------------------------------------- | -------------- |
-| 2.1.1 | Rule schema in `packages/contracts` (conditions, outcomes, closed field set) | FR-POL-002/003 |
-| 2.1.2 | Prisma: policies, policy_versions, policy_rules                              | FR-POL-001/007 |
-| 2.1.3 | `PolicyContext` builder                                                      | —              |
-| 2.1.4 | Condition evaluator — full field × operator matrix, currency-safe            | FR-POL-003     |
-| 2.1.5 | Outcome merger — all nine precedence rules                                   | FR-POL-006     |
-| 2.1.6 | `PolicyEvaluator` (pure) + decision snapshot                                 | FR-POL-005     |
-| 2.1.7 | Version cache with invalidation                                              | —              |
-| 2.1.8 | Simulation and backtest endpoints                                            | FR-POL-008     |
-| 2.1.9 | **Golden-file fixture suite**                                                | `11 §9`        |
+| ID    | Task                                                                         | FR             | Status    |
+| ----- | ---------------------------------------------------------------------------- | -------------- | --------- |
+| 2.1.1 | Rule schema in `packages/contracts` (conditions, outcomes, closed field set) | FR-POL-002/003 | ✅        |
+| 2.1.2 | Prisma: policies, policy_versions, policy_rules                              | FR-POL-001/007 |           |
+| 2.1.3 | `PolicyContext` builder                                                      | —              | type only |
+| 2.1.4 | Condition evaluator — full field × operator matrix, currency-safe            | FR-POL-003     | ✅        |
+| 2.1.5 | Outcome merger — all nine precedence rules                                   | FR-POL-006     | ✅        |
+| 2.1.6 | `PolicyEvaluator` (pure) + decision snapshot                                 | FR-POL-005     | ✅        |
+| 2.1.7 | Version cache with invalidation                                              | —              |           |
+| 2.1.8 | Simulation and backtest endpoints                                            | FR-POL-008     |           |
+| 2.1.9 | **Golden-file fixture suite**                                                | `11 §9`        |           |
+
+**The engine lives in `core`, not in `contracts`, and that is forced rather than chosen.**
+`contracts` already imports `Money` from `core`, so the dependency runs contracts → core and an
+import the other way would be a cycle. The split lands where it should anyway: the domain owns the
+shape and the behaviour — the closed field set, the operator tables, the merge semantics — and the
+contract owns the validation and the wire form, exactly as `Money` and `moneySchema` already
+divide. Putting the evaluator in `contracts` would also have put a decision engine inside the
+package that compiles into the browser bundle.
+
+**Everything in 2.1.4–2.1.6 is pure: no I/O, no clock, no database.** `now` is injected, the
+duration is injected, and the caller supplies the active policy versions — deciding _which_
+versions are active is a query, and a query inside the evaluator would be the one impure thing
+that made the rest impossible. Purity is what makes the golden-file suite (2.1.9) feasible, what
+lets a simulation ask "what would this policy have done in March", and what makes a decision
+reproducible from its record months later.
+
+**Two failure modes shaped the design, and both are silent ones.**
+
+_A rule that cannot fire is worse than a rule that is wrong._ Nothing errors, nothing is logged,
+and the spend the policy was written to control simply goes through. So the field set is closed, a
+comparison is validated for internal coherence at authoring time (operator belongs to the field's
+type, value kind matches the operator, ranges are the right way round), and the evaluator's field
+switch is exhaustive — adding a field to the model without teaching the evaluator about it is a
+compile error rather than a rule nobody notices is dead.
+
+_A cross-currency comparison that answers anyway._ Comparing 1000 USD to 1000 EUR raises rather
+than comparing magnitudes, because the silent version approves a €1,000 purchase under a $1,000
+limit and never says why. It is the one place the evaluator refuses to answer; everything else is
+total, and a comparison against absent data is `false` rather than an error — a policy that errors
+on an unusual request blocks legitimate spend for a reason nobody can act on.
+
+**Ordering is total.** Priority descending, then policy id; within a policy, sequence then rule id.
+The tiebreaks matter more than they look: without them, two policies of equal priority evaluate in
+whatever order the database returned, and the same request is decided differently on two days with
+nothing changed. There is a test that evaluates the same pair in both orders and asserts one
+answer.
+
+`POLICY_ENGINE_VERSION` is recorded on every decision. If the merge semantics ever change,
+historical decisions stay interpretable — without it, a "why was this approved?" screen would
+explain the past using today's rules and quietly be wrong.
 
 ### Epic 2.2 — Approvals
 

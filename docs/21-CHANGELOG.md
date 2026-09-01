@@ -13,6 +13,18 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **The policy engine — rule model, condition evaluator, and outcome merger** (tasks 2.1.1,
+  2.1.4–2.1.6). Pure: no I/O, no clock, no database. `now` and the duration are injected and the
+  caller supplies the active policy versions, because deciding which are active is a query and a
+  query inside the evaluator would make the golden-file suite, the simulation endpoint, and
+  reproducible historical decisions all impossible. The field set is closed and the evaluator's
+  switch over it is exhaustive, so a field the model names but the engine cannot read is a compile
+  error rather than a rule that silently never fires. Money comparisons raise across currencies
+  instead of comparing magnitudes; every other comparison against absent data answers `false`
+  rather than erroring. Ordering is total — priority, then policy id, then sequence, then rule id
+  — so the same request cannot be decided differently on two days. All nine merge precedence rules
+  are implemented with a dedicated test each, every one built around an explicitly constructed
+  conflict.
 - **The audit screen gains filters, an export, and the security log** (task 1.7.9). Filters live
   in the URL, so a filtered view is a link somebody can paste into a ticket, and changing one
   clears the cursor — a cursor is a position in one query's ordering, and carried across a filter
