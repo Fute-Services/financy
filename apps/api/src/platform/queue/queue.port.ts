@@ -59,6 +59,24 @@ export interface QueuePort {
   ): Promise<JobHandle>;
 
   /**
+   * Declare that a job should run on a schedule.
+   *
+   * **The inline adapter records the schedule and does not run it** (docs/14
+   * §2). That is deliberate rather than unfinished: a background timer firing
+   * in every developer's terminal and every test process would make local
+   * behaviour depend on how long something had been running, which is the one
+   * property a test cannot work around. A developer triggers a due job
+   * explicitly — `pnpm --filter @financy/api job <name>` — and the Redis
+   * adapter, when it exists, runs them for real behind a distributed lock so
+   * two instances do not both fire the 08:00 sweep.
+   */
+  registerRecurring<T extends JobName>(
+    name: T,
+    cron: string,
+    payload: JobPayload<T>,
+  ): Promise<void>;
+
+  /**
    * Wait for everything currently in flight.
    *
    * Present on the port rather than only on the inline adapter, because a test

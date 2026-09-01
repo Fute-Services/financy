@@ -45,6 +45,9 @@ export class NotificationJobs implements OnModuleInit {
       this.approvalDecided(payload),
     );
     this.registry.register('approval.reminder', (payload) => this.approvalReminder(payload));
+    this.registry.register('notification.approval_escalated', (payload) =>
+      this.approvalEscalated(payload),
+    );
   }
 
   private async approvalRequested(
@@ -163,6 +166,52 @@ export class NotificationJobs implements OnModuleInit {
       resourceType: 'spend_request',
       resourceId: subject.id,
       metadata: { reference: subject.reference, nth: payload.nth },
+    });
+  }
+
+  /**
+   * The step went past its deadline and came to somebody new.
+   *
+   * **Only the people newly brought in are told.** The original approvers were
+   * asked when the step opened and chased at 50% and 80% of the window; a
+   * fourth message saying it has been escalated *away from* them adds nothing
+   * they can act on that the queue does not already show.
+   */
+  private async approvalEscalated(
+    payload: JobPayload<'notification.approval_escalated'>,
+  ): Promise<void> {
+    const step = await this.step(payload.organizationId, payload.approvalStepId);
+
+    if (step === null) {
+      throw new PermanentJobError(`Approval step ${payload.approvalStepId} no longer exists.`);
+    }
+
+    // Settled between the escalation and this job. The people it escalated to
+    // do not need telling about something already decided.
+    if (step.status !== 'ACTIVE' && step.status !== 'ESCALATED') return;
+
+    const subject = await this.subjectOf(payload.organizationId, step.instance.subjectId);
+
+    if (subject === null) return;
+
+    const rendered = templates.approvalEscalated({
+      requesterName: subject.requesterName,
+      amount: subject.amount,
+      purpose: subject.purpose,
+      reference: subject.reference,
+      spendRequestId: subject.id,
+      dueAt: (step.dueAt ?? step.createdAt).toISOString(),
+    });
+
+    await this.notifications.deliver({
+      organizationId: payload.organizationId,
+      eventType: 'approval.escalated',
+      recipientMembershipIds: payload.addedMembershipIds,
+      dedupeKey: `step:${step.id}:escalated`,
+      ...rendered,
+      resourceType: 'spend_request',
+      resourceId: subject.id,
+      metadata: { reference: subject.reference, stepId: step.id },
     });
   }
 

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { ApprovalResolverService } from './approval-resolver.service.js';
+import { ApprovalJobs } from './approval-jobs.js';
 import { ApprovalService } from './approval.service.js';
 import { DelegationService } from './delegation.service.js';
 import { DelegationsController } from './delegations.controller.js';
@@ -16,7 +17,7 @@ import { DelegationsController } from './delegations.controller.js';
  */
 @Module({
   controllers: [DelegationsController],
-  providers: [ApprovalService, ApprovalResolverService, DelegationService],
+  providers: [ApprovalService, ApprovalResolverService, DelegationService, ApprovalJobs],
   exports: [ApprovalService, ApprovalResolverService, DelegationService],
 })
 export class ApprovalsModule {}

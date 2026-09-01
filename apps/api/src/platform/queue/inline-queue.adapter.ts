@@ -65,6 +65,9 @@ export class InlineQueueAdapter implements QueuePort {
    */
   private readonly inFlight = new Set<Promise<void>>();
 
+  /** Registered schedules. Recorded, never fired — see `registerRecurring`. */
+  private readonly schedules = new Map<JobName, { cron: string; payload: unknown }>();
+
   constructor(
     private readonly database: DatabaseService,
     private readonly registry: JobRegistry,
@@ -158,6 +161,55 @@ export class InlineQueueAdapter implements QueuePort {
     return this.enqueue(name, payload, {
       ...options,
       delayMs: Math.max(0, runAt.getTime() - Date.now()),
+    });
+  }
+
+  /**
+   * Record a schedule without running it (docs/14 §2).
+   *
+   * A timer firing in every developer's terminal and every test process would
+   * make behaviour depend on how long the process had been up — the one thing
+   * a test cannot control for. The schedule is kept so `recurring` can list
+   * what *would* run, and `trigger` runs one on demand.
+   */
+  registerRecurring<T extends JobName>(
+    name: T,
+    cron: string,
+    payload: JobPayload<T>,
+  ): Promise<void> {
+    this.schedules.set(name, { cron, payload });
+
+    this.logger.debug(
+      { jobName: name, cron },
+      'Recurring job registered. The inline adapter does not run it; trigger it explicitly.',
+    );
+
+    return Promise.resolve();
+  }
+
+  /** What is registered, for the CLI that triggers them and for the tests. */
+  get recurring(): Array<{ name: JobName; cron: string }> {
+    return [...this.schedules.entries()].map(([name, entry]) => ({ name, cron: entry.cron }));
+  }
+
+  /**
+   * Run a registered recurring job once, now.
+   *
+   * The idempotency key carries the minute, so triggering it twice in the same
+   * minute is one run — which is what makes a developer leaning on the key
+   * harmless — while the next minute is genuinely a new sweep.
+   */
+  async trigger(name: JobName): Promise<JobHandle> {
+    const schedule = this.schedules.get(name);
+
+    if (schedule === undefined) {
+      throw new Error(`No recurring job is registered as "${name}".`);
+    }
+
+    const minute = new Date().toISOString().slice(0, 16);
+
+    return this.enqueue(name, schedule.payload as JobPayload<typeof name>, {
+      idempotencyKey: `${name}:${minute}`,
     });
   }
 

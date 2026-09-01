@@ -13,6 +13,37 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **Approval reminders, escalation, and request expiry** (tasks 2.2.7 and 2.3.8, FR-APR-008,
+  FR-SPD-008). One sweep finds the work and writes nothing; everything it finds becomes a bounded
+  job whose idempotency key names one record — so a failure on one step does not stop the other two
+  hundred, and two sweeps overlapping produce no duplicated work.
+- **Reminders are proportional, not absolute** — at 50% and 80% of the window the step was given,
+  rather than at fixed hours. A four-hour deadline and a two-week one need chasing on completely
+  different rhythms, and one absolute schedule is wrong for both: hourly reminders on a fortnightly
+  approval is spam, and a daily reminder on a four-hour one arrives after it has already gone
+  overdue. The key names the step and the threshold, never the moment, so the sweep running every
+  fifteen minutes chases each approver once per threshold rather than ninety-six times a day.
+- **Escalation adds an approver and never removes one.** The original approvers stay eligible and
+  the step stays actionable — one that stopped accepting approvals the moment it went overdue would
+  be a chain nobody can finish, which is the opposite of what a deadline is for. It is not an
+  approval and it decides nothing: what changes is who may act, and the fact that it is visibly
+  late.
+- **The escalation target is resolved when the chain opens and frozen on the step**, exactly like
+  the eligible set, so a reorganisation between the submission and the deadline cannot redirect an
+  escalation to somebody the policy author never named. It carries the same three exclusions as the
+  approvers themselves — the requester, anybody who cannot act, and anybody already on the step —
+  because escalation must not become the way around the rule it bypasses.
+- **Expiry is a status change, never a deletion**, and it is audited as `SYSTEM` with the job's
+  name. The approval happened; what has run out is the licence to spend against it, and attributing
+  an automatic expiry to whoever last touched the request would be a lie about who did it.
+- **The clock is a parameter.** The sweep takes `asOf` and every threshold is computed from it, so
+  "what happens at 80% of a two-day window?" is a test rather than a two-day wait — and jobs the
+  sweep enqueues carry that same moment forward rather than re-reading the clock.
+- `pnpm --filter @financy/api job` lists the registered schedules and runs one on demand. The
+  inline adapter records recurring jobs and deliberately fires none of them (docs/14 §2): a timer
+  running in every developer's terminal and every test process would make behaviour depend on how
+  long the process had been up, which is the one thing a test cannot control for.
+
 - **Notifications, and the queue underneath them** (Epic 2.5, plus the queue port from ADR-0006).
   Submitting a request tells the people who can approve it; deciding one tells the person who
   raised it. Both go through a **job, never through the request** (FR-NOT-003) — a provider outage

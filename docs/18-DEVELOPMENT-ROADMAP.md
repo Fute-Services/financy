@@ -450,17 +450,17 @@ SEC-19, SEC-22) · E2E (`auth`, `permissions`).
 
 ### Epic 2.1 — Policy engine
 
-| ID    | Task                                                                         | FR             | Status                 |
-| ----- | ---------------------------------------------------------------------------- | -------------- | ---------------------- |
-| 2.1.1 | Rule schema in `packages/contracts` (conditions, outcomes, closed field set) | FR-POL-002/003 | ✅                     |
-| 2.1.2 | Prisma: policies, policy_versions, policy_rules                              | FR-POL-001/007 | ✅ rules as a snapshot |
-| 2.1.3 | `PolicyContext` builder                                                      | —              | ✅                     |
-| 2.1.4 | Condition evaluator — full field × operator matrix, currency-safe            | FR-POL-003     | ✅                     |
-| 2.1.5 | Outcome merger — all nine precedence rules                                   | FR-POL-006     | ✅                     |
-| 2.1.6 | `PolicyEvaluator` (pure) + decision snapshot                                 | FR-POL-005     | ✅                     |
-| 2.1.7 | Version cache with invalidation                                              | —              | ✅ in-process          |
-| 2.1.8 | Simulation and backtest endpoints                                            | FR-POL-008     |                        |
-| 2.1.9 | **Golden-file fixture suite**                                                | `11 §9`        |                        |
+| ID    | Task                                                                         | FR             | Status                     |
+| ----- | ---------------------------------------------------------------------------- | -------------- | -------------------------- |
+| 2.1.1 | Rule schema in `packages/contracts` (conditions, outcomes, closed field set) | FR-POL-002/003 | ✅                         |
+| 2.1.2 | Prisma: policies, policy_versions, policy_rules                              | FR-POL-001/007 | ✅ rules as a snapshot     |
+| 2.1.3 | `PolicyContext` builder                                                      | —              | ✅                         |
+| 2.1.4 | Condition evaluator — full field × operator matrix, currency-safe            | FR-POL-003     | ✅                         |
+| 2.1.5 | Outcome merger — all nine precedence rules                                   | FR-POL-006     | ✅                         |
+| 2.1.6 | `PolicyEvaluator` (pure) + decision snapshot                                 | FR-POL-005     | ✅                         |
+| 2.1.7 | Version cache with invalidation                                              | —              | ✅ in-process              |
+| 2.1.8 | Simulation and backtest endpoints                                            | FR-POL-008     | ✅ simulation; no backtest |
+| 2.1.9 | **Golden-file fixture suite**                                                | `11 §9`        |                            |
 
 **The engine lives in `core`, not in `contracts`, and that is forced rather than chosen.**
 `contracts` already imports `Money` from `core`, so the dependency runs contracts → core and an
@@ -512,8 +512,8 @@ explain the past using today's rules and quietly be wrong.
 | 2.2.4 | State machine: instance and step, all four step types                                | FR-APR-001/002 | ✅                        |
 | 2.2.5 | Actions: approve, reject, return, delegate                                           | FR-APR-005     | ⚠️ approve and reject     |
 | 2.2.6 | Row-locked step transition with status re-check inside the lock                      | FR-APR-011     | ✅ version, not a lock    |
-| 2.2.7 | Timeout, escalation, reminder jobs                                                   | FR-APR-008     | ⚠️ `dueAt` set, no job    |
-| 2.2.8 | Finance override with mandatory reason (step-up)                                     | FR-APR-010     |                           |
+| 2.2.7 | Timeout, escalation, reminder jobs                                                   | FR-APR-008     | ✅                        |
+| 2.2.8 | Finance override with mandatory reason (step-up)                                     | FR-APR-010     | ✅                        |
 | 2.2.9 | Approval queue endpoint                                                              | FR-APR-012     | ✅                        |
 
 **Eligible means _able to act_, and finding that out cost a stuck chain.** A policy can name a
@@ -543,9 +543,15 @@ guarantee `docs/16` asks for by a different mechanism, and the difference is wor
 
 ### Epic 2.3 — Spend requests
 
-2.3.1 schema · 2.3.2 draft with autosave · 2.3.3 dry-run evaluate · 2.3.4 submit (authoritative,
-idempotent) · 2.3.5 state machine · 2.3.6 server-computed totals (FR-SPD-006) · 2.3.7 cancel ·
-2.3.8 expiry job.
+2.3.1 schema ✅ · 2.3.2 draft ✅ (no autosave: a draft that saved itself while somebody typed an
+amount would produce a record of a figure nobody chose) · 2.3.3 dry-run evaluate ✅ · 2.3.4 submit
+(authoritative) ✅ · 2.3.5 state machine ✅ · 2.3.6 server-computed totals ✅ · 2.3.7 cancel ✅ ·
+2.3.8 expiry job ✅.
+
+**Submission is authoritative but not yet idempotent by key.** Re-submitting is refused by the
+state machine and by `If-Match`, which covers the double-click; an `Idempotency-Key` header that
+returns the first response to a retried request is docs/10 §2.7 and arrives with the payments work
+in Phase 5, where a retried request can move money.
 
 ### Epic 2.4 — Cards and transactions (abstraction)
 

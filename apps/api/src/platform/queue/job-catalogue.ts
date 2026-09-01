@@ -55,6 +55,70 @@ export const JOB_PAYLOADS = {
     approvalStepId: idSchema,
     nth: z.int().min(1).max(5),
   }),
+
+  /**
+   * A step passed its deadline (docs/14 §4.2, FR-APR-008).
+   *
+   * `asOf` is the moment the sweep judged it late, carried forward rather than
+   * re-read here. The two must agree: a job that re-read the clock would
+   * disagree with the sweep that enqueued it whenever the sweep was run
+   * against a simulated time, and the escalation would silently do nothing —
+   * which is exactly how this was found.
+   */
+  'approval.escalate': z.strictObject({
+    organizationId: idSchema,
+    approvalStepId: idSchema,
+    asOf: z.iso.datetime({ offset: true }),
+  }),
+
+  /**
+   * A step was escalated, and the people it went to need telling.
+   *
+   * Separate from `approval.escalate`, which does the escalating. The two are
+   * split for the same reason every other notification is its own job: the
+   * escalation is a database transition that must not be undone by a mail
+   * server being down, and the notification is a delivery that must be
+   * retryable without re-running the transition.
+   *
+   * `addedMembershipIds` is in the payload rather than re-derived, because by
+   * the time this runs the step's eligible set contains the original approvers
+   * too and there would be no way to tell who was just brought in.
+   */
+  'notification.approval_escalated': z.strictObject({
+    organizationId: idSchema,
+    approvalStepId: idSchema,
+    addedMembershipIds: z.array(idSchema).min(1),
+  }),
+
+  /**
+   * An approved request whose validity has run out (FR-SPD-008, task 2.3.8).
+   *
+   * One request per job rather than a sweep that expires everything it finds:
+   * the work is bounded, the idempotency key names one record, and a failure
+   * on one request does not stop the other four hundred expiring.
+   */
+  'spend_request.expire': z.strictObject({
+    organizationId: idSchema,
+    spendRequestId: idSchema,
+  }),
+
+  /**
+   * The sweep that finds work for the three jobs above.
+   *
+   * **Cross-tenant by design**, which is why there is no `organizationId`: it
+   * asks "which steps anywhere are overdue?" in one query and enqueues one
+   * bounded job per answer. A per-organisation sweep would need a list of
+   * organisations to iterate first — the same query with an extra hop, run
+   * once per tenant.
+   *
+   * It writes nothing itself. Everything it finds becomes a job with its own
+   * idempotency key, so a sweep running twice in one minute — two instances, a
+   * manual trigger during a scheduled run — produces no duplicated work.
+   */
+  'approvals.sweep': z.strictObject({
+    /** Present only in tests, which need a fixed clock to assert against. */
+    asOf: z.iso.datetime({ offset: true }).optional(),
+  }),
 } as const satisfies Record<string, z.ZodType>;
 
 export type JobName = keyof typeof JOB_PAYLOADS;
@@ -74,6 +138,12 @@ export const JOB_TIMEOUT_MS: Readonly<Record<JobName, number>> = {
   'notification.approval_requested': 30_000,
   'notification.approval_decided': 30_000,
   'approval.reminder': 30_000,
+  'approval.escalate': 30_000,
+  'notification.approval_escalated': 30_000,
+  'spend_request.expire': 30_000,
+  // Longer, because it reads across every organisation. Still bounded: a
+  // sweep that can run indefinitely holds the only scheduled worker there is.
+  'approvals.sweep': 120_000,
 };
 
 /**
@@ -88,4 +158,11 @@ export const JOB_MAX_ATTEMPTS: Readonly<Record<JobName, number>> = {
   'notification.approval_requested': 5,
   'notification.approval_decided': 5,
   'approval.reminder': 3,
+  'approval.escalate': 3,
+  'notification.approval_escalated': 5,
+  'spend_request.expire': 3,
+  // Two, because it runs again on its schedule anyway. A sweep piling up
+  // retries behind a database problem fills the queue with work that has
+  // already been superseded by the next sweep.
+  'approvals.sweep': 2,
 };

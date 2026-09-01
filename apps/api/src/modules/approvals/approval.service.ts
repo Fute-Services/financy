@@ -137,6 +137,8 @@ export class ApprovalService {
           eligibleMembershipIds: [...step.eligibleMembershipIds],
           activatedAt: isFirst ? input.now : null,
           dueAt: step.dueAt,
+          ...(step.escalation === null ? {} : { escalation: step.escalation as never }),
+          escalatedAt: null,
         },
       });
     }
@@ -353,6 +355,90 @@ export class ApprovalService {
     // anything yet, and the caller enqueues that once this transaction has
     // committed.
     return { settled: null, activatedStepId: next.id };
+  }
+
+  /**
+   * The deadline passed and nobody acted (task 2.2.7, FR-APR-008).
+   *
+   * **Escalation adds an approver; it never removes one.** The people who were
+   * already asked stay eligible, and the step stays actionable — a step that
+   * stopped accepting approvals the moment it went past its date would be a
+   * chain nobody can finish, which is the opposite of what a deadline is for.
+   *
+   * **It is not an approval, and it does not advance the chain.** Nothing here
+   * decides anything: the request still needs somebody to act, and the only
+   * changes are who may act and the fact that it is now visibly late.
+   *
+   * Returns the memberships newly brought in, so the caller can tell them
+   * after the commit. `null` means nothing happened — the step was acted on
+   * between the sweep and this call, or it has already escalated once, and
+   * both are ordinary rather than errors.
+   */
+  async escalate(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    stepId: string,
+    now: Date,
+  ): Promise<{ addedMembershipIds: string[]; subjectId: string; subjectType: string } | null> {
+    const step = await tx.approvalStep.findFirst({
+      where: { id: stepId, organizationId },
+      select: {
+        id: true,
+        status: true,
+        dueAt: true,
+        version: true,
+        eligibleMembershipIds: true,
+        escalation: true,
+        instance: { select: { id: true, status: true, subjectId: true, subjectType: true } },
+      },
+    });
+
+    if (step === null) return null;
+
+    // Only an active step escalates. `ESCALATED` is excluded deliberately:
+    // escalating twice would add the same people again and send a second
+    // message saying it had just been escalated to them.
+    if (step.status !== 'ACTIVE' || step.instance.status !== 'PENDING') return null;
+
+    if (step.dueAt === null || step.dueAt.getTime() > now.getTime()) return null;
+
+    const escalation = parseEscalation(step.escalation);
+
+    // A deadline with no escalation configured is a step that goes overdue and
+    // says so on the queue. Marking it `ESCALATED` with nobody added would be
+    // a status change that means nothing.
+    if (escalation === null) return null;
+
+    const added = escalation.membershipIds.filter(
+      (membershipId) => !step.eligibleMembershipIds.includes(membershipId),
+    );
+
+    if (added.length === 0) return null;
+
+    await tx.approvalStep.update({
+      where: { id: step.id, version: step.version },
+      data: {
+        status: 'ESCALATED',
+        escalatedAt: now,
+        eligibleMembershipIds: [...step.eligibleMembershipIds, ...added],
+        version: { increment: 1 },
+      },
+    });
+
+    await this.audit.record(tx, {
+      action: 'approval.escalated',
+      resourceType: 'approval_step',
+      resourceId: step.id,
+      before: { status: 'ACTIVE', eligible: step.eligibleMembershipIds.length },
+      after: { status: 'ESCALATED', addedMembershipIds: added },
+      metadata: { dueAt: step.dueAt.toISOString(), afterHours: escalation.afterHours },
+    });
+
+    return {
+      addedMembershipIds: added,
+      subjectId: step.instance.subjectId,
+      subjectType: step.instance.subjectType,
+    };
   }
 
   async cancel(
@@ -661,6 +747,31 @@ const AUDIT_ACTIONS: Readonly<Record<'APPROVE' | 'REJECT' | 'RETURN' | 'OVERRIDE
   RETURN: 'approval.returned',
   OVERRIDE: 'approval.overridden',
 };
+
+/**
+ * The escalation snapshot, read back defensively.
+ *
+ * It is JSON on the row, which means the type system has nothing to say about
+ * it — the column could hold anything a previous version of this code wrote.
+ * A step whose escalation is unreadable escalates to nobody rather than
+ * throwing: the job that calls this runs hours after anybody was watching, and
+ * a dead-lettered escalation leaves the step exactly as stuck as it already
+ * was while adding an alert nobody can act on.
+ */
+function parseEscalation(value: unknown): { afterHours: number; membershipIds: string[] } | null {
+  if (typeof value !== 'object' || value === null) return null;
+
+  const candidate = value as { afterHours?: unknown; membershipIds?: unknown };
+
+  if (typeof candidate.afterHours !== 'number') return null;
+  if (!Array.isArray(candidate.membershipIds)) return null;
+
+  const membershipIds = candidate.membershipIds.filter(
+    (entry): entry is string => typeof entry === 'string',
+  );
+
+  return membershipIds.length === 0 ? null : { afterHours: candidate.afterHours, membershipIds };
+}
 
 /** Re-exported so the spend module can name the refusal it maps to a 403. */
 export { SelfApprovalForbiddenError };

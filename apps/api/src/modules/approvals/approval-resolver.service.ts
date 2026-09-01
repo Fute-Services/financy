@@ -13,6 +13,16 @@ export interface ResolvedStep {
   readonly quorum: number;
   readonly eligibleMembershipIds: readonly string[];
   readonly dueAt: Date | null;
+  /**
+   * Who the step goes to if the deadline passes, resolved now.
+   *
+   * Resolved here rather than when the deadline arrives, for the same reason
+   * the eligible set is: a reorganisation in between would otherwise send the
+   * escalation to somebody the policy author never named. `null` when the
+   * policy configured none — a deadline with no escalation is a step that goes
+   * overdue and says so, which is a legitimate thing to want.
+   */
+  readonly escalation: { readonly afterHours: number; readonly membershipIds: string[] } | null;
 }
 
 /**
@@ -114,10 +124,58 @@ export class ApprovalResolverService {
           step.timeoutHours === null
             ? null
             : new Date(now.getTime() + step.timeoutHours * 3_600_000),
+        escalation: this.resolveEscalation(step, context, graph, canAct),
       });
     }
 
     return resolved;
+  }
+
+  /**
+   * Who the step escalates to, resolved now and frozen on the step.
+   *
+   * **The same three exclusions as the approvers themselves**, and skipping
+   * any of them would make escalation the way around the rule it bypasses:
+   * the requester is excluded (INV-02 does not stop applying because a
+   * deadline passed), anybody who cannot act is filtered out (escalating to a
+   * role without `approval:act` produces a step nobody can finish, which is
+   * exactly the failure that made eligibility mean "able to act"), and people
+   * already on the step are dropped — adding somebody who is already an
+   * approver is not an escalation, and would send them a second message
+   * saying the first one had been escalated to them.
+   *
+   * A configured escalation that resolves to nobody becomes `null` rather than
+   * an error. It is discovered hours later by a job, where throwing would
+   * dead-letter and leave the step exactly as stuck as it already was; the
+   * step stays overdue and visible, which is the honest outcome.
+   */
+  private resolveEscalation(
+    step: ResolvedStepSpec,
+    context: PolicyContext,
+    graph: Graph,
+    alreadyEligible: ReadonlySet<string>,
+  ): ResolvedStep['escalation'] {
+    if (step.escalation === null || step.escalation === undefined) return null;
+
+    const targets = new Set<string>();
+
+    for (const membershipId of this.resolveSpec(step.escalation.to, context, graph)) {
+      targets.add(graph.delegatedTo.get(membershipId) ?? membershipId);
+    }
+
+    targets.delete(context.requester.membershipId);
+
+    for (const membershipId of alreadyEligible) targets.delete(membershipId);
+
+    const canAct = [...targets].filter((membershipId) => {
+      const roleKey = graph.membershipRole.get(membershipId);
+
+      return roleKey !== undefined && permissionsForRole(roleKey as RoleKey).has('approval:act');
+    });
+
+    if (canAct.length === 0) return null;
+
+    return { afterHours: step.escalation.afterHours, membershipIds: canAct.sort() };
   }
 
   /**

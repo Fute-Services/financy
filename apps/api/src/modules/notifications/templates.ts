@@ -54,6 +54,15 @@ export interface ApprovalReminderVariables {
   waitingSince: string;
 }
 
+export interface ApprovalEscalatedVariables {
+  requesterName: string;
+  amount: string;
+  purpose: string;
+  reference: string;
+  spendRequestId: string;
+  dueAt: string;
+}
+
 export const templates = {
   approvalRequested(variables: ApprovalRequestedVariables): RenderedNotification {
     const due = variables.dueAt === null ? '' : ` It is due by ${formatDay(variables.dueAt)}.`;
@@ -99,6 +108,18 @@ export const templates = {
       title: chosen.title,
       body: `${chosen.lead}${comment}`,
       actionLabel: 'Open the request',
+      path: `/spend/${variables.spendRequestId}`,
+    };
+  },
+
+  approvalEscalated(variables: ApprovalEscalatedVariables): RenderedNotification {
+    return {
+      // Says who it is now with and why it reached them. An escalation that
+      // arrived reading like an ordinary approval request would leave the
+      // recipient wondering why they, of all people, are being asked.
+      title: `Escalated to you: ${variables.amount} for ${variables.requesterName}`,
+      body: `${variables.reference} — ${variables.purpose} — passed its deadline of ${formatDay(variables.dueAt)} without a decision, so it has come to you as well.`,
+      actionLabel: 'Review this request',
       path: `/spend/${variables.spendRequestId}`,
     };
   },

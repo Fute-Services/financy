@@ -975,6 +975,17 @@ model ApprovalStep {
   dueAt       DateTime?
   completedAt DateTime?
 
+  /// Who this step goes to if nobody acts before `dueAt`, resolved when the
+  /// chain opened and frozen with everything else about the step:
+  /// `{ afterHours, membershipIds }`.
+  ///
+  /// Frozen rather than resolved at escalation time for the same reason the
+  /// eligible set is — a reorganisation between the submission and the
+  /// deadline would otherwise move the escalation to somebody the policy
+  /// author never named.
+  escalation  Json?
+  escalatedAt DateTime?
+
   version   Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
