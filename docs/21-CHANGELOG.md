@@ -56,6 +56,15 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   category's `key` is create-only and its parent is immutable: policies name the key, and moving a
   category between branches changes what every transaction already coded to it appears to have
   been. System categories may be archived, never renamed — a later deploy reseeds by key.
+- **Audit export, per-record history, and the security log** — `GET /v1/audit-events/export`,
+  `GET /v1/audit-events/{resourceType}/{resourceId}`, and `GET /v1/security-events`
+  (tasks 1.6.2–1.6.4). The export writes an audit event describing itself — the filters and the
+  row count, never the rows — because a complete copy of the trail leaving the system is the one
+  act whose absence from the record would matter most. CSV fields are guarded against formula
+  injection: a cell beginning `=`, `+`, `-`, or `@` is executed by Excel and Sheets on open, and
+  an export is a document written by one person and trusted by another. History is chronological
+  and unpaginated; the list stays newest-first and cursored, because the two answer different
+  questions.
 - **`@IfMatch()`** (`platform/concurrency`) — the precondition is a header rather than a body
   field, and it is mandatory: an optional one is a client that forgets, and the lost edit it
   prevents is invisible when it happens.
@@ -110,6 +119,15 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Fixed
 
+- **Account lockout did not exist, and failed sign-ins were never recorded.** The whole login flow
+  ran in one transaction with the failure bookkeeping inside it and a `throw` on the next line;
+  the throw rolled the transaction back and discarded the record. So `failedLoginCount` never
+  persisted, `MAX_FAILED_LOGINS` was never reached, and the lockout in `docs/12 §3.2` was absent —
+  as was every `LOGIN_FAILED` security event, which is the single signal that log exists for.
+  Nothing about the response differed either way, so nothing showed it; the first test of the new
+  security-events endpoint did. `POST /v1/auth/step-up`, written a day earlier, had inherited the
+  same shape. Both now verify outside a transaction and commit the failure record in one of its
+  own, with a regression test asserting the counter climbs across three requests.
 - **An update body of `{ field: undefined }` counted as a change.** The "at least one field" rule
   counted keys, and a key set to `undefined` carries no instruction — the services skip it — so the
   request wrote nothing, incremented the version anyway, and invalidated every other client's

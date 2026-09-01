@@ -151,39 +151,55 @@ export class AuthService {
   async login(input: LoginRequest): Promise<AuthResult> {
     const context = getContext();
 
-    return this.database.unscoped.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({
-        where: { email: input.email },
-        select: {
-          id: true,
-          passwordHash: true,
-          failedLoginCount: true,
-          lockedUntil: true,
-          archivedAt: true,
-        },
+    // The credential check runs **outside** a transaction, and that is the
+    // fix for a bug this suite caught rather than a stylistic preference.
+    //
+    // It was all one transaction, with `recordFailedLogin` inside it and a
+    // `throw` on the next line. The throw rolled the transaction back, taking
+    // the failure bookkeeping with it — so `failedLoginCount` never
+    // persisted, `MAX_FAILED_LOGINS` was never reached, and the account
+    // lockout in docs/12 §3.2 did not exist. Nor did the `LOGIN_FAILED`
+    // security event, which is the single signal that log is for. Nothing
+    // about the response differed, so nothing showed it.
+    //
+    // Failure bookkeeping must therefore commit in a transaction of its own,
+    // one that is not about to be rolled back by the rejection it describes.
+    const user = await this.database.unscoped.user.findUnique({
+      where: { email: input.email },
+      select: {
+        id: true,
+        passwordHash: true,
+        failedLoginCount: true,
+        lockedUntil: true,
+        archivedAt: true,
+      },
+    });
+
+    if (user === null) {
+      // Same work, same elapsed time, same answer.
+      await this.password.verifyDummy(input.password);
+      throw new UnauthenticatedError('Email or password is incorrect.');
+    }
+
+    const now = new Date();
+    const locked = user.lockedUntil !== null && user.lockedUntil > now;
+
+    if (locked || user.archivedAt !== null) {
+      await this.password.verifyDummy(input.password);
+      throw new UnauthenticatedError('Email or password is incorrect.');
+    }
+
+    const valid = await this.password.verify(user.passwordHash, input.password);
+
+    if (!valid) {
+      await this.database.unscoped.$transaction(async (tx) => {
+        await this.recordFailedLogin(tx, user.id, user.failedLoginCount, now);
       });
 
-      if (user === null) {
-        // Same work, same elapsed time, same answer.
-        await this.password.verifyDummy(input.password);
-        throw new UnauthenticatedError('Email or password is incorrect.');
-      }
+      throw new UnauthenticatedError('Email or password is incorrect.');
+    }
 
-      const now = new Date();
-      const locked = user.lockedUntil !== null && user.lockedUntil > now;
-
-      if (locked || user.archivedAt !== null) {
-        await this.password.verifyDummy(input.password);
-        throw new UnauthenticatedError('Email or password is incorrect.');
-      }
-
-      const valid = await this.password.verify(user.passwordHash, input.password);
-
-      if (!valid) {
-        await this.recordFailedLogin(tx, user.id, user.failedLoginCount, now);
-        throw new UnauthenticatedError('Email or password is incorrect.');
-      }
-
+    return this.database.unscoped.$transaction(async (tx) => {
       const membership = await tx.membership.findFirst({
         where: { userId: user.id, status: 'ACTIVE' },
         orderBy: { createdAt: 'asc' },
@@ -247,36 +263,42 @@ export class AuthService {
    * it arrived through a different endpoint.
    */
   async stepUp(sessionId: string, password: string): Promise<Date> {
-    return this.database.unscoped.$transaction(async (tx) => {
-      const session = await tx.session.findUnique({
-        where: { id: sessionId },
-        select: {
-          userId: true,
-          activeMembership: { select: { id: true, organizationId: true } },
-        },
-      });
+    // Read and verify outside a transaction, for the same reason `login`
+    // does: the failure path records an attempt and then throws, and a throw
+    // inside the transaction that wrote the record discards it.
+    const session = await this.database.unscoped.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        userId: true,
+        activeMembership: { select: { id: true, organizationId: true } },
+      },
+    });
 
-      // The guard resolved this session moments ago, so a miss means it was
-      // revoked in between — which is an expired session, not a bad password.
-      if (session === null) throw new UnauthenticatedError();
+    // The guard resolved this session moments ago, so a miss means it was
+    // revoked in between — an expired session, not a bad password.
+    if (session === null) throw new UnauthenticatedError();
 
-      const user = await tx.user.findUnique({
-        where: { id: session.userId },
-        select: { id: true, passwordHash: true, failedLoginCount: true, lockedUntil: true },
-      });
+    const user = await this.database.unscoped.user.findUnique({
+      where: { id: session.userId },
+      select: { id: true, passwordHash: true, failedLoginCount: true, lockedUntil: true },
+    });
 
-      if (user === null) throw new UnauthenticatedError();
+    if (user === null) throw new UnauthenticatedError();
 
-      const now = new Date();
+    const now = new Date();
 
-      if (user.lockedUntil !== null && user.lockedUntil > now) {
-        await this.password.verifyDummy(password);
-        throw new UnauthenticatedError('Password is incorrect.');
-      }
+    if (user.lockedUntil !== null && user.lockedUntil > now) {
+      await this.password.verifyDummy(password);
+      throw new UnauthenticatedError('Password is incorrect.');
+    }
 
-      const valid = await this.password.verify(user.passwordHash, password);
+    const valid = await this.password.verify(user.passwordHash, password);
 
-      if (!valid) {
+    if (!valid) {
+      await this.database.unscoped.$transaction(async (tx) => {
+        // The same lockout as a failed login. Someone holding a stolen cookie
+        // and guessing at the password must not get unlimited attempts merely
+        // because they arrived through a different endpoint.
         await this.recordFailedLogin(tx, user.id, user.failedLoginCount, now);
 
         if (session.activeMembership !== null) {
@@ -287,14 +309,13 @@ export class AuthService {
             membershipId: session.activeMembership.id,
           });
         }
-
-        throw new UnauthenticatedError('Password is incorrect.');
-      }
-
-      await tx.session.update({
-        where: { id: sessionId },
-        data: { steppedUpAt: now },
       });
+
+      throw new UnauthenticatedError('Password is incorrect.');
+    }
+
+    await this.database.unscoped.$transaction(async (tx) => {
+      await tx.session.update({ where: { id: sessionId }, data: { steppedUpAt: now } });
 
       // Reset the counter, as a successful login does: the person has proven
       // who they are, and leaving nine failures banked would lock them out on
@@ -303,9 +324,9 @@ export class AuthService {
         where: { id: user.id },
         data: { failedLoginCount: 0, lockedUntil: null },
       });
-
-      return new Date(now.getTime() + this.config.get('STEP_UP_WINDOW_MINUTES') * 60_000);
     });
+
+    return new Date(now.getTime() + this.config.get('STEP_UP_WINDOW_MINUTES') * 60_000);
   }
 
   async logout(sessionId: string): Promise<void> {

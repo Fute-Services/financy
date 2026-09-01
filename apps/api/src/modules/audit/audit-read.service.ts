@@ -1,4 +1,9 @@
-import type { AuditEvent, ListAuditEventsQuery } from '@financy/contracts';
+import {
+  AUDIT_EXPORT_MAX_ROWS,
+  type AuditEvent,
+  type ExportAuditEventsQuery,
+  type ListAuditEventsQuery,
+} from '@financy/contracts';
 import { ValidationError } from '@financy/core';
 import { Injectable } from '@nestjs/common';
 
@@ -8,6 +13,69 @@ export interface AuditPage {
   readonly items: AuditEvent[];
   readonly nextCursor: string | null;
   readonly hasMore: boolean;
+}
+
+/**
+ * The columns every read here projects, named once so the list, the history,
+ * and the export cannot drift into returning different shapes of the same
+ * event.
+ */
+const AUDIT_SELECT = {
+  id: true,
+  action: true,
+  resourceType: true,
+  resourceId: true,
+  actorType: true,
+  actorLabel: true,
+  actorMembershipId: true,
+  before: true,
+  after: true,
+  metadata: true,
+  ipAddress: true,
+  correlationId: true,
+  createdAt: true,
+} as const;
+
+/**
+ * The ceiling on one record's history.
+ *
+ * High enough that no real record reaches it, low enough that a pathological
+ * one cannot be used to pull the whole trail through an unpaginated route.
+ */
+const RECORD_HISTORY_LIMIT = 500;
+
+interface AuditRow {
+  id: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  actorType: string;
+  actorLabel: string | null;
+  actorMembershipId: string | null;
+  before: unknown;
+  after: unknown;
+  metadata: unknown;
+  ipAddress: string | null;
+  correlationId: string;
+  createdAt: Date;
+}
+
+function toAuditEvent(row: AuditRow): AuditEvent {
+  return {
+    id: row.id,
+    action: row.action,
+    resourceType: row.resourceType,
+    resourceId: row.resourceId,
+    actorType: row.actorType as AuditEvent['actorType'],
+    actorLabel: row.actorLabel,
+    actorMembershipId: row.actorMembershipId,
+    before: row.before ?? null,
+    after: row.after ?? null,
+    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    ipAddress: row.ipAddress,
+    correlationId: row.correlationId,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 /**
@@ -76,6 +144,66 @@ export class AuditReadService {
         createdAt: row.createdAt.toISOString(),
       })),
     };
+  }
+
+  /**
+   * Every event touching one record, oldest first (task 1.6.4).
+   *
+   * Chronological here, unlike the main list. The list answers "what has been
+   * happening", which is a question about the recent past and reads newest
+   * first; this answers "how did this record get into its current state",
+   * which only makes sense read forwards.
+   *
+   * Not paginated. One record's history is bounded by how many times a person
+   * edited it, and a paginated history is one a reader has to reassemble
+   * before they can follow it. The cap exists so a pathological record cannot
+   * be used to pull the whole trail through this route.
+   */
+  async history(resourceType: string, resourceId: string): Promise<AuditEvent[]> {
+    const rows = await this.database.client.auditEvent.findMany({
+      where: { resourceType, resourceId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: RECORD_HISTORY_LIMIT,
+      select: AUDIT_SELECT,
+    });
+
+    return rows.map(toAuditEvent);
+  }
+
+  /**
+   * The rows behind an export (task 1.6.2).
+   *
+   * Capped at `AUDIT_EXPORT_MAX_ROWS`, and the cap is not negotiable by the
+   * caller. An unbounded export against a remote database is a way to take
+   * the API down from an ordinary authenticated session, and somebody who
+   * genuinely needs more can ask for a date range and repeat — which is also
+   * what an auditor asking for "March" actually wants.
+   *
+   * The export **audits itself**, but that happens in the service that has a
+   * transaction to write it in; this method only reads. Exporting an audit
+   * trail is itself a privileged act and one of the more useful lines in the
+   * trail, so the write is not optional — see `AuditExportService`.
+   */
+  async forExport(query: ExportAuditEventsQuery): Promise<AuditEvent[]> {
+    const rows = await this.database.client.auditEvent.findMany({
+      where: this.buildWhere({
+        limit: AUDIT_EXPORT_MAX_ROWS,
+        ...(query.action === undefined ? {} : { action: query.action }),
+        ...(query.resourceType === undefined ? {} : { resourceType: query.resourceType }),
+        ...(query.resourceId === undefined ? {} : { resourceId: query.resourceId }),
+        ...(query.actorType === undefined ? {} : { actorType: query.actorType }),
+        ...(query.actorMembershipId === undefined
+          ? {}
+          : { actorMembershipId: query.actorMembershipId }),
+        ...(query.from === undefined ? {} : { from: query.from }),
+        ...(query.before === undefined ? {} : { before: query.before }),
+      }),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: AUDIT_EXPORT_MAX_ROWS,
+      select: AUDIT_SELECT,
+    });
+
+    return rows.map(toAuditEvent);
   }
 
   private buildWhere(query: ListAuditEventsQuery): Record<string, unknown> {

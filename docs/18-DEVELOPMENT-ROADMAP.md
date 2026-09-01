@@ -303,12 +303,42 @@ field that caused it.
 
 ### Epic 1.6 — Audit
 
-| ID    | Task                                              |
-| ----- | ------------------------------------------------- |
-| 1.6.1 | Audit read API with filters and cursor pagination |
-| 1.6.2 | Audit export (permission-gated, self-auditing)    |
-| 1.6.3 | Security events read API                          |
-| 1.6.4 | Per-record audit history endpoint                 |
+| ID    | Task                                              | Status                |
+| ----- | ------------------------------------------------- | --------------------- |
+| 1.6.1 | Audit read API with filters and cursor pagination | ✅                    |
+| 1.6.2 | Audit export (permission-gated, self-auditing)    | ✅ API; no screen yet |
+| 1.6.3 | Security events read API                          | ✅ API; no screen yet |
+| 1.6.4 | Per-record audit history endpoint                 | ✅ API; no screen yet |
+
+**The export audits itself, and that is why it is a service of its own.** Downloading an
+organisation's complete audit trail is a copy of every privileged action anyone has taken, leaving
+the system; an export that left no trace would be the one gap in the record that mattered most.
+The event records the filters and the row count, never the rows — a copy of the export inside the
+trail would double the trail on every download and tell a reader nothing they could not get by
+re-running the filters. The reader service has no writer injected into it and no transaction, which
+is what keeps "read the trail" and "write to the trail" on different objects.
+
+**CSV fields are guarded against formula injection.** A cell beginning `=`, `+`, `-`, or `@` is
+executed by Excel and Sheets on open, and audit fields carry user-chosen text — an action name, an
+actor label somebody picked. An export is therefore a document written by one person and opened,
+trusted, by another. Quoting alone does not stop it; a leading tab does, and leaves the value
+readable. `before`, `after`, and `metadata` are not CSV columns at all: they are arbitrarily nested
+JSON, and a caller who needs them asks for `format=json`, which is why that format exists.
+
+**The security log resolves the actor's name at read time, and the audit trail does not.** That
+looks like an inconsistency and is the opposite. The audit trail is evidence and must read the
+same in five years, after the person has left and been renamed — so `actorLabel` is denormalised at
+write time. The security log is an operator asking what is happening _now_, who wants the name
+that is on the account today.
+
+**Two real bugs surfaced here, and neither changed any response.** Task 1.6.3's first test found
+that the whole login flow ran in one transaction with the failure bookkeeping inside it and a
+`throw` on the next line: the throw rolled the transaction back and took the record with it. So no
+`LOGIN_FAILED` event was ever written — and `failedLoginCount` never persisted, which meant the
+account lockout in `docs/12 §3.2` **did not exist**. `POST /v1/auth/step-up`, written a day
+earlier, had inherited the same shape. Both now do the credential check outside a transaction and
+commit the failure record in one of its own. There is a regression test asserting the counter
+climbs 1, 2, 3 across three requests, which is only true if each one commits.
 
 ### Epic 1.7 — Frontend
 
