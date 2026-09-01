@@ -352,7 +352,7 @@ climbs 1, 2, 3 across three requests, which is only true if each one commits.
 | 1.7.6  | Auth screens: login, register, invite acceptance, forgot/reset                                    | ⚠️ no forgot/reset yet      |
 | 1.7.7  | People: list, detail, invite flow with permission preview                                         | ✅ list + writes; no detail |
 | 1.7.8  | Settings: organisation, entities, departments, categories                                         | ✅ writes; categories read  |
-| 1.7.9  | Audit log: stream, filters, event detail                                                          | ⚠️ stream only              |
+| 1.7.9  | Audit log: stream, filters, event detail                                                          | ✅ + export, security log   |
 | 1.7.10 | API client + session handling + `useSession`                                                      | ✅                          |
 
 **1.7.2 is marked partial and the list is the reason.** `Input`, `Select`, `Textarea`, and
@@ -373,6 +373,32 @@ initial value to call `useActionState`, and `lib/actions` cannot supply them —
 `revalidatePath` into the browser bundle and failed the build. That failure was the useful kind:
 the alternative to splitting was dropping `server-only`, which is what keeps the API client and
 its session cookie out of the browser.
+
+**The audit trail and the security log share one screen and one switch.** They answer different
+questions and have different shapes, which is why they are separate collections — but an operator
+investigating an incident wants both, and two navigation items means always being on the wrong
+one. Switching drops every filter: the two share no field names, so an action filter carried onto
+the security log is a parameter the endpoint refuses.
+
+**Audit timestamps render in UTC, explicitly, and that started as a bug fix.** `toLocaleString`
+without a zone uses the runtime's own, so the server rendered IST and the browser rendered UTC;
+React found the markups disagreed and bailed out of hydrating the subtree. The visible symptom was
+not a wrong time — it was the filters silently not navigating, because the client tree they lived
+in had been discarded. UTC is also right on its own terms: an operator correlating a row with the
+API's logs is comparing absolute instants, and a row that says 11:59 to one reader and 06:29 to
+another is a row two people cannot discuss.
+
+**A rejected cursor falls back to the first page instead of crashing the screen.** A cursor
+reaches this page from a bookmark or a pasted link, and the API answers a malformed one with a
+`422` — correctly, since it cannot page from a position it did not issue. The page says so and
+shows the newest entries, which is what somebody following an old link wanted anyway.
+
+**The export is a route handler, not a server action.** It is a file download: the browser has to
+receive the response itself, with `Content-Type` and `Content-Disposition` intact, so its own
+download handling applies. A server action would hand the bytes to the server's fetch and leave
+the client reconstructing a blob — losing progress on a large file and holding the whole export in
+memory. The route decides nothing: the permission, the row cap, the self-auditing event, and the
+CSV escaping all live in the API.
 
 **The invite dialog previews what the role grants, from the shared catalogue.** Choosing a role is
 choosing what somebody may do to the organisation's money, and a select showing five names says

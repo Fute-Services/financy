@@ -13,6 +13,13 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **The audit screen gains filters, an export, and the security log** (task 1.7.9). Filters live
+  in the URL, so a filtered view is a link somebody can paste into a ticket, and changing one
+  clears the cursor — a cursor is a position in one query's ordering, and carried across a filter
+  change it points into a result set that no longer exists. A rejected cursor now falls back to
+  the first page and says so, rather than taking the screen down: a stale bookmark is an ordinary
+  way to arrive here. Rows expand in place to their before, after, and correlation id, because
+  reading a trail is comparing an entry with its neighbours and a modal hides them.
 - **The invitation acceptance screen** at `/invite/{token}` (task 1.7.6), and the one-time link
   surfaced in the invite dialog so there is something to send. The preview is fetched on the
   server before anything renders — asking somebody to choose a password and only then telling them
@@ -142,6 +149,12 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Fixed
 
+- **The audit filters silently stopped working**, and the cause was a timestamp. `toLocaleString`
+  without an explicit zone uses the runtime's own, so the server rendered IST and the browser
+  rendered UTC; React found the two markups disagreed and discarded the whole client subtree the
+  filters lived in. Nothing looked wrong — the times were plausible either way — until a select
+  stopped navigating. Audit timestamps are pinned to UTC now, which is also the right answer for
+  a log an operator correlates with the API's own.
 - **Registration returned `500` under any parallelism.** Prisma's default interactive-transaction
   timeout is five seconds, and registration is one transaction writing an organisation, five roles,
   185 grants, a user, a membership, an entity, and 36 categories against a remote database — ~3
