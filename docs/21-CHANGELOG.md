@@ -13,6 +13,13 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **The settings screen writes.** The organisation form, entity create/edit/archive, and the
+  department tree with re-parenting all save through server actions (task 1.7.8). Every form
+  carries the record version it was rendered with in a hidden input — the version the person
+  actually looked at, which is what `If-Match` is supposed to assert; reading it fresh at submit
+  time would defeat the precondition by construction. A stale save offers a reload rather than a
+  retry, because retrying with the same version fails identically. New primitives: `Input`,
+  `Select`, `Textarea`, `Dialog`, `FormMessage`.
 - **The first settings writes** — `PATCH /v1/organization` (task 1.5.1) and the entity endpoints
   `GET/POST /v1/entities`, `GET/PATCH /v1/entities/{id}`, and
   `POST /v1/entities/{id}/archive`·`/restore` (task 1.5.2). Every write takes `If-Match` carrying
@@ -119,6 +126,21 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Fixed
 
+- **Registration returned `500` under any parallelism.** Prisma's default interactive-transaction
+  timeout is five seconds, and registration is one transaction writing an organisation, five roles,
+  185 grants, a user, a membership, an entity, and 36 categories against a remote database — ~3
+  seconds idle, more than five whenever anything else runs. Two browser tests at once were enough
+  to fail every one of them with "Transaction already closed". `transactionOptions` now allows
+  twenty seconds; the round trips are the cost here, not the work.
+- **Three form inputs shared one DOM id.** The field components used `name` as the id, which was
+  fine until a page held more than one form — the settings screen has three, each with a field
+  called `name`. Duplicate ids are invalid HTML, and the visible symptom is worse: `<label for>`
+  binds to whichever came first, so clicking a label focuses a box in a different form and a
+  screen reader announces the wrong field. Ids come from `useId()` now.
+- **A dialog stayed open after its second successful save.** The close effect keyed on
+  `state.status`, which was already `'success'` from the previous submission, so it never re-ran —
+  the record was written and the form looked like it had failed. Dialogs mount only while open, so
+  each opening starts from the idle state.
 - **Account lockout did not exist, and failed sign-ins were never recorded.** The whole login flow
   ran in one transaction with the failure bookkeeping inside it and a `throw` on the next line;
   the throw rolled the transaction back and discarded the record. So `failedLoginCount` never

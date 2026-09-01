@@ -22,6 +22,20 @@ export {
   type StatusBadgeProps,
 } from './primitives/badge';
 
+export {
+  FieldShell,
+  Input,
+  Select,
+  Textarea,
+  FormMessage,
+  type FieldShellProps,
+  type InputProps,
+  type SelectProps,
+  type SelectOption,
+  type TextareaProps,
+} from './primitives/field';
+export { Dialog, type DialogProps } from './primitives/dialog';
+
 export { Money, NoValue, type MoneyProps } from './finance/money';
 
 export { Card, CardHeader, CardBody, KpiCard, BudgetMeter, type KpiCardProps } from './data/card';

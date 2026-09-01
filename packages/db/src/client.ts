@@ -38,6 +38,31 @@ export interface PrismaClientOptions {
 export function createPrismaClient(options: PrismaClientOptions): PrismaClient {
   const client = new PrismaClient({
     datasources: { db: { url: options.databaseUrl } },
+    /**
+     * Prisma's default interactive-transaction timeout is 5 seconds, and
+     * against a remote database that is not enough for the largest
+     * transaction this application has.
+     *
+     * Registration writes an organisation, five roles, 185 role-permission
+     * grants, a user, a membership, an entity, and 36 categories — all in one
+     * transaction, because a half-registered organisation is unusable and
+     * unrecoverable through the UI. Against a local PostgreSQL that took
+     * ~140ms. Against Atlas it takes ~3 seconds on an idle connection, and
+     * more than five whenever anything else is running: two browser tests in
+     * parallel were enough to turn every registration into a `500` reading
+     * "Transaction already closed".
+     *
+     * Twenty seconds is not a licence to do more work in a transaction. It is
+     * an acknowledgement that the round trips are the cost here, not the
+     * work: the same transaction under PostgreSQL finishes inside the
+     * original default with room to spare, and would again.
+     *
+     * `maxWait` is the time a transaction will queue for a connection before
+     * giving up, and is raised for the same reason — under load the pool is
+     * the thing that is scarce, and failing fast there just moves the same
+     * `500` one step earlier.
+     */
+    transactionOptions: { timeout: 20_000, maxWait: 10_000 },
     log: [
       ...(options.logQueries ? ([{ emit: 'event', level: 'query' }] as const) : []),
       { emit: 'event', level: 'info' },

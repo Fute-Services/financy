@@ -342,18 +342,54 @@ climbs 1, 2, 3 across three requests, which is only true if each one commits.
 
 ### Epic 1.7 — Frontend
 
-| ID     | Task                                                                                              |
-| ------ | ------------------------------------------------------------------------------------------------- |
-| 1.7.1  | Design tokens + Tailwind preset from `UI-DESIGN-SYSTEM.md`                                        |
-| 1.7.2  | Primitives: Button, Input, Select, Checkbox, Badge, Avatar, Dropdown, Dialog, Drawer, Tabs, Toast |
-| 1.7.3  | `DataTable` with sort, select, sticky header, keyboard nav, and all four states                   |
-| 1.7.4  | State components: EmptyState (×3), LoadingSkeleton, ErrorState, PermissionState                   |
-| 1.7.5  | App shell: sidebar (permission-filtered), top bar, org switcher, user menu                        |
-| 1.7.6  | Auth screens: login, register, invite acceptance, forgot/reset                                    |
-| 1.7.7  | People: list, detail, invite flow with permission preview                                         |
-| 1.7.8  | Settings: organisation, entities, departments, categories                                         |
-| 1.7.9  | Audit log: stream, filters, event detail                                                          |
-| 1.7.10 | API client + session handling + `useSession`                                                      |
+| ID     | Task                                                                                              | Status                      |
+| ------ | ------------------------------------------------------------------------------------------------- | --------------------------- |
+| 1.7.1  | Design tokens + Tailwind preset from `UI-DESIGN-SYSTEM.md`                                        | ✅                          |
+| 1.7.2  | Primitives: Button, Input, Select, Checkbox, Badge, Avatar, Dropdown, Dialog, Drawer, Tabs, Toast | ⚠️ Input/Select/Dialog only |
+| 1.7.3  | `DataTable` with sort, select, sticky header, keyboard nav, and all four states                   | ✅                          |
+| 1.7.4  | State components: EmptyState (×3), LoadingSkeleton, ErrorState, PermissionState                   | ✅                          |
+| 1.7.5  | App shell: sidebar (permission-filtered), top bar, org switcher, user menu                        | ✅                          |
+| 1.7.6  | Auth screens: login, register, invite acceptance, forgot/reset                                    | ⚠️ login/register only      |
+| 1.7.7  | People: list, detail, invite flow with permission preview                                         | ⚠️ list only                |
+| 1.7.8  | Settings: organisation, entities, departments, categories                                         | ✅ writes; categories read  |
+| 1.7.9  | Audit log: stream, filters, event detail                                                          | ⚠️ stream only              |
+| 1.7.10 | API client + session handling + `useSession`                                                      | ✅                          |
+
+**1.7.2 is marked partial and the list is the reason.** `Input`, `Select`, `Textarea`, and
+`Dialog` exist because the settings writes needed them. Checkbox, Avatar, Dropdown, Drawer, Tabs,
+and Toast do not, and building them now would be building against a guess about what Phase 2 needs
+rather than against a screen that needs them.
+
+**Writes go through server actions, not a client fetch layer.** The session cookie is `httpOnly`
+and never reaches browser JavaScript; a client-side mutation would need a proxy route per
+endpoint, and each proxy is a place a permission check can be forgotten. An action runs on the
+server, inherits the caller's cookie from the request it is part of, and calls the API exactly as
+a page render does. Nothing in `actions.ts` validates: the API owns every rule, and duplicating
+one in the browser would create a second place to be wrong.
+
+**`FormState` lives in its own module with no imports.** A client component needs the type and the
+initial value to call `useActionState`, and `lib/actions` cannot supply them — it imports
+`next/cache` and marks itself `server-only`, so importing `IDLE` from there pulled
+`revalidatePath` into the browser bundle and failed the build. That failure was the useful kind:
+the alternative to splitting was dropping `server-only`, which is what keeps the API client and
+its session cookie out of the browser.
+
+**Three bugs came out of writing the browser tests, and none of them changed any response.**
+
+1. **Registration returned `500` under any parallelism.** Prisma's default interactive-transaction
+   timeout is five seconds, and registration is one transaction writing an organisation, five
+   roles, 185 grants, a user, a membership, an entity, and 36 categories against a remote
+   database. Two browser tests at once were enough. `transactionOptions` now allows twenty
+   seconds, with the reasoning in `packages/db/src/client.ts` — the round trips are the cost, not
+   the work.
+2. **Three inputs shared `id="name"`.** The organisation form, the entity dialog, and the
+   department dialog each have a field called `name`, and the field components used the name as
+   the DOM id. Duplicate ids are invalid HTML; the visible symptom is worse — `<label for>` binds
+   to whichever came first, so clicking a label focuses a box in another form and a screen reader
+   announces the wrong field. Ids come from `useId()` now.
+3. **A dialog stayed open after its second successful save.** The close effect keyed on
+   `state.status`, which was already `'success'` from the previous submission, so it never re-ran.
+   The dialogs mount only while open, so each opening starts from `IDLE`.
 
 ### Epic 1.8 — Tests
 
