@@ -1,0 +1,151 @@
+{
+  "name": "evidence-and-validity-take-the-strictest",
+  "why": "Merge rules 4, 6, and 8: the longest memo minimum, finance review once anything asks for it, and the shortest validity, because two rules disagreeing about a control are resolved conservatively.",
+  "context": {
+    "organizationId": "org-demo",
+    "spendType": "SPEND_REQUEST",
+    "amount": {
+      "amount": "6000.00",
+      "currency": "USD"
+    },
+    "amountInBaseCurrency": {
+      "amount": "6000.00",
+      "currency": "USD"
+    },
+    "requester": {
+      "membershipId": "mem-dana",
+      "roleKey": "EMPLOYEE",
+      "departmentId": "dept-eng",
+      "departmentPath": "/dept-eng/",
+      "entityId": "ent-us",
+      "managerChain": ["mem-priya"],
+      "tenureDays": 420
+    },
+    "classification": {
+      "categoryId": "cat-software",
+      "categoryPath": "/cat-operations/cat-software/",
+      "projectId": null,
+      "vendorId": null,
+      "merchantName": "Figma"
+    },
+    "budget": null,
+    "evidence": {
+      "hasReceipt": false,
+      "hasMemo": true,
+      "memoLength": 12,
+      "receiptCount": 0
+    },
+    "temporal": {
+      "now": "2026-09-02T10:00:00.000Z",
+      "neededBy": null,
+      "fiscalPeriod": "2026-Q3"
+    },
+    "history": {
+      "requesterSpendThisMonth": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "requesterSpendThisMonthInCategory": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "similarRequestsLast30Days": 0
+    }
+  },
+  "policies": [
+    {
+      "id": "pol-evidence-a-v1",
+      "policyId": "pol-evidence-a",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 200,
+      "rules": [
+        {
+          "id": "rule-memo-short",
+          "name": "Anything over 1,000 needs a note",
+          "sequence": 1,
+          "terminal": false,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "amountInBaseCurrency",
+            "operator": "GT",
+            "value": {
+              "kind": "money",
+              "amount": "1000.00",
+              "currency": "USD"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "REQUIRE_MEMO",
+              "minLength": 20
+            },
+            {
+              "type": "SET_VALIDITY",
+              "days": 60
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pol-evidence-b-v1",
+      "policyId": "pol-evidence-b",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 100,
+      "rules": [
+        {
+          "id": "rule-memo-long",
+          "name": "Anything over 5,000 needs a real explanation and a receipt",
+          "sequence": 1,
+          "terminal": false,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "amountInBaseCurrency",
+            "operator": "GT",
+            "value": {
+              "kind": "money",
+              "amount": "5000.00",
+              "currency": "USD"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "REQUIRE_MEMO",
+              "minLength": 120
+            },
+            {
+              "type": "REQUIRE_RECEIPT"
+            },
+            {
+              "type": "REQUIRE_FINANCE_REVIEW"
+            },
+            {
+              "type": "SET_VALIDITY",
+              "days": 14
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "verdict": "ALLOWED",
+    "engineVersion": "1.0.0",
+    "matchedRuleIds": ["rule-memo-short", "rule-memo-long"],
+    "policyVersionIds": ["pol-evidence-a-v1", "pol-evidence-b-v1"],
+    "blocks": [],
+    "exceptions": [],
+    "requirements": {
+      "approvalSteps": [],
+      "requireReceipt": true,
+      "requireMemo": {
+        "required": true,
+        "minLength": 120
+      },
+      "requireFinanceReview": true,
+      "validityDays": 14
+    }
+  }
+}

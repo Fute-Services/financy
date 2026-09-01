@@ -1,0 +1,148 @@
+{
+  "name": "a-terminal-rule-stops-every-policy",
+  "why": "A terminal rule stops evaluation of everything, not just its own policy. That is what makes \"this is an exception, nothing else applies\" expressible at all.",
+  "context": {
+    "organizationId": "org-demo",
+    "spendType": "SPEND_REQUEST",
+    "amount": {
+      "amount": "9000.00",
+      "currency": "USD"
+    },
+    "amountInBaseCurrency": {
+      "amount": "9000.00",
+      "currency": "USD"
+    },
+    "requester": {
+      "membershipId": "mem-ceo",
+      "roleKey": "ORG_ADMIN",
+      "departmentId": "dept-exec",
+      "departmentPath": "/dept-exec/",
+      "entityId": "ent-us",
+      "managerChain": [],
+      "tenureDays": 2000
+    },
+    "classification": {
+      "categoryId": "cat-software",
+      "categoryPath": "/cat-operations/cat-software/",
+      "projectId": null,
+      "vendorId": null,
+      "merchantName": "Figma"
+    },
+    "budget": null,
+    "evidence": {
+      "hasReceipt": false,
+      "hasMemo": false,
+      "memoLength": 0,
+      "receiptCount": 0
+    },
+    "temporal": {
+      "now": "2026-09-02T10:00:00.000Z",
+      "neededBy": null,
+      "fiscalPeriod": "2026-Q3"
+    },
+    "history": {
+      "requesterSpendThisMonth": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "requesterSpendThisMonthInCategory": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "similarRequestsLast30Days": 0
+    }
+  },
+  "policies": [
+    {
+      "id": "pol-exec-v1",
+      "policyId": "pol-exec",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 500,
+      "rules": [
+        {
+          "id": "rule-exec-exempt",
+          "name": "Executive spend is pre-authorised",
+          "sequence": 1,
+          "terminal": true,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "requester.departmentPath",
+            "operator": "IS_DESCENDANT_OF",
+            "value": {
+              "kind": "string",
+              "value": "/dept-exec/"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "FLAG_EXCEPTION",
+              "exceptionCode": "EXECUTIVE_PREAUTHORISED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pol-limits-v1",
+      "policyId": "pol-limits",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 100,
+      "rules": [
+        {
+          "id": "rule-over-1000",
+          "name": "Over 1,000 needs finance",
+          "sequence": 1,
+          "terminal": false,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "amountInBaseCurrency",
+            "operator": "GT",
+            "value": {
+              "kind": "money",
+              "amount": "1000.00",
+              "currency": "USD"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "REQUIRE_APPROVER",
+              "approver": {
+                "kind": "ROLE",
+                "roleKey": "FINANCE_ADMIN",
+                "scope": "ORGANIZATION"
+              },
+              "stepType": "SINGLE",
+              "sequence": 1,
+              "timeoutHours": 48
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "verdict": "ALLOWED",
+    "engineVersion": "1.0.0",
+    "matchedRuleIds": ["rule-exec-exempt"],
+    "policyVersionIds": ["pol-exec-v1"],
+    "blocks": [],
+    "exceptions": [
+      {
+        "exceptionCode": "EXECUTIVE_PREAUTHORISED",
+        "ruleId": "rule-exec-exempt"
+      }
+    ],
+    "requirements": {
+      "approvalSteps": [],
+      "requireReceipt": false,
+      "requireMemo": {
+        "required": false,
+        "minLength": 0
+      },
+      "requireFinanceReview": false,
+      "validityDays": null
+    }
+  }
+}

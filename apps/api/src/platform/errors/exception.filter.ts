@@ -10,6 +10,7 @@ import type { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
 import { ZodError } from 'zod';
 
+import { isWriteConflict } from '../concurrency/index.js';
 import { getCorrelationId } from '../request-context/index.js';
 
 /**
@@ -137,6 +138,27 @@ export class AppExceptionFilter implements ExceptionFilter {
       }
 
       return { status, code, message: exception.message, cause: exception };
+    }
+
+    /**
+     * A write that lost a race with a simultaneous one.
+     *
+     * MongoDB aborts one of two transactions touching the same document at the
+     * same instant and Prisma reports `P2034`. That is the database doing what
+     * makes concurrent writes safe, not a fault — so it is a `409` telling the
+     * caller to read and retry, never a `500` telling them the system broke.
+     *
+     * Matched structurally rather than by importing Prisma's error class,
+     * because the platform layer does not depend on the ORM (docs/08 §4.3).
+     */
+    if (isWriteConflict(exception)) {
+      return {
+        status: 409,
+        code: 'REQUEST_IN_PROGRESS',
+        message:
+          'Somebody else changed this at the same moment. Nothing was lost — reload and try again.',
+        cause: exception,
+      };
     }
 
     /**

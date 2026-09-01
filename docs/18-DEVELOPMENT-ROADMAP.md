@@ -460,7 +460,7 @@ SEC-19, SEC-22) · E2E (`auth`, `permissions`).
 | 2.1.6 | `PolicyEvaluator` (pure) + decision snapshot                                 | FR-POL-005     | ✅                         |
 | 2.1.7 | Version cache with invalidation                                              | —              | ✅ in-process              |
 | 2.1.8 | Simulation and backtest endpoints                                            | FR-POL-008     | ✅ simulation; no backtest |
-| 2.1.9 | **Golden-file fixture suite**                                                | `11 §9`        |                            |
+| 2.1.9 | **Golden-file fixture suite**                                                | `11 §9`        | ✅ 11 fixtures             |
 
 **The engine lives in `core`, not in `contracts`, and that is forced rather than chosen.**
 `contracts` already imports `Money` from `core`, so the dependency runs contracts → core and an
@@ -622,8 +622,36 @@ queue · cards list and detail · transactions list and detail · notification c
 
 ### Epic 2.7 — Tests
 
-The full `11 §9` matrix · FR-APR-004 across four paths · FR-APR-011 concurrency · FIN-03/04 ·
-SEC-07 · E2E `spend-approval`.
+| Row of `11 §9`            | Where                                        | Status                      |
+| ------------------------- | -------------------------------------------- | --------------------------- |
+| Field/operator matrix     | `core/policy/conditions.test.ts`             | ✅                          |
+| Merge semantics, all nine | `core/policy/merge.test.ts`                  | ✅                          |
+| Determinism               | `core/policy/determinism.test.ts`            | ✅ 10,000 shuffled cases    |
+| Currency safety           | `core/policy/conditions.test.ts`             | ✅ raises, never compares   |
+| Resolution                | `api/test/approval-invariants.e2e.spec.ts`   | ✅ except `WORKFLOW`        |
+| INV-02, four paths        | `api/test/approval-invariants.e2e.spec.ts`   | ✅ SEC-07, FR-APR-004       |
+| State machine             | `core/state-machine.test.ts` + the e2e suite | ✅                          |
+| Concurrency               | `api/test/approval-invariants.e2e.spec.ts`   | ✅ FR-APR-011               |
+| Versioning                | `api/test/spend-approvals.e2e.spec.ts`       | ✅ decision stored verbatim |
+| Cross-type                | —                                            | one spend type exists       |
+| Performance               | `core/policy/determinism.test.ts`            | ✅ 100 policies, p95 < 50ms |
+| Golden files              | `core/policy/golden/`                        | ✅ 11 fixtures              |
+
+**FIN-04** (the same file imported twice) is covered by the cards and transactions suite.
+**FIN-03** is a duplicate webhook, and there are no webhooks until Phase 7 — a test asserting that
+a receiver nobody has written is idempotent would assert nothing.
+
+**Cross-type is not deferred so much as not yet expressible.** `SPEND_REQUEST` is the only spend
+type with a route; expenses, bills, and purchase orders arrive in Phases 3 and 5. The evaluator
+takes the type as data and the contract lists all five, so the test is one `describe.each` away —
+on the day there is a second type to point it at.
+
+**The concurrency row cost a `500`, and that is worth recording.** MongoDB aborts one of two
+transactions touching the same step at the same instant, Prisma reports `P2034`, and nothing
+mapped it — so the approver who lost the race was told "something went wrong" about an approval
+that had in fact been decided by their colleague a millisecond earlier. The filter now maps a
+write conflict to `409 REQUEST_IN_PROGRESS` everywhere, and the approval route narrows it to
+`STEP_NOT_ACTIONABLE`, which is what FR-APR-011 asks for.
 
 **Exit:** six distinct policy scenarios configured through the UI produce correct chains, each
 covered by a test; approval and verdict audited with the policy version applied.

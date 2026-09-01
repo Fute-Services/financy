@@ -1,0 +1,113 @@
+{
+  "name": "nothing-matches-is-allowed",
+  "why": "A request under every limit needs no approval at all. An organisation whose first small purchase needs a signature is a product nobody gets past.",
+  "context": {
+    "organizationId": "org-demo",
+    "spendType": "SPEND_REQUEST",
+    "amount": {
+      "amount": "250.00",
+      "currency": "USD"
+    },
+    "amountInBaseCurrency": {
+      "amount": "250.00",
+      "currency": "USD"
+    },
+    "requester": {
+      "membershipId": "mem-dana",
+      "roleKey": "EMPLOYEE",
+      "departmentId": "dept-eng",
+      "departmentPath": "/dept-eng/",
+      "entityId": "ent-us",
+      "managerChain": ["mem-priya"],
+      "tenureDays": 420
+    },
+    "classification": {
+      "categoryId": "cat-software",
+      "categoryPath": "/cat-operations/cat-software/",
+      "projectId": null,
+      "vendorId": null,
+      "merchantName": "Figma"
+    },
+    "budget": null,
+    "evidence": {
+      "hasReceipt": false,
+      "hasMemo": false,
+      "memoLength": 0,
+      "receiptCount": 0
+    },
+    "temporal": {
+      "now": "2026-09-02T10:00:00.000Z",
+      "neededBy": null,
+      "fiscalPeriod": "2026-Q3"
+    },
+    "history": {
+      "requesterSpendThisMonth": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "requesterSpendThisMonthInCategory": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "similarRequestsLast30Days": 0
+    }
+  },
+  "policies": [
+    {
+      "id": "pol-limits-v1",
+      "policyId": "pol-limits",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 100,
+      "rules": [
+        {
+          "id": "rule-over-1000",
+          "name": "Over 1,000 needs finance",
+          "sequence": 1,
+          "terminal": false,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "amountInBaseCurrency",
+            "operator": "GT",
+            "value": {
+              "kind": "money",
+              "amount": "1000.00",
+              "currency": "USD"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "REQUIRE_APPROVER",
+              "approver": {
+                "kind": "ROLE",
+                "roleKey": "FINANCE_ADMIN",
+                "scope": "ORGANIZATION"
+              },
+              "stepType": "SINGLE",
+              "sequence": 1,
+              "timeoutHours": 48
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "verdict": "ALLOWED",
+    "engineVersion": "1.0.0",
+    "matchedRuleIds": [],
+    "policyVersionIds": [],
+    "blocks": [],
+    "exceptions": [],
+    "requirements": {
+      "approvalSteps": [],
+      "requireReceipt": false,
+      "requireMemo": {
+        "required": false,
+        "minLength": 0
+      },
+      "requireFinanceReview": false,
+      "validityDays": null
+    }
+  }
+}

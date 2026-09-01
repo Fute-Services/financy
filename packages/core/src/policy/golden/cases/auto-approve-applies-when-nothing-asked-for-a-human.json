@@ -1,0 +1,104 @@
+{
+  "name": "auto-approve-applies-when-nothing-asked-for-a-human",
+  "why": "The other half of merge rule 5: with no approver requirement anywhere, the auto-approval stands and the verdict says so rather than pretending a human agreed.",
+  "context": {
+    "organizationId": "org-demo",
+    "spendType": "SPEND_REQUEST",
+    "amount": {
+      "amount": "80.00",
+      "currency": "USD"
+    },
+    "amountInBaseCurrency": {
+      "amount": "80.00",
+      "currency": "USD"
+    },
+    "requester": {
+      "membershipId": "mem-dana",
+      "roleKey": "EMPLOYEE",
+      "departmentId": "dept-eng",
+      "departmentPath": "/dept-eng/",
+      "entityId": "ent-us",
+      "managerChain": ["mem-priya"],
+      "tenureDays": 420
+    },
+    "classification": {
+      "categoryId": "cat-software",
+      "categoryPath": "/cat-operations/cat-software/",
+      "projectId": null,
+      "vendorId": null,
+      "merchantName": "Figma"
+    },
+    "budget": null,
+    "evidence": {
+      "hasReceipt": false,
+      "hasMemo": false,
+      "memoLength": 0,
+      "receiptCount": 0
+    },
+    "temporal": {
+      "now": "2026-09-02T10:00:00.000Z",
+      "neededBy": null,
+      "fiscalPeriod": "2026-Q3"
+    },
+    "history": {
+      "requesterSpendThisMonth": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "requesterSpendThisMonthInCategory": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "similarRequestsLast30Days": 0
+    }
+  },
+  "policies": [
+    {
+      "id": "pol-trusted-v1",
+      "policyId": "pol-trusted",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 400,
+      "rules": [
+        {
+          "id": "rule-trusted-vendor",
+          "name": "Software renewals are pre-approved",
+          "sequence": 1,
+          "terminal": false,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "category.path",
+            "operator": "IS_DESCENDANT_OF",
+            "value": {
+              "kind": "string",
+              "value": "/cat-operations/cat-software/"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "AUTO_APPROVE"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "verdict": "AUTO_APPROVED",
+    "engineVersion": "1.0.0",
+    "matchedRuleIds": ["rule-trusted-vendor"],
+    "policyVersionIds": ["pol-trusted-v1"],
+    "blocks": [],
+    "exceptions": [],
+    "requirements": {
+      "approvalSteps": [],
+      "requireReceipt": false,
+      "requireMemo": {
+        "required": false,
+        "minLength": 0
+      },
+      "requireFinanceReview": false,
+      "validityDays": null
+    }
+  }
+}

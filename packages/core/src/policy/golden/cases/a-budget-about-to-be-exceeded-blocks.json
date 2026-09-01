@@ -1,0 +1,130 @@
+{
+  "name": "a-budget-about-to-be-exceeded-blocks",
+  "why": "A rule can read the budget the spend would land in. Blocking before the money moves is the entire point of evaluating at submission rather than at reconciliation.",
+  "context": {
+    "organizationId": "org-demo",
+    "spendType": "SPEND_REQUEST",
+    "amount": {
+      "amount": "3000.00",
+      "currency": "USD"
+    },
+    "amountInBaseCurrency": {
+      "amount": "3000.00",
+      "currency": "USD"
+    },
+    "requester": {
+      "membershipId": "mem-dana",
+      "roleKey": "EMPLOYEE",
+      "departmentId": "dept-eng",
+      "departmentPath": "/dept-eng/",
+      "entityId": "ent-us",
+      "managerChain": ["mem-priya"],
+      "tenureDays": 420
+    },
+    "classification": {
+      "categoryId": "cat-software",
+      "categoryPath": "/cat-operations/cat-software/",
+      "projectId": null,
+      "vendorId": null,
+      "merchantName": "Figma"
+    },
+    "budget": {
+      "budgetLineId": "line-eng-software",
+      "allocated": {
+        "amount": "10000.00",
+        "currency": "USD"
+      },
+      "committed": {
+        "amount": "6000.00",
+        "currency": "USD"
+      },
+      "actual": {
+        "amount": "2000.00",
+        "currency": "USD"
+      },
+      "remaining": {
+        "amount": "2000.00",
+        "currency": "USD"
+      },
+      "utilizationAfterThisSpend": 1.1,
+      "wouldExceed": true
+    },
+    "evidence": {
+      "hasReceipt": false,
+      "hasMemo": false,
+      "memoLength": 0,
+      "receiptCount": 0
+    },
+    "temporal": {
+      "now": "2026-09-02T10:00:00.000Z",
+      "neededBy": null,
+      "fiscalPeriod": "2026-Q3"
+    },
+    "history": {
+      "requesterSpendThisMonth": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "requesterSpendThisMonthInCategory": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "similarRequestsLast30Days": 0
+    }
+  },
+  "policies": [
+    {
+      "id": "pol-budget-v1",
+      "policyId": "pol-budget",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 250,
+      "rules": [
+        {
+          "id": "rule-budget-exceeded",
+          "name": "Do not spend past the budget",
+          "sequence": 1,
+          "terminal": false,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "budget.wouldExceed",
+            "operator": "IS_TRUE",
+            "value": {
+              "kind": "none"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "BLOCK",
+              "reasonCode": "BUDGET_EXCEEDED",
+              "message": "This would take the budget line past its allocation."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "verdict": "BLOCKED",
+    "engineVersion": "1.0.0",
+    "matchedRuleIds": ["rule-budget-exceeded"],
+    "policyVersionIds": ["pol-budget-v1"],
+    "blocks": [
+      {
+        "reasonCode": "BUDGET_EXCEEDED",
+        "ruleId": "rule-budget-exceeded"
+      }
+    ],
+    "exceptions": [],
+    "requirements": {
+      "approvalSteps": [],
+      "requireReceipt": false,
+      "requireMemo": {
+        "required": false,
+        "minLength": 0
+      },
+      "requireFinanceReview": false,
+      "validityDays": null
+    }
+  }
+}

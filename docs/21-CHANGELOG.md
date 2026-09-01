@@ -13,6 +13,28 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **The golden-file suite for the policy engine** (task 2.1.9, docs/11 §9). Eleven
+  `(context, policies) → decision` fixtures as JSON, so a change to the evaluator that moves one
+  fails the build and has to be re-approved deliberately — with the diff showing which decision
+  moved. They are data rather than code on purpose: a case written as code can be corrected in the
+  same commit that broke it and the diff reads as one change, while a case that is data has to be
+  edited separately and a reviewer sees "this used to need two approvals and now needs one".
+- **Determinism as a property, not an example.** Ten thousand generated contexts, each evaluated
+  against the same policies shuffled twice, must produce identical decisions. The failure this
+  guards against — the same request decided differently because the database returned two
+  equal-priority policies in the other order — is invisible to any hand-written case, because
+  whichever order you write down is the order you assert. The generator is seeded, so a failure is
+  reproducible rather than "it happened once".
+- **A cost budget**: 100 policies and 1,000 rules evaluated at p95 under 50 ms. Not about a request
+  feeling fast — evaluation happens inside the submission transaction, so a slow evaluator holds a
+  database transaction open across every policy the organisation has ever written.
+- **INV-02 asserted through all four paths it can be lost** (SEC-07, FR-APR-004): a role the
+  requester holds, a role that resolves to them alone, their own position in the manager chain, and
+  an approver delegating authority back to them. The fourth is the one somebody could arrange
+  deliberately, and it is why the resolver excludes the requester before _and_ after delegation.
+- **Concurrent approvals asserted as simultaneous, not sequential** (FR-APR-011): two approvers
+  fired together produce exactly one completion, one recorded action, and one settled request.
+
 - **Approval reminders, escalation, and request expiry** (tasks 2.2.7 and 2.3.8, FR-APR-008,
   FR-SPD-008). One sweep finds the work and writes nothing; everything it finds becomes a bounded
   job whose idempotency key names one record — so a failure on one step does not stop the other two
@@ -277,6 +299,14 @@ idempotencyKey)` is reserved _before_ the handler runs, so two simultaneous deli
 
 ### Fixed
 
+- **A simultaneous approval answered `500`.** MongoDB aborts one of two transactions touching the
+  same step at the same instant and Prisma reports `P2034`; nothing mapped it, so the approver who
+  lost the race was told "something went wrong" about an approval their colleague had in fact
+  completed a millisecond earlier. That is the worst thing to tell somebody about an approval:
+  they cannot tell whether theirs counted. Write conflicts now map to `409 REQUEST_IN_PROGRESS`
+  everywhere, and the approval route narrows it to `STEP_NOT_ACTIONABLE` — the answer FR-APR-011
+  specifies. Found by writing the concurrency test as two simultaneous requests rather than two
+  sequential ones.
 - **A permission added to or removed from the catalogue never reached an organisation that already
   existed.** Roles are per-organisation, and the routine that converges their grants ran exactly
   once, at registration — so a new capability arrived for new tenants and no existing one, and a

@@ -5,10 +5,11 @@ import {
   type QueueItem,
   type Resource,
 } from '@financy/contracts';
-import { ForbiddenError, NotFoundError } from '@financy/core';
+import { ForbiddenError, NotFoundError, StepNotActionableError } from '@financy/core';
 import { Body, Controller, Get, HttpCode, Inject, Param, Post } from '@nestjs/common';
 
 import { RequirePermission } from '../../platform/authorization/index.js';
+import { isWriteConflict } from '../../platform/concurrency/index.js';
 import { DatabaseService } from '../../platform/database/index.js';
 import { QUEUE_PORT, type QueuePort } from '../../platform/queue/index.js';
 import {
@@ -153,29 +154,7 @@ export class ApprovalController {
       );
     }
 
-    const result = await this.database.unscoped.$transaction(async (tx) => {
-      const outcome = await this.approvals.act(
-        tx,
-        organizationId,
-        instanceId,
-        body.action,
-        body.comment ?? null,
-      );
-
-      if (outcome.settled !== null && outcome.settled.subjectType === 'spend_request') {
-        // The subject is told inside the same transaction. A chain that
-        // settled without its request moving is a request stuck in
-        // `PENDING_APPROVAL` with nothing left to approve it.
-        await this.spend.onApprovalSettled(
-          tx,
-          organizationId,
-          outcome.settled.subjectId,
-          outcome.settled.outcome,
-        );
-      }
-
-      return outcome;
-    });
+    const result = await this.settle(organizationId, instanceId, body);
 
     // Enqueued **after** the commit, never inside it (docs/14 §1). A job
     // scheduled inside a transaction that then rolled back would tell somebody
@@ -187,6 +166,58 @@ export class ApprovalController {
       data: { settled: result.settled !== null, outcome: result.settled?.outcome ?? null },
       meta: { correlationId: getCorrelationId() },
     };
+  }
+
+  /**
+   * The action and the subject, in one transaction.
+   *
+   * **A write conflict here is not a failure; it is the answer.** MongoDB
+   * aborts one of two transactions touching the same step at the same instant,
+   * and the approver who lost that race did not encounter a fault — somebody
+   * else completed the step a millisecond earlier. Reported as a `500` it
+   * reads as "the system broke and I do not know whether my approval
+   * counted", which is the worst thing to tell somebody about an approval.
+   * Reported as `STEP_NOT_ACTIONABLE` it says exactly what happened, and it is
+   * what FR-APR-011 asks for.
+   *
+   * The general mapping in the exception filter turns a conflict anywhere into
+   * a `409`; this narrows it, because on this path the meaning is not merely
+   * "retry" but "it is already decided".
+   */
+  private async settle(
+    organizationId: string,
+    instanceId: string,
+    body: ActOnApproval,
+  ): Promise<ActionResult> {
+    try {
+      return await this.database.unscoped.$transaction(async (tx) => {
+        const outcome = await this.approvals.act(
+          tx,
+          organizationId,
+          instanceId,
+          body.action,
+          body.comment ?? null,
+        );
+
+        if (outcome.settled !== null && outcome.settled.subjectType === 'spend_request') {
+          // The subject is told inside the same transaction. A chain that
+          // settled without its request moving is a request stuck in
+          // `PENDING_APPROVAL` with nothing left to approve it.
+          await this.spend.onApprovalSettled(
+            tx,
+            organizationId,
+            outcome.settled.subjectId,
+            outcome.settled.outcome,
+          );
+        }
+
+        return outcome;
+      });
+    } catch (error) {
+      if (isWriteConflict(error)) throw new StepNotActionableError();
+
+      throw error;
+    }
   }
 
   /**

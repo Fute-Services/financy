@@ -17,3 +17,29 @@ import { StaleVersionError } from '@financy/core';
 export function guardVersion(entity: string, expected: number, actual: number): void {
   if (expected !== actual) throw new StaleVersionError(entity, expected, actual);
 }
+
+/**
+ * Did this write lose a race with a simultaneous one?
+ *
+ * MongoDB aborts one of two transactions that touch the same document at the
+ * same instant, and Prisma surfaces that as `P2034` — "write conflict or
+ * deadlock, please retry". It is not a bug and it is not an outage: it is the
+ * database doing exactly what makes concurrent approvals safe.
+ *
+ * **What matters is that it never reaches the caller as a `500`.** A second
+ * approver pressing the button at the same moment as the first is the ordinary
+ * case in a parallel step (FR-APR-011), and "something went wrong, please try
+ * again" is both wrong and unactionable — the step *was* approved, by somebody
+ * else, a millisecond earlier.
+ *
+ * Detected structurally rather than by importing Prisma's error class, because
+ * the platform layer must not depend on the ORM (docs/08 §4.3) — and because
+ * the shape is stable in a way the class hierarchy is not.
+ */
+export function isWriteConflict(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+
+  const code = (error as { code?: unknown }).code;
+
+  return code === 'P2034';
+}

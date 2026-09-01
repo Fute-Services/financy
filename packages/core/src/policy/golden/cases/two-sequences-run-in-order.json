@@ -1,0 +1,163 @@
+{
+  "name": "two-sequences-run-in-order",
+  "why": "Two rules naming different sequences are two steps, and they come out in the order they run rather than the order the rules were evaluated.",
+  "context": {
+    "organizationId": "org-demo",
+    "spendType": "SPEND_REQUEST",
+    "amount": {
+      "amount": "9000.00",
+      "currency": "USD"
+    },
+    "amountInBaseCurrency": {
+      "amount": "9000.00",
+      "currency": "USD"
+    },
+    "requester": {
+      "membershipId": "mem-dana",
+      "roleKey": "EMPLOYEE",
+      "departmentId": "dept-eng",
+      "departmentPath": "/dept-eng/",
+      "entityId": "ent-us",
+      "managerChain": ["mem-priya"],
+      "tenureDays": 420
+    },
+    "classification": {
+      "categoryId": "cat-software",
+      "categoryPath": "/cat-operations/cat-software/",
+      "projectId": null,
+      "vendorId": null,
+      "merchantName": "Figma"
+    },
+    "budget": null,
+    "evidence": {
+      "hasReceipt": false,
+      "hasMemo": false,
+      "memoLength": 0,
+      "receiptCount": 0
+    },
+    "temporal": {
+      "now": "2026-09-02T10:00:00.000Z",
+      "neededBy": null,
+      "fiscalPeriod": "2026-Q3"
+    },
+    "history": {
+      "requesterSpendThisMonth": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "requesterSpendThisMonthInCategory": {
+        "amount": "0.00",
+        "currency": "USD"
+      },
+      "similarRequestsLast30Days": 0
+    }
+  },
+  "policies": [
+    {
+      "id": "pol-second-v1",
+      "policyId": "pol-second",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 50,
+      "rules": [
+        {
+          "id": "rule-cfo-second",
+          "name": "Finance signs second",
+          "sequence": 1,
+          "terminal": false,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "amountInBaseCurrency",
+            "operator": "GT",
+            "value": {
+              "kind": "money",
+              "amount": "5000.00",
+              "currency": "USD"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "REQUIRE_APPROVER",
+              "approver": {
+                "kind": "ROLE",
+                "roleKey": "FINANCE_ADMIN",
+                "scope": "ORGANIZATION"
+              },
+              "stepType": "SINGLE",
+              "sequence": 2,
+              "timeoutHours": 72
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pol-first-v1",
+      "policyId": "pol-first",
+      "version": 1,
+      "spendTypes": ["SPEND_REQUEST"],
+      "priority": 200,
+      "rules": [
+        {
+          "id": "rule-manager-first",
+          "name": "The manager signs first",
+          "sequence": 1,
+          "terminal": false,
+          "condition": {
+            "type": "COMPARISON",
+            "field": "amountInBaseCurrency",
+            "operator": "GT",
+            "value": {
+              "kind": "money",
+              "amount": "1000.00",
+              "currency": "USD"
+            }
+          },
+          "outcomes": [
+            {
+              "type": "REQUIRE_APPROVER",
+              "approver": {
+                "kind": "MANAGER_CHAIN",
+                "position": 1
+              },
+              "stepType": "SINGLE",
+              "sequence": 1,
+              "timeoutHours": 24
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "verdict": "ALLOWED_WITH_APPROVAL",
+    "engineVersion": "1.0.0",
+    "matchedRuleIds": ["rule-manager-first", "rule-cfo-second"],
+    "policyVersionIds": ["pol-first-v1", "pol-second-v1"],
+    "blocks": [],
+    "exceptions": [],
+    "requirements": {
+      "approvalSteps": [
+        {
+          "sequence": 1,
+          "stepType": "SINGLE",
+          "approverKinds": ["MANAGER_CHAIN"],
+          "timeoutHours": 24
+        },
+        {
+          "sequence": 2,
+          "stepType": "SINGLE",
+          "approverKinds": ["ROLE"],
+          "timeoutHours": 72
+        }
+      ],
+      "requireReceipt": false,
+      "requireMemo": {
+        "required": false,
+        "minLength": 0
+      },
+      "requireFinanceReview": false,
+      "validityDays": null
+    }
+  }
+}
