@@ -1,16 +1,26 @@
-import { nonEmptyString, type Resource } from '@financy/contracts';
+import {
+  actOnApprovalSchema,
+  type ActOnApproval,
+  type ApprovalInstance,
+  type QueueItem,
+  type Resource,
+} from '@financy/contracts';
+import { ForbiddenError, NotFoundError } from '@financy/core';
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { z } from 'zod';
 
 import { RequirePermission } from '../../platform/authorization/index.js';
 import { DatabaseService } from '../../platform/database/index.js';
-import { getCorrelationId, getOrganizationId } from '../../platform/request-context/index.js';
+import {
+  callerHas,
+  getCorrelationId,
+  getOrganizationId,
+} from '../../platform/request-context/index.js';
 import { ZodValidationPipe } from '../../platform/validation/index.js';
 import { ApprovalService } from '../approvals/index.js';
 import { SpendRequestService } from './spend-request.service.js';
 
 /**
- * `/v1/approvals` — the queue, and acting on it (docs/10 §5.6).
+ * `/v1/approvals` — the queue, the timeline, and acting on a step (docs/10 §5.6).
  *
  * **It lives in the spend module rather than the approvals module, and that is
  * temporary.** Acting on an approval settles the chain, and settling has to
@@ -23,35 +33,6 @@ import { SpendRequestService } from './spend-request.service.js';
  * Writing it the other way — the approvals module importing every subject —
  * is the arrangement that does not survive the second subject.
  */
-const actSchema = z.strictObject({
-  action: z.enum(['APPROVE', 'REJECT']),
-  /**
-   * Optional on an approval, and that asymmetry is deliberate: approving is
-   * agreeing with what was asked, and there is nothing extra to say. A
-   * rejection is a decision somebody has to act on, so the service requires a
-   * comment for it — see below.
-   */
-  comment: z.string().trim().max(1000).nullable().optional(),
-});
-
-export interface QueueItem {
-  instanceId: string;
-  stepId: string;
-  sequence: number;
-  subjectType: string;
-  subjectId: string;
-  dueAt: string | null;
-  activatedAt: string | null;
-  /** Enough to decide without opening the request. */
-  subject: {
-    reference: string;
-    purpose: string;
-    amount: string;
-    currency: string;
-    requester: string;
-  } | null;
-}
-
 @Controller('approvals')
 export class ApprovalController {
   constructor(
@@ -117,24 +98,56 @@ export class ApprovalController {
   }
 
   /**
-   * Approve or reject the active step.
+   * One chain, with every step and everything anybody did to it.
+   *
+   * Declared after `queue` and before nothing else that could shadow it. The
+   * requester reads this as much as the approvers do — "where has it got to,
+   * and who is it with" is the question a pending request generates, and the
+   * alternative to answering it here is that they ask in a chat message the
+   * record never sees.
+   */
+  @Get(':instanceId')
+  @RequirePermission('approval:read')
+  async instance(@Param('instanceId') instanceId: string): Promise<Resource<ApprovalInstance>> {
+    const instance = await this.approvals.instance(instanceId);
+
+    if (instance === null) throw new NotFoundError('Approval');
+
+    return { data: instance, meta: { correlationId: getCorrelationId() } };
+  }
+
+  /**
+   * Approve, reject, return for changes, or override.
    *
    * No `If-Match`. The precondition that matters here is the step's *status*,
    * re-read and re-checked inside the transaction — two approvers pressing at
    * the same instant is the ordinary case in a parallel step, and a version on
    * the instance would refuse the second one for the wrong reason.
+   *
+   * **The route is gated on `approval:act`; an override needs
+   * `approval:override` on top.** They are different powers: acting is being
+   * one of the people the chain named, overriding is settling a chain that
+   * named somebody who cannot act any more. Checking the second here rather
+   * than in the service keeps the authorization decision at the boundary,
+   * where the rest of this application's permission checks live.
    */
   @Post(':instanceId/act')
   @HttpCode(200)
   @RequirePermission('approval:act')
   async act(
     @Param('instanceId') instanceId: string,
-    @Body(new ZodValidationPipe(actSchema)) body: z.infer<typeof actSchema>,
+    @Body(new ZodValidationPipe(actOnApprovalSchema)) body: ActOnApproval,
   ): Promise<Resource<{ settled: boolean; outcome: string | null }>> {
     const organizationId = getOrganizationId();
 
     if (organizationId === undefined) {
       throw new Error('An approval cannot be acted on without a tenant context.');
+    }
+
+    if (body.action === 'OVERRIDE' && !callerHas('approval:override')) {
+      throw new ForbiddenError(
+        'Overriding an approval chain is a finance power. You can approve, reject, or return this instead.',
+      );
     }
 
     const settled = await this.database.unscoped.$transaction(async (tx) => {
@@ -162,6 +175,3 @@ export class ApprovalController {
     };
   }
 }
-
-/** Kept so the schema above reads as one piece. */
-export { nonEmptyString };

@@ -1,7 +1,9 @@
 export {
+  callerHas,
   enterContext,
   getContext,
   getCorrelationId,
+  getMembershipId,
   getOrganizationId,
   runWithContext,
   type RequestContext,

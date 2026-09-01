@@ -197,10 +197,11 @@ export class SpendRequestService {
 
       guardVersion('Spend request', expectedVersion, before.version);
 
-      // Only a draft is editable. Once submitted, the request is the thing
-      // approvers are looking at — editing it underneath them would mean the
-      // approval was given for something other than what was approved.
-      if (before.status !== 'DRAFT') {
+      // A draft, or a request an approver has handed back. Nothing else: once
+      // submitted, the request is the thing approvers are looking at, and
+      // editing it underneath them would mean the approval was given for
+      // something other than what was approved.
+      if (before.status !== 'DRAFT' && before.status !== 'CHANGES_REQUESTED') {
         throw new InvalidStateTransitionError('Spend request', before.status, 'DRAFT');
       }
 
@@ -269,7 +270,18 @@ export class SpendRequestService {
 
       guardVersion('Spend request', expectedVersion, before.version);
 
-      if (before.status !== 'DRAFT') {
+      /**
+       * A draft, or one that was returned for changes.
+       *
+       * Resubmission after a return re-runs evaluation completely rather than
+       * reopening the old chain. The amount or the category may have changed,
+       * and reusing a chain built for the previous figures would be a way to
+       * launder a larger amount through a smaller approval (docs/11 §7.1).
+       * That happens for free here, because submission always evaluates from
+       * scratch — the point is that nothing in this method is allowed to
+       * shortcut it.
+       */
+      if (before.status !== 'DRAFT' && before.status !== 'CHANGES_REQUESTED') {
         throw new InvalidStateTransitionError('Spend request', before.status, 'SUBMITTED');
       }
 
@@ -398,7 +410,15 @@ export class SpendRequestService {
         throw new ConflictError('Only the person who raised this request can cancel it.');
       }
 
-      if (before.status !== 'DRAFT' && before.status !== 'PENDING_APPROVAL') {
+      // FR-SPD-010: anything not yet decided. A request handed back for changes
+      // is one the requester is most likely to want to abandon — it is sitting
+      // in their list asking them to do work they have decided against.
+      if (
+        before.status !== 'DRAFT' &&
+        before.status !== 'SUBMITTED' &&
+        before.status !== 'PENDING_APPROVAL' &&
+        before.status !== 'CHANGES_REQUESTED'
+      ) {
         throw new InvalidStateTransitionError('Spend request', before.status, 'CANCELLED');
       }
 
@@ -435,7 +455,7 @@ export class SpendRequestService {
     tx: Prisma.TransactionClient,
     organizationId: string,
     subjectId: string,
-    outcome: 'APPROVED' | 'REJECTED',
+    outcome: 'APPROVED' | 'REJECTED' | 'RETURNED' | 'OVERRIDDEN',
   ): Promise<void> {
     const request = await tx.spendRequest.findFirst({
       where: { id: subjectId, organizationId },
@@ -444,17 +464,35 @@ export class SpendRequestService {
 
     if (request === null || request.status !== 'PENDING_APPROVAL') return;
 
+    const status = SETTLED_STATUS[outcome];
+
     await tx.spendRequest.update({
       where: { id: subjectId },
-      data: { status: outcome, decidedAt: new Date(), version: { increment: 1 } },
+      data: {
+        status,
+        /**
+         * A return is not a decision, so it does not stamp `decidedAt`.
+         *
+         * The request goes back to its requester and will be decided later, by
+         * whatever chain the resubmission builds. Stamping it here would make
+         * a request that is still open look settled in every report that reads
+         * that column.
+         */
+        ...(outcome === 'RETURNED' ? {} : { decidedAt: new Date() }),
+        // The chain is over either way. Clearing the link on a return is what
+        // makes resubmission build a new one rather than reattaching to a
+        // settled instance.
+        ...(outcome === 'RETURNED' ? { approvalInstanceId: null } : {}),
+        version: { increment: 1 },
+      },
     });
 
     await this.audit.record(tx, {
-      action: outcome === 'APPROVED' ? 'spend_request.approved' : 'spend_request.rejected',
+      action: SETTLED_AUDIT_ACTIONS[outcome],
       resourceType: 'spend_request',
       resourceId: subjectId,
       before: { status: 'PENDING_APPROVAL' },
-      after: { status: outcome },
+      after: { status },
     });
   }
 
@@ -604,3 +642,32 @@ function toRecord(row: Row): SpendRequestRecord {
     version: row.version,
   };
 }
+
+/**
+ * What each chain outcome means for the request.
+ *
+ * An **override** lands on `APPROVED`, and the collapse is deliberate: for
+ * everything downstream — budgets, cards, reports — a request finance forced
+ * through is approved and spendable, and giving it a status of its own would
+ * mean every consumer had to learn a fourth case to treat identically to the
+ * third. The distinction is not lost: the approval instance is `OVERRIDDEN`,
+ * the action row says `OVERRIDE`, and the audit event is
+ * `spend_request.overridden` with the mandatory reason attached.
+ */
+const SETTLED_STATUS: Readonly<
+  Record<'APPROVED' | 'REJECTED' | 'RETURNED' | 'OVERRIDDEN', SpendRequestRecord['status']>
+> = {
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  RETURNED: 'CHANGES_REQUESTED',
+  OVERRIDDEN: 'APPROVED',
+};
+
+const SETTLED_AUDIT_ACTIONS: Readonly<
+  Record<'APPROVED' | 'REJECTED' | 'RETURNED' | 'OVERRIDDEN', string>
+> = {
+  APPROVED: 'spend_request.approved',
+  REJECTED: 'spend_request.rejected',
+  RETURNED: 'spend_request.returned',
+  OVERRIDDEN: 'spend_request.overridden',
+};

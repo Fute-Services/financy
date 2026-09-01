@@ -25,6 +25,7 @@ export const SPEND_REQUEST_STATUSES = [
   'DRAFT',
   'SUBMITTED',
   'PENDING_APPROVAL',
+  'CHANGES_REQUESTED',
   'APPROVED',
   'REJECTED',
   'CANCELLED',
@@ -37,6 +38,9 @@ export const SPEND_STATUS_LABELS: Readonly<Record<SpendRequestStatus, string>> =
   DRAFT: 'Draft',
   SUBMITTED: 'Submitted',
   PENDING_APPROVAL: 'Awaiting approval',
+  // "Changes requested" rather than "Returned": the noun names what the
+  // requester has to do, which is the only thing they need from this word.
+  CHANGES_REQUESTED: 'Changes requested',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   CANCELLED: 'Cancelled',

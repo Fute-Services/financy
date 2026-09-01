@@ -18,6 +18,18 @@ export interface RequestContext {
   readonly membershipId?: string;
   readonly userId?: string;
   readonly sessionId?: string;
+  /**
+   * Every permission the caller's role actually grants, resolved from the
+   * database by `AuthGuard`.
+   *
+   * `@RequirePermission` already gates the route on the one permission it
+   * needs. This is for the endpoints whose *behaviour* differs by a second
+   * one — a delegation list that widens for an administrator, a queue that
+   * shows the whole organisation to finance. Those services would otherwise
+   * re-query `role_permissions` on every request to learn something the guard
+   * had already read a moment earlier.
+   */
+  readonly permissions?: ReadonlySet<string>;
   /** Recorded on every audit and security event, so they are attributable. */
   readonly ipAddress?: string;
   readonly userAgent?: string;
@@ -72,6 +84,30 @@ export function getContext(): RequestContext | undefined {
  */
 export function getOrganizationId(): string | undefined {
   return storage.getStore()?.organizationId;
+}
+
+/**
+ * The caller's membership, or `undefined` outside a request.
+ *
+ * The same "reports what is true, does not invent a default" contract as
+ * `getOrganizationId`. A service that requires one says so by failing.
+ */
+export function getMembershipId(): string | undefined {
+  return storage.getStore()?.membershipId;
+}
+
+/**
+ * Whether the caller holds a permission beyond the one their route required.
+ *
+ * **Never a substitute for `@RequirePermission`.** That decorator is the gate;
+ * this answers the narrower question a handful of endpoints ask afterwards —
+ * "may they *also* see everybody's, not just their own?" — where the answer
+ * widens a result set rather than deciding whether the call is allowed at all.
+ *
+ * Fails closed outside a request, where there is no caller to hold anything.
+ */
+export function callerHas(permission: string): boolean {
+  return storage.getStore()?.permissions?.has(permission) ?? false;
 }
 
 /**

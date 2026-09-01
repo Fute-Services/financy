@@ -65,7 +65,11 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   define('policy:manage', 'Create policies and publish new versions.'),
   define('approval:read', 'View approval instances and steps.'),
   define('approval:act', 'Approve, reject, or return a step.'),
-  define('approval:delegate', 'Delegate approval authority to another member.'),
+  define('approval:delegate', 'Delegate your own approval authority to another member.'),
+  define(
+    'approval:delegate_any',
+    'Delegate another member’s approval authority — an administrative act, since the holder never agreed to lend it.',
+  ),
   define('approval:override', 'Force a decision on a stalled chain. Reason mandatory.'),
 
   // §3.3 Spend, cards, transactions
@@ -200,6 +204,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
     'policy:manage',
     'approval:read',
     'approval:delegate',
+    'approval:delegate_any',
     'spend_request:create',
     'spend_request:read',
     'spend_request:read_all',
@@ -241,6 +246,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
     'approval:read',
     'approval:act',
     'approval:delegate',
+    'approval:delegate_any',
     'approval:override',
     'spend_request:create',
     'spend_request:read',

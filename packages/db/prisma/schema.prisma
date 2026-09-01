@@ -773,6 +773,11 @@ enum SpendRequestStatus {
   DRAFT
   SUBMITTED
   PENDING_APPROVAL
+  /// An approver returned it for changes. Editable again, and resubmitting
+  /// re-evaluates policy from scratch — the amount may have changed, and
+  /// reusing the old chain would launder a larger amount through a smaller
+  /// approval (docs/11 §7.1).
+  CHANGES_REQUESTED
   APPROVED
   REJECTED
   CANCELLED
@@ -853,7 +858,10 @@ enum ApprovalInstanceStatus {
   PENDING
   APPROVED
   REJECTED
+  RETURNED
   CANCELLED
+  /// Finance settled a stalled chain directly, with a mandatory reason.
+  OVERRIDDEN
   EXPIRED
 }
 
@@ -862,6 +870,10 @@ enum ApprovalStepStatus {
   ACTIVE
   APPROVED
   REJECTED
+  /// Past its due date and reassigned. Still actionable — an escalated step
+  /// that stopped accepting approvals would be a chain nobody can finish.
+  ESCALATED
+  RETURNED
   SKIPPED
   EXPIRED
 }

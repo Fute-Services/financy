@@ -109,14 +109,19 @@ export class AuthGuard implements CanActivate {
     // Layer 1 of tenant isolation: the organisation comes from the membership
     // on the session and from nowhere else. Nothing the client sent is
     // consulted, so there is nothing for it to influence.
+    const granted = new Set(membership.role.permissions.map((row) => row.permission.key));
+
     enterContext({
       organizationId: membership.organizationId,
       membershipId: membership.id,
       userId: session.userId,
       sessionId: session.id,
+      // Published so a handler can ask about a *second* permission without
+      // re-reading `role_permissions`. It never replaces the check below: this
+      // is the resolved set, and the gate is still the decorator.
+      permissions: granted,
     });
 
-    const granted = new Set(membership.role.permissions.map((row) => row.permission.key));
     const required = this.reflector.getAllAndOverride<string>(PERMISSION_KEY, [
       handler,
       controller,

@@ -51,7 +51,7 @@ export async function runWrite<T>(
   };
 }
 
-function toFormState(error: unknown): FormState {
+export function toFormState(error: unknown): FormState {
   if (!(error instanceof ApiError)) {
     // A network failure, not an API answer. Saying so is more useful than a
     // generic message, which makes people doubt what they typed.
