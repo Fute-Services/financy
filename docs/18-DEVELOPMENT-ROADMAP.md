@@ -195,7 +195,7 @@ than null (ADR-0017). Both were plausible code that a reader would have approved
 | 1.5.1 | Organisation CRUD + currency lock                                               | ✅ API; no screen yet |
 | 1.5.2 | Entities CRUD + archive                                                         | ✅ API; no screen yet |
 | 1.5.3 | Departments: tree, path maintenance, cycle rejection, head                      | ✅ API; no screen yet |
-| 1.5.4 | Projects and categories CRUD                                                    |                       |
+| 1.5.4 | Projects and categories CRUD                                                    | ✅ API; no screen yet |
 | 1.5.5 | Memberships: list, detail, update, role change (step-up), deactivate/reactivate |                       |
 | 1.5.6 | Invitations: create, accept, revoke, resend, expiry                             |                       |
 | 1.5.7 | Last-admin and self-elevation guards (INV-03, INV-04)                           |                       |
@@ -226,6 +226,18 @@ anything is written, by one path comparison rather than by walking parents.
 members is a `409` naming what is in the way. Cascading would archive rows nobody asked about,
 and restoring the parent afterwards cannot know which children the cascade archived and which
 were already archived on their own.
+
+**A category key is create-only, and that is 1.5.4's one real constraint.** A policy rule says
+"airfare over 500 needs finance approval" by naming `travel_airfare`. Letting a `PATCH` change the
+key would silently change what every policy referring to it decides, with nothing in the policy's
+own history to show why; re-parenting would change what every historical transaction coded to it
+appears to have been. The display name — the thing people actually want to change — is editable.
+System categories may be archived by an organisation that does not use them, never renamed: a
+later deploy reseeds by key.
+
+**Projects close and archive separately.** A _closed_ project is finished and still belongs in
+reports; an _archived_ one should not have existed, or no longer matters, and drops out of the
+pickers. One flag would make "this ended" and "this was a mistake" the same line in the audit log.
 
 **Three error codes were added rather than reusing `INVALID_STATE_TRANSITION`** (docs/10 §6):
 `DUPLICATE_NAME`, `ARCHIVED_RECORD_IMMUTABLE`, `LAST_ACTIVE_ENTITY`. Nothing transitions when a

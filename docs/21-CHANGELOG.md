@@ -27,6 +27,13 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   organisation, and codes across the organisation but only when set. `pathUnder()` and
   `isWithinSubtree()` live in `@financy/contracts` so the server that writes a path and any client
   that re-derives one after a local edit cannot disagree about its shape.
+- **Projects and categories** — `/v1/projects` (with `close`·`reopen` as well as
+  `archive`·`restore`) and `/v1/categories` (task 1.5.4). A project's `entityId` and
+  `departmentId` are validated against the caller's own organisation, because the composite
+  foreign key that used to make a cross-tenant reference impossible does not exist on MongoDB. A
+  category's `key` is create-only and its parent is immutable: policies name the key, and moving a
+  category between branches changes what every transaction already coded to it appears to have
+  been. System categories may be archived, never renamed — a later deploy reseeds by key.
 - **`@IfMatch()`** (`platform/concurrency`) — the precondition is a header rather than a body
   field, and it is mandatory: an optional one is a client that forgets, and the lost edit it
   prevents is invisible when it happens.

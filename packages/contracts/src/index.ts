@@ -19,6 +19,7 @@ export * from './categories.js';
 export * from './auth.js';
 export * from './people.js';
 export * from './organization.js';
+export * from './projects.js';
 export * from './audit.js';
 export * from './errors.js';
 export * from './pagination.js';
