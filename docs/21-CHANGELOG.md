@@ -32,6 +32,12 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   and writes a security event alongside the audit event, and folding it in would make every one of
   those a conditional inside a handler that mostly does something else. Deactivation revokes every
   session behind the membership and clears any department it headed.
+- **Session management for another member** — `GET`/`DELETE /v1/memberships/{id}/sessions`
+  (task 1.5.8). The list names every live session the _account_ holds, not only the ones bound to
+  this organisation: one account can be signed into several, and showing a filtered list would
+  make "revoke everything" look like it had worked when it had not. Revoking requires step-up and
+  leaves the membership active — "sign them out of everything" is what somebody who has lost a
+  laptop needs, and it is not the same request as removing their access.
 - **`POST /v1/auth/step-up`** — re-proves the password on the session already held, stamping
   `steppedUpAt`. Without it `@RequireStepUp()` was a permanent `403`: nothing else set that field,
   so every route carrying the decorator was unreachable by anyone. A failure counts towards the

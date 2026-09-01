@@ -447,4 +447,84 @@ describeWithDatabase('membership writes', () => {
       expect(me.role.key).toBe('ORG_ADMIN');
     });
   });
+
+  // ── sessions (task 1.5.8) ────────────────────────────────────────────────
+
+  describe('sessions', () => {
+    it('lists the live sessions behind a membership, marking the current one', async () => {
+      const response = expectStatus(
+        await request(server)
+          .get(`/v1/memberships/${admin.membershipId}/sessions`)
+          .set('Cookie', admin.cookie),
+        200,
+      );
+
+      const sessions = (
+        response.body as {
+          data: Array<{ id: string; isCurrent: boolean; userAgent: string | null }>;
+        }
+      ).data;
+
+      expect(sessions.length).toBeGreaterThan(0);
+      expect(sessions.some((session) => session.isCurrent)).toBe(true);
+
+      // No token and no hash, ever: this list is for recognising a device, and
+      // a hash on a screen is a hash in a screenshot in a support ticket.
+      expect(JSON.stringify(sessions)).not.toContain('tokenHash');
+    });
+
+    /**
+     * A stolen cookie must not be enough to lock a colleague out of their own
+     * account, so the revoke carries step-up like the role change does.
+     */
+    it('requires step-up to revoke', async () => {
+      const fresh = await register('revoker');
+
+      const response = expectStatus(
+        await request(server)
+          .delete(`/v1/memberships/${fresh.membershipId}/sessions`)
+          .set('Cookie', fresh.cookie),
+        403,
+      );
+
+      expect((response.body as { error: { code: string } }).error.code).toBe('STEP_UP_REQUIRED');
+    });
+
+    /**
+     * Revoking your own sessions spares the one you are using. Signing
+     * yourself out as a side effect of clearing your other devices is a
+     * surprise whose undo is a login you did not ask for.
+     */
+    it('spares the caller’s own session when they revoke their own', async () => {
+      const fresh = await register('self-revoker');
+
+      expectStatus(
+        await request(server)
+          .post('/v1/auth/step-up')
+          .set('Cookie', fresh.cookie)
+          .send({ password: PASSWORD }),
+        200,
+      );
+
+      expectStatus(
+        await request(server)
+          .delete(`/v1/memberships/${fresh.membershipId}/sessions`)
+          .set('Cookie', fresh.cookie)
+          .send(),
+        200,
+      );
+
+      // Still signed in.
+      expectStatus(await request(server).get('/v1/auth/session').set('Cookie', fresh.cookie), 200);
+    });
+
+    it("answers 404 for another organisation's membership", async () => {
+      expectStatus(
+        await request(server)
+          .get(`/v1/memberships/${admin.membershipId}/sessions`)
+          .set('Cookie', stranger.cookie),
+        404,
+      );
+    });
+  });
 });

@@ -3,6 +3,7 @@ import {
   deactivateMembershipSchema,
   listPeopleQuerySchema,
   updateMembershipSchema,
+  type ActiveSession,
   type ChangeRole,
   type DeactivateMembership,
   type ListPeopleQuery,
@@ -12,7 +13,7 @@ import {
   type Resource,
   type UpdateMembership,
 } from '@financy/contracts';
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 
 import { RequirePermission, RequireStepUp } from '../../platform/authorization/index.js';
 import { IfMatch } from '../../platform/concurrency/index.js';
@@ -133,6 +134,45 @@ export class MembershipsController {
   ): Promise<Resource<MembershipDetail>> {
     return {
       data: await this.memberships.reactivate(id, version),
+      meta: { correlationId: getCorrelationId() },
+    };
+  }
+
+  /**
+   * The live sessions behind a membership (task 1.5.8).
+   *
+   * Sessions belong to the account, not to the membership — one account can
+   * be signed into several organisations — so this lists all of them. An
+   * administrator about to revoke needs to know they are ending all of it.
+   */
+  @Get(':id/sessions')
+  @RequirePermission('session:revoke_any')
+  async sessions(@Param('id') id: string): Promise<Resource<ActiveSession[]>> {
+    return {
+      data: await this.memberships.listSessions(id),
+      meta: { correlationId: getCorrelationId() },
+    };
+  }
+
+  /**
+   * Sign someone out of everything, without removing their access.
+   *
+   * Step-up, because a stolen cookie should not be enough to lock a colleague
+   * out of their own account. `DELETE` on the collection rather than on one
+   * session: revoking devices one at a time is a race against whoever is
+   * using them.
+   *
+   * There is no `If-Match`. This does not edit the membership — its version
+   * does not move — and a precondition on a record the request does not
+   * change would be a precondition against nothing.
+   */
+  @Delete(':id/sessions')
+  @HttpCode(200)
+  @RequireStepUp()
+  @RequirePermission('session:revoke_any')
+  async revokeSessions(@Param('id') id: string): Promise<Resource<{ revoked: number }>> {
+    return {
+      data: { revoked: await this.memberships.revokeSessions(id) },
       meta: { correlationId: getCorrelationId() },
     };
   }

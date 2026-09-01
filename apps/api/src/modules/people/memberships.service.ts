@@ -1,6 +1,7 @@
 import {
   DEFAULT_ROLE_SCOPE,
   permissionsForRole,
+  type ActiveSession,
   type ChangeRole,
   type MembershipDetail,
   type RoleKey,
@@ -410,6 +411,113 @@ export class MembershipsService {
       });
 
       return toDetail(after);
+    });
+  }
+
+  /**
+   * The live sessions behind a membership (task 1.5.8).
+   *
+   * Sessions belong to the *user*, not to the membership — one account can be
+   * signed into several organisations — so this lists every live session that
+   * account holds, and says so rather than pretending to filter. An
+   * administrator revoking access needs to know they are ending all of it;
+   * showing only the ones bound to this organisation would make "revoke
+   * everything" look like it had worked when it had not.
+   *
+   * No token, no hash, ever. The list is for recognising a device, and a hash
+   * shown on a screen is a hash in a screenshot in a support ticket.
+   */
+  async listSessions(membershipId: string): Promise<ActiveSession[]> {
+    const organizationId = requireOrganization();
+    const currentSessionId = getContext()?.sessionId;
+
+    const membership = await this.database.unscoped.membership.findFirst({
+      where: { id: membershipId, organizationId },
+      select: { userId: true },
+    });
+
+    if (membership === null) throw new NotFoundError('Membership');
+
+    const rows = await this.database.unscoped.session.findMany({
+      where: { userId: membership.userId },
+      select: {
+        id: true,
+        ipAddress: true,
+        userAgent: true,
+        lastSeenAt: true,
+        createdAt: true,
+        revokedAt: true,
+        absoluteExpiresAt: true,
+      },
+      orderBy: [{ lastSeenAt: 'desc' }],
+    });
+
+    const now = new Date();
+
+    // Filtered here rather than with `revokedAt: null`: on MongoDB an optional
+    // field never written is absent, and Prisma's `null` filter does not match
+    // absent (ADR-0017) — that predicate would return nothing at all, and an
+    // empty session list reads as "nobody is signed in", which is the worst
+    // possible wrong answer on this particular screen.
+    return rows
+      .filter((row) => row.revokedAt === null && row.absoluteExpiresAt > now)
+      .map((row) => ({
+        id: row.id,
+        ipAddress: row.ipAddress,
+        userAgent: row.userAgent,
+        lastSeenAt: row.lastSeenAt.toISOString(),
+        createdAt: row.createdAt.toISOString(),
+        isCurrent: row.id === currentSessionId,
+      }));
+  }
+
+  /**
+   * Revoke every session behind a membership. Step-up is enforced at the route.
+   *
+   * The membership stays active — this is "sign them out of everything", not
+   * "remove their access". Somebody who has lost a laptop needs the first and
+   * would be badly served by the second, and an administrator who wanted the
+   * second has `deactivate`, which says so in the audit log.
+   */
+  async revokeSessions(membershipId: string): Promise<number> {
+    const organizationId = requireOrganization();
+    const currentSessionId = getContext()?.sessionId;
+
+    return this.database.unscoped.$transaction(async (tx) => {
+      const membership = await tx.membership.findFirst({
+        where: { id: membershipId, organizationId },
+        select: { id: true, userId: true },
+      });
+
+      if (membership === null) throw new NotFoundError('Membership');
+
+      // The caller's own session is spared when they are revoking their own
+      // sessions: signing yourself out as a side effect of clearing your other
+      // devices is a surprise, and the undo is a fresh login you did not ask
+      // for.
+      const revoked = await this.sessions.revokeAllForUser(
+        tx,
+        membership.userId,
+        'REVOKED_BY_ADMIN',
+        currentSessionId,
+      );
+
+      await this.audit.record(tx, {
+        action: 'membership.sessions_revoked',
+        resourceType: 'membership',
+        resourceId: membershipId,
+        metadata: { sessionsRevoked: revoked },
+      });
+
+      await this.securityEvents.record(tx, {
+        type: 'SESSION_REVOKED',
+        organizationId,
+        userId: membership.userId,
+        membershipId,
+        metadata: { sessionsRevoked: revoked, byAnotherMember: true },
+      });
+
+      return revoked;
     });
   }
 

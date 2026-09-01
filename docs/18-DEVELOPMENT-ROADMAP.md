@@ -199,7 +199,7 @@ than null (ADR-0017). Both were plausible code that a reader would have approved
 | 1.5.5 | Memberships: list, detail, update, role change (step-up), deactivate/reactivate | ✅ API; no screen yet |
 | 1.5.6 | Invitations: create, accept, revoke, resend, expiry                             | ✅ API; no screen yet |
 | 1.5.7 | Last-admin and self-elevation guards (INV-03, INV-04)                           | ✅ see the note below |
-| 1.5.8 | Session management for another user (step-up)                                   |                       |
+| 1.5.8 | Session management for another user (step-up)                                   | ✅ API; no screen yet |
 
 **1.5.1 and 1.5.2 are the API only, and the status column says so.** The endpoints exist, enforce
 their permission, take a mandatory `If-Match`, and write an audit event inside the same
