@@ -127,6 +127,13 @@ describe('every route declares its access', () => {
       'AuthController.register',
       'HealthController.live',
       'HealthController.ready',
+      // The invitation token *is* the authorisation: it determines which
+      // organisation is being joined, so there is no session to scope by.
+      // Both answer an identical 404 for a token that is unknown, spent,
+      // revoked, or expired, because distinguishing those tells somebody
+      // guessing at tokens which guesses were close.
+      'InvitationAcceptanceController.accept',
+      'InvitationAcceptanceController.preview',
     ]);
   });
 });

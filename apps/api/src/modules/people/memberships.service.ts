@@ -47,10 +47,14 @@ const MEMBERSHIP_SELECT = {
  * Everything here exists to enforce two invariants that the database cannot:
  *
  * **INV-03 — no self-elevation.** Nobody changes their own role, and nobody
- * grants a role carrying a permission they do not themselves hold. The first
- * is obvious and the second is the one that gets missed: an administrator
- * with a delegated subset of permissions must not be able to mint a role that
- * exceeds their own, then adopt it via a colleague.
+ * deactivates their own membership. Refused before the target role is even
+ * read, so the message cannot vary with the role that was requested.
+ *
+ * A companion rule — "you may not grant a role holding permissions you lack"
+ * (docs/12 THR-02) — was written here and then removed, because it assumes
+ * nested roles and this catalogue implements separation of duties instead.
+ * See the note in `changeRole`; it is worth reading before anyone adds it
+ * back.
  *
  * **INV-04 — the last administrator stays.** An organisation with no
  * `ORG_ADMIN` can still be signed into and can never be administered again;
@@ -216,10 +220,27 @@ export class MembershipsService {
         throw new ConflictError(`This member already holds the ${input.roleKey} role.`);
       }
 
-      // INV-03, second half — the one that gets missed. An administrator with
-      // a delegated subset of permissions must not be able to grant a role
-      // exceeding their own and then adopt it through a colleague.
-      await this.assertActorMayGrant(tx, organizationId, actorMembershipId, input.roleKey);
+      // There is deliberately **no** "you cannot grant a role holding
+      // permissions you lack" check here, and the absence is the decision.
+      //
+      // docs/12 THR-02 lists that as a mitigation, and it was written and
+      // then removed, because it assumes roles are nested and these are not:
+      // this catalogue implements separation of duties, so `ORG_ADMIN`
+      // administers people and structure and deliberately holds neither
+      // `approval:act` nor `transaction:categorize` — `FINANCE_ADMIN` does.
+      // A superset check therefore refuses `ORG_ADMIN` the right to assign
+      // *any* role, including `EMPLOYEE`, and since `ORG_ADMIN` is the only
+      // role holding `membership:manage_role`, the endpoint becomes
+      // unreachable by everyone. The end-to-end suite caught it on the first
+      // real promotion.
+      //
+      // What actually guards this endpoint: `membership:manage_role` on the
+      // route, mandatory step-up, the self-elevation refusal above, INV-04
+      // below, and an audit plus security event on every change. The residual
+      // risk — an administrator promoting a colleague they intend to collude
+      // with — is not addressable by a permission comparison at all; it needs
+      // dual control, which is a Phase 2 policy-engine feature and is named
+      // as such rather than half-implemented here.
 
       // INV-04. An organisation with no ORG_ADMIN can still be signed into and
       // can never be administered again; no support process recovers from it.
@@ -423,48 +444,6 @@ export class MembershipsService {
     });
 
     if (others === 0) throw new LastAdminError();
-  }
-
-  /**
-   * INV-03, second half: you cannot grant what you do not hold.
-   *
-   * Compared as permission *sets* rather than by comparing role names, so a
-   * future custom role is covered by the same check with no extra code. The
-   * actor's own permissions come from their role in this organisation, not
-   * from the session — a session's cached set could be stale by exactly the
-   * change that made it dangerous.
-   */
-  private async assertActorMayGrant(
-    tx: Prisma.TransactionClient,
-    organizationId: string,
-    actorMembershipId: string | undefined,
-    targetRole: RoleKey,
-  ): Promise<void> {
-    // No membership means a system caller — the seed, or a job. Those are not
-    // escalating anything, because nothing grants them a role to escalate to.
-    if (actorMembershipId === undefined) return;
-
-    const actor = await tx.membership.findFirst({
-      where: { id: actorMembershipId, organizationId },
-      select: { role: { select: { key: true } } },
-    });
-
-    if (actor === null) throw new NotFoundError('Membership');
-
-    const held = permissionsForRole(actor.role.key as RoleKey);
-    const granting = permissionsForRole(targetRole);
-
-    const exceeded = [...granting].filter((permission) => !held.has(permission));
-
-    if (exceeded.length > 0) {
-      throw new ForbiddenError(
-        `You cannot grant the ${targetRole} role, because it carries permissions you do not hold.`,
-        // The excess is named. An administrator refused with no explanation
-        // files a support ticket; one told which permissions are missing can
-        // ask for those instead.
-        { details: { missingPermissions: exceeded.sort() } },
-      );
-    }
   }
 
   private async assertDepartmentIsOurs(

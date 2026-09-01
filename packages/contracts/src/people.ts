@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 
+import { passwordSchema } from './auth.js';
 import { MEMBERSHIP_SCOPES, ROLE_KEYS } from './permissions.js';
 import {
   emailSchema,
@@ -176,3 +177,100 @@ export type UpdateMembership = z.infer<typeof updateMembershipSchema>;
 export type ChangeRole = z.infer<typeof changeRoleSchema>;
 export type DeactivateMembership = z.infer<typeof deactivateMembershipSchema>;
 export type MembershipDetail = z.infer<typeof membershipDetailSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Invitations (docs/10 §5.1 and §5.3, task 1.5.6)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * `POST /v1/memberships/invitations`.
+ *
+ * The role is chosen at invite time rather than after acceptance, so the
+ * person arrives with the access they were meant to have. Inviting somebody
+ * and then promoting them is two audit events describing one intent, and the
+ * window between them is a real account with the wrong permissions.
+ */
+export const createInvitationSchema = z.strictObject({
+  email: emailSchema,
+  roleKey: z.enum(ROLE_KEYS),
+  departmentId: idSchema.nullable().optional(),
+});
+
+/**
+ * The invitation as an administrator sees it.
+ *
+ * No token. The plaintext exists once, in the create and resend responses,
+ * and is never readable again — the stored form is a hash, so a leaked
+ * listing cannot be used to join an organisation.
+ */
+export const invitationSchema = z.object({
+  id: idSchema,
+  email: emailSchema,
+  roleKey: z.enum(ROLE_KEYS),
+  departmentId: idSchema.nullable(),
+  invitedByMembershipId: idSchema,
+  expiresAt: timestampSchema,
+  acceptedAt: timestampSchema.nullable(),
+  revokedAt: timestampSchema.nullable(),
+  resentCount: z.int().min(0),
+  createdAt: timestampSchema,
+  /** Derived, so a client does not re-implement the expiry comparison. */
+  status: z.enum(['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED']),
+});
+
+/**
+ * What creating or resending returns.
+ *
+ * The **token travels in the response**, once, and this is a deliberate
+ * decision rather than a placeholder for an email. The inviter is already
+ * authorised to invite this person; handing them a link to pass on is how
+ * every "copy invite link" flow works, and it means an invitation is not
+ * silently dead when mail delivery fails — which it does, to exactly the
+ * corporate mail filters this product's customers run.
+ *
+ * When the mailer lands (Phase 2) it sends the same link. It does not become
+ * the only way to obtain one.
+ */
+export const issuedInvitationSchema = z.object({
+  invitation: invitationSchema,
+  /** Single-use, expiring, and never recoverable from the stored hash. */
+  token: nonEmptyString(200),
+});
+
+/** `GET /v1/auth/invitations/{token}` — the acceptance screen's preflight. */
+export const invitationPreviewSchema = z.object({
+  organizationName: nonEmptyString(200),
+  email: emailSchema,
+  roleKey: z.enum(ROLE_KEYS),
+  /** Whether the invitee already has an account, so the form knows what to ask. */
+  requiresPassword: z.boolean(),
+  expiresAt: timestampSchema,
+});
+
+/**
+ * `POST /v1/auth/invitations/accept`.
+ *
+ * `password` is required only for a new account and refused for an existing
+ * one: accepting an invitation must never be a way to set the password of an
+ * account somebody else controls. The service enforces the pairing, because
+ * only it knows whether the address already has an account — and the preview
+ * endpoint says which case it is without revealing anything the token holder
+ * does not already know.
+ */
+export const acceptInvitationSchema = z.strictObject({
+  token: nonEmptyString(200),
+  fullName: nonEmptyString(120).optional(),
+  password: passwordSchema.optional(),
+});
+
+export type CreateInvitation = z.infer<typeof createInvitationSchema>;
+export type Invitation = z.infer<typeof invitationSchema>;
+export type IssuedInvitation = z.infer<typeof issuedInvitationSchema>;
+export type InvitationPreview = z.infer<typeof invitationPreviewSchema>;
+export type AcceptInvitation = z.infer<typeof acceptInvitationSchema>;
+
+/** How long an invitation stays usable. Long enough to survive a weekend. */
+export const INVITATION_TTL_HOURS = 72;
+
+/** Resends per invitation per day (docs/10 §5.3). */
+export const INVITATION_RESEND_LIMIT_PER_DAY = 3;

@@ -197,7 +197,7 @@ than null (ADR-0017). Both were plausible code that a reader would have approved
 | 1.5.3 | Departments: tree, path maintenance, cycle rejection, head                      | ✅ API; no screen yet |
 | 1.5.4 | Projects and categories CRUD                                                    | ✅ API; no screen yet |
 | 1.5.5 | Memberships: list, detail, update, role change (step-up), deactivate/reactivate | ✅ API; no screen yet |
-| 1.5.6 | Invitations: create, accept, revoke, resend, expiry                             |                       |
+| 1.5.6 | Invitations: create, accept, revoke, resend, expiry                             | ✅ API; no screen yet |
 | 1.5.7 | Last-admin and self-elevation guards (INV-03, INV-04)                           | ✅ see the note below |
 | 1.5.8 | Session management for another user (step-up)                                   |                       |
 
@@ -238,20 +238,44 @@ meta-test names it alongside `session` and `logout` — requiring step-up to obt
 lock whose key is inside it, and borrowing a permission every role happens to hold would have
 satisfied the meta-test while teaching the next reader that permissions here are decorative.
 
-**INV-03 is two rules, and the second is the one that gets missed.** Nobody changes their own
-role — refused before the target role is even read, so the message cannot vary with the role that
-was requested — and nobody grants a role carrying a permission they do not themselves hold. The
-second matters for a delegated administrator: without it they could grant a role exceeding their
-own and adopt it through a colleague. It is compared as permission _sets_ rather than by role
-name, so a future custom role is covered by the same check with no extra code.
+**INV-03 is enforced as a self-rule, and the "cannot grant what you lack" companion was written
+and then removed.** Nobody changes their own role — refused before the target role is even read,
+so the message cannot vary with what was requested — and nobody deactivates their own membership.
 
-**INV-04's own path is implemented but not yet provable end-to-end, and that is worth stating.**
-The last-administrator check runs on both demotion and deactivation, counted through the
-organisation's own `ORG_ADMIN` role row rather than a global one. But every route to it in a test
-today goes through a _self_-change, which INV-03 refuses first — and a second administrator cannot
-be created until invitations exist (1.5.6). The e2e suite proves the self-guards and says so; the
-multi-administrator case gets its test with 1.5.6, and until then that branch is reviewed code
-rather than tested code.
+The companion rule from `docs/12` THR-02 ("a role may not grant permissions the granter lacks")
+was implemented as a permission-set comparison, and the end-to-end suite refuted it on the first
+real promotion: **this catalogue is deliberately not nested.** `docs/03` implements separation of
+duties, so `ORG_ADMIN` administers people and structure and holds neither `approval:act` nor
+`transaction:categorize` — `FINANCE_ADMIN` does. A superset check therefore refuses `ORG_ADMIN`
+the right to assign _any_ role including `EMPLOYEE`, and since `ORG_ADMIN` is the only role
+holding `membership:manage_role`, it makes the endpoint unreachable by everyone. It is removed,
+with the reasoning left in the code so nobody re-adds it from the threat model alone.
+
+What guards the endpoint instead: `membership:manage_role` on the route, mandatory step-up, the
+self-elevation refusal, INV-04, and an audit plus security event on every change. The residual
+risk — an administrator promoting a colleague they intend to collude with — is not addressable by
+comparing permission sets at all. It needs dual control, which belongs to the Phase 2 policy
+engine and is named there rather than half-implemented here.
+
+**INV-04 is now tested on its real path, which 1.5.6 unblocked.** The last-administrator check
+runs on demotion and deactivation, counted through the organisation's own `ORG_ADMIN` role row
+rather than a global one. Until an organisation could have a _second_ administrator, every route
+to it in a test went through a self-change that INV-03 refused first — so the branch was reviewed
+code rather than tested code. The invitation suite now invites a second `ORG_ADMIN`, demotes them
+(allowed, because another remains), and the self-guards cover the rest.
+
+**Invitations are the token, and the token is a bearer credential.** It is stored as a hash and
+returned exactly once, in the create and resend responses. Returning it at all is a decision, not
+a placeholder for an email: the inviter is already authorised to invite this person, so handing
+them a link to pass on is no wider a disclosure than the invitation itself, and it means an
+invitation is not silently dead when mail delivery fails — which is what corporate mail filters
+do to transactional email. The mailer, when it lands, sends the same link rather than becoming
+the only way to obtain one.
+
+Every failure to resolve a token — unknown, spent, revoked, expired — answers an identical `404`,
+because distinguishing them tells somebody guessing which guesses were close. And acceptance
+refuses a password when the address already has an account: without that refusal, "invite a
+colleague" is a way to set the password of an account somebody else controls.
 
 **`/v1/people` became `/v1/memberships`.** The specification (docs/10 §5.3) named the second; the
 first shipped by accident and matched nothing. One endpoint with two names is a drift that only

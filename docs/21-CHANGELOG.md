@@ -20,6 +20,12 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   makes the same check atomically; the change and its audit event commit in one transaction or
   neither does. `organizationSummarySchema` now carries `version`, because a screen with no
   version to send has no precondition to make.
+- **Invitations** — `/v1/memberships/invitations` for issuing, listing, resending, and revoking,
+  plus the two public halves at `/v1/auth/invitations` (task 1.5.6). The token is stored as a hash
+  and returned exactly once; every failure to resolve one — unknown, spent, revoked, expired —
+  answers an identical `404`, because distinguishing them tells somebody guessing which guesses
+  were close. Accepting refuses a password when the address already has an account: without that,
+  "invite a colleague" is a way to set the password of an account somebody else controls.
 - **Membership writes** — `/v1/memberships` with `role`, `deactivate`, and `reactivate` as
   separate endpoints (tasks 1.5.5 and 1.5.7). The role is not a field on the `PATCH`: it needs
   step-up re-authentication, refuses self-elevation and the demotion of the last administrator,
@@ -58,7 +64,7 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   writer's value in place, that the audit event commits with its change and names only the fields
   that moved, and that a cross-tenant `PATCH` is a `404` rather than a `403`.
 - **People, Settings, and the Audit log** — the three screens that finish Phase 1. Each reads a
-  live endpoint (`GET /v1/people`, `GET /v1/organization`, `GET /v1/audit-events`), enforces its
+  live endpoint (`GET /v1/memberships`, `GET /v1/organization`, `GET /v1/audit-events`), enforces its
   permission at the route as well as in the navigation, and shows the caller's own organisation
   and nobody else's. `BUILT_PHASES` is raised from `0` to `1`, so the shell stops marking them
   unbuilt. All three are read-only until task 1.5 adds the writes with the concurrency control and
@@ -84,6 +90,17 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   every one of those guarantees now rests on application code. The thirteen constraint tests that
   proved them are **inverted rather than deleted**, so the loss is recorded in executable form.
   Tenant isolation is now enforced in one layer instead of two; treat it accordingly.
+
+### Removed
+
+- **The "you may not grant a role holding permissions you lack" check** (docs/12 THR-02). It was
+  written, and the end-to-end suite refuted it on the first real promotion: this catalogue is
+  deliberately not nested — `ORG_ADMIN` administers people and structure and holds neither
+  `approval:act` nor `transaction:categorize`, because `FINANCE_ADMIN` does. A superset check
+  therefore refuses `ORG_ADMIN` the right to assign _any_ role, including `EMPLOYEE`, which makes
+  the only role that can call the endpoint unable to call it. The reasoning is left in the code so
+  nobody re-adds it from the threat model alone; the residual risk it aimed at needs dual control,
+  which is Phase 2.
 
 ### Fixed
 

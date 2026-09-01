@@ -10,14 +10,14 @@ import {
 } from '@financy/contracts';
 import { UnauthenticatedError } from '@financy/core';
 import { Body, Controller, Get, HttpCode, Post, Res } from '@nestjs/common';
-import type { CookieOptions, Response } from 'express';
+import type { Response } from 'express';
 
 import { Public } from '../../platform/authorization/index.js';
 import { ConfigService } from '../../platform/config/index.js';
 import { getContext } from '../../platform/request-context/index.js';
 import { ZodValidationPipe } from '../../platform/validation/index.js';
 import { AuthService } from './auth.service.js';
-import type { IssuedSession } from './session.service.js';
+import { cookieOptions, setSessionCookie } from './session-cookie.js';
 
 /**
  * `/v1/auth` (docs/10 §5.1).
@@ -48,7 +48,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<SessionResponse> {
     const result = await this.auth.register(dto);
-    this.setSessionCookie(response, result.session);
+    setSessionCookie(response, this.config, result.session);
 
     return this.auth.describeSession(result.membershipId, result.session.absoluteExpiresAt);
   }
@@ -66,7 +66,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<SessionResponse> {
     const result = await this.auth.login(dto);
-    this.setSessionCookie(response, result.session);
+    setSessionCookie(response, this.config, result.session);
 
     return this.auth.describeSession(result.membershipId, result.session.absoluteExpiresAt);
   }
@@ -116,7 +116,7 @@ export class AuthController {
       await this.auth.logout(sessionId);
     }
 
-    response.clearCookie(this.config.get('SESSION_COOKIE_NAME'), this.cookieOptions());
+    response.clearCookie(this.config.get('SESSION_COOKIE_NAME'), cookieOptions(this.config));
   }
 
   /** The current user, organisation, role, and resolved permission set. */
@@ -134,30 +134,5 @@ export class AuthController {
     );
 
     return this.auth.describeSession(context.membershipId, expiresAt);
-  }
-
-  // ── cookie ──────────────────────────────────────────────────────────────
-
-  private setSessionCookie(response: Response, session: IssuedSession): void {
-    response.cookie(this.config.get('SESSION_COOKIE_NAME'), session.token, {
-      ...this.cookieOptions(),
-      expires: session.absoluteExpiresAt,
-    });
-  }
-
-  private cookieOptions(): CookieOptions {
-    return {
-      // Script cannot read it. This is the property that matters.
-      httpOnly: true,
-      // `Lax` rather than `Strict`: `Strict` drops the cookie on a top-level
-      // navigation from an email link, so a user following an invitation
-      // arrives logged out. `Lax` still blocks the cross-site POST that CSRF
-      // needs.
-      sameSite: 'lax',
-      // Off locally so `http://localhost` works at all; required everywhere
-      // else, where a cookie sent over plaintext is a cookie in the clear.
-      secure: this.config.isProductionLike,
-      path: '/',
-    };
   }
 }
