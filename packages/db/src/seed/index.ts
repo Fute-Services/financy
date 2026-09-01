@@ -69,7 +69,8 @@ async function main(): Promise<void> {
       if (seed === 'system') {
         const result = await seedSystem(client);
         console.warn(
-          `seed:system — permissions +${result.permissionsCreated}/~${result.permissionsUpdated}`,
+          `seed:system — permissions +${result.permissionsCreated}/~${result.permissionsUpdated}, ` +
+            `organisations converged ${result.organizationsConverged} (grants +${result.grantsAdded}/-${result.grantsRemoved})`,
         );
       }
 

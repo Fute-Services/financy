@@ -549,10 +549,35 @@ idempotent) · 2.3.5 state machine · 2.3.6 server-computed totals (FR-SPD-006) 
 
 ### Epic 2.4 — Cards and transactions (abstraction)
 
-2.4.1 card schema (no PAN/CVV) · 2.4.2 `CardProvider` port + `MockCardProvider` · 2.4.3 card
-lifecycle · 2.4.4 limit history · 2.4.5 transaction schema with four status axes · 2.4.6 unique
-provider reference · 2.4.7 CSV import (idempotent, per-row results) · 2.4.8 auto-match to spend
-requests.
+| ID    | Task                                     | Status                               |
+| ----- | ---------------------------------------- | ------------------------------------ |
+| 2.4.1 | Card schema (no PAN/CVV)                 | ✅                                   |
+| 2.4.2 | `CardProvider` port + `MockCardProvider` | ✅                                   |
+| 2.4.3 | Card lifecycle                           | ✅                                   |
+| 2.4.4 | Limit history                            | ✅ with a mandatory reason           |
+| 2.4.5 | Transaction schema with four status axes | ✅                                   |
+| 2.4.6 | Unique provider reference                | ✅ per provider, not globally        |
+| 2.4.7 | CSV import (idempotent, per-row results) | ✅ rows as JSON; parsing at the edge |
+| 2.4.8 | Auto-match to spend requests             | ✅ opt-in, labelled, reversible      |
+
+**The import endpoint takes rows, not a file.** Parsing CSV belongs in the browser, where there is
+somebody to ask: it reads the file, shows what it found, lets them map the columns, and posts
+structured rows. An endpoint taking a file would have to guess at delimiters and encodings with
+nobody to ask, and would report its guesses as import failures.
+
+**Uniqueness is per provider.** Two banks numbering their own statements from 1 is normal, and a
+globally unique reference would import the second bank's file as a pile of duplicates.
+
+**Card visibility is one method, used by every read and every write pre-read.** Deriving it from
+the caller's permissions rather than accepting it as an argument is what keeps a new route from
+forgetting to narrow — the failure being silent and in the worst direction, since the endpoint
+that forgets shows the whole organisation's spending and looks like it works.
+
+**Known gap, and it is shared with every other module:** narrowing is org-wide-or-own. The
+`DEPARTMENT` scope a manager's membership carries is not yet enforced anywhere, so a manager sees
+their own cards rather than their team's. Enforcing it needs the membership scope in the request
+context and a department-subtree predicate, which is a cross-cutting workstream (§10) rather than
+something this epic should invent for cards alone.
 
 ### Epic 2.5 — Notifications
 
@@ -672,3 +697,8 @@ Continuous, not scheduled:
 - **Performance** — `EXPLAIN` assertions added with every list endpoint.
 - **Accessibility** — `axe` on every new route; keyboard pass each phase.
 - **Dependencies** — weekly audit; nothing added without a written justification.
+- **Membership scope** — the four scope levels in `docs/03 §4` are enforced as two: organisation-
+  wide with a `:read_all` grant, and own records without one. `DEPARTMENT` is carried on the
+  membership and read by nothing, so a manager sees their own records rather than their team's.
+  Closing it needs the scope in the request context and a department-subtree predicate shared by
+  every module, which is why it is here rather than inside whichever epic notices it next.

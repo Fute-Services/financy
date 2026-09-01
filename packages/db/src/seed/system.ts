@@ -2,10 +2,14 @@ import { PERMISSIONS } from '@financy/contracts';
 import { newId } from '@financy/core';
 
 import type { PrismaClient } from '../client.js';
+import { provisionOrganizationRoles } from './roles.js';
 
 export interface SystemSeedResult {
   permissionsCreated: number;
   permissionsUpdated: number;
+  organizationsConverged: number;
+  grantsAdded: number;
+  grantsRemoved: number;
 }
 
 /**
@@ -22,7 +26,13 @@ export interface SystemSeedResult {
  * reason. There is no organisation for a system seed to attach either to.
  */
 export async function seedSystem(prisma: PrismaClient): Promise<SystemSeedResult> {
-  const result: SystemSeedResult = { permissionsCreated: 0, permissionsUpdated: 0 };
+  const result: SystemSeedResult = {
+    permissionsCreated: 0,
+    permissionsUpdated: 0,
+    organizationsConverged: 0,
+    grantsAdded: 0,
+    grantsRemoved: 0,
+  };
 
   // One transaction: a half-seeded catalogue is a broken authorisation system,
   // and a deploy that failed midway should leave the previous state intact.
@@ -77,6 +87,35 @@ export async function seedSystem(prisma: PrismaClient): Promise<SystemSeedResult
      * as vocabulary.
      */
   });
+
+  /**
+   * Every existing organisation's grants are brought back into step.
+   *
+   * Without this the convergence above is only half of one. Roles are
+   * per-organisation, and `provisionOrganizationRoles` otherwise runs exactly
+   * once — at registration — so a permission added to the catalogue reaches
+   * new tenants and no existing one, and a permission *withdrawn* from the
+   * catalogue stays granted forever in every organisation that already
+   * existed. Both failures are silent, and the second is a security one: the
+   * capability somebody thought they had revoked is still held.
+   *
+   * **One transaction per organisation, not one for all of them.** A thousand
+   * organisations in a single transaction is a write nobody can retry and a
+   * lock nobody wants at deploy time; per-organisation, a failure halfway
+   * leaves each tenant either converged or untouched, and running it again
+   * finishes the job.
+   */
+  const organizations = await prisma.organization.findMany({ select: { id: true } });
+
+  for (const organization of organizations) {
+    const converged = await prisma.$transaction((tx) =>
+      provisionOrganizationRoles(tx, organization.id),
+    );
+
+    result.organizationsConverged += 1;
+    result.grantsAdded += converged.grantsAdded;
+    result.grantsRemoved += converged.grantsRemoved;
+  }
 
   return result;
 }

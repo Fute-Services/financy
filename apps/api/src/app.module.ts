@@ -19,6 +19,8 @@ import { OrganizationModule } from './modules/organization/index.js';
 import { PeopleModule } from './modules/people/index.js';
 import { PoliciesModule } from './modules/policies/index.js';
 import { ProjectsModule } from './modules/projects/index.js';
+import { CardsModule } from './modules/cards/index.js';
+import { TransactionsModule } from './modules/transactions/index.js';
 import { SpendModule } from './modules/spend/index.js';
 
 /**
@@ -49,6 +51,8 @@ import { SpendModule } from './modules/spend/index.js';
     ProjectsModule,
     PoliciesModule,
     SpendModule,
+    CardsModule,
+    TransactionsModule,
     AuditReadModule,
   ],
   providers: [

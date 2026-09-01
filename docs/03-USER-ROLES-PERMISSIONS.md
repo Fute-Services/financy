@@ -169,6 +169,7 @@ Legend: **✔** granted · **○** granted, scope-limited (see column note) · *
 | `spend_request:update`   | ○ own draft |  ○ own draft  | ○ own draft | ○ own draft |    ✖    |
 | `spend_request:cancel`   |    ○ own    |       ✔       |   ○ dept    |   ○ self    |    ✖    |
 | `card:read`              |      ✔      |       ✔       |   ○ dept    |   ○ self    |    ✔    |
+| `card:read_all`          |      ✔      |       ✔       |      ✖      |      ✖      |    ✔    |
 | `card:create`            |      ✔      |       ✔       |      ✖      |      ✖      |    ✖    |
 | `card:update_limit`      |      ✖      |       ✔       |      ✖      |      ✖      |    ✖    |
 | `card:lock`              |      ✔      |       ✔       |   ○ dept    |   ○ self    |    ✖    |

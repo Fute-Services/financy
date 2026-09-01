@@ -163,6 +163,10 @@ model Organization {
   approvalSteps       ApprovalStep[]
   approvalActions     ApprovalAction[]
   approvalDelegations ApprovalDelegation[]
+  cards                  Card[]
+  cardLimits             CardLimit[]
+  transactions           Transaction[]
+  transactionAdjustments TransactionAdjustment[]
 
   @@map("organizations")
 }
@@ -386,6 +390,12 @@ model Membership {
   delegationsGiven       ApprovalDelegation[] @relation("DelegatedFrom")
   delegationsReceived    ApprovalDelegation[] @relation("DelegatedTo")
 
+  cardsHeld              Card[]                  @relation("CardHolder")
+  cardLimitsSet          CardLimit[]             @relation("CardLimitAuthor")
+  transactions           Transaction[]           @relation("TransactionMember")
+  transactionsReviewed   Transaction[]           @relation("TransactionReviewer")
+  adjustmentsAuthored    TransactionAdjustment[] @relation("AdjustmentAuthor")
+
   /// One membership per user per organisation.
   @@unique([organizationId, userId])
   @@index([organizationId, status])
@@ -416,6 +426,8 @@ model Entity {
   organization  Organization   @relation(fields: [organizationId], references: [id])
   projects      Project[]
   spendRequests SpendRequest[]
+  cards         Card[]
+  transactions  Transaction[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -461,6 +473,8 @@ model Department {
 
   projects      Project[]
   spendRequests SpendRequest[]
+  cards         Card[]
+  transactions  Transaction[]
 
   /// **Not** unique on (organizationId, code), though PostgreSQL made it so.
   /// MongoDB treats every missing or null value in a unique index as the same
@@ -499,6 +513,7 @@ model Project {
   entity        Entity?        @relation(fields: [entityId], references: [id])
   department    Department?    @relation(fields: [departmentId], references: [id])
   spendRequests SpendRequest[]
+  transactions  Transaction[]
 
   /// **Not** unique on (organizationId, code), though PostgreSQL made it so.
   /// MongoDB treats every missing or null value in a unique index as the same
@@ -538,6 +553,7 @@ model Category {
   children Category[] @relation("CategoryTree")
 
   spendRequests SpendRequest[]
+  transactions  Transaction[]
 
   @@unique([organizationId, key])
   @@index([organizationId, parentId])
@@ -842,6 +858,8 @@ model SpendRequest {
   project      Project?     @relation(fields: [projectId], references: [id])
   category     Category?    @relation(fields: [categoryId], references: [id])
 
+  transactions Transaction[]
+
   @@unique([organizationId, reference])
   @@index([organizationId, status])
   @@index([organizationId, requesterMembershipId, status])
@@ -1020,4 +1038,343 @@ model ApprovalDelegation {
   @@index([organizationId, toMembershipId])
   @@index([toMembershipId])
   @@map("approval_delegations")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Cards and transactions (Phase 2, epic 2.4)
+//
+//  ⚠ **No model here ever holds a PAN, a CVV, or a full expiry date.**
+//  Not "we redact it before logging" — the columns do not exist, so there is
+//  no code path that could store one and no backup that could leak one. What
+//  is stored is a provider reference, the last four digits, and the expiry
+//  month and year: everything a person needs to recognise their own card and
+//  nothing anybody could spend with. Card data lives with the issuer, behind
+//  the `CardProvider` port (docs/13, ADR-0014).
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum CardType {
+  VIRTUAL
+  PHYSICAL
+}
+
+enum CardStatus {
+  /// Requested from the provider; not yet usable.
+  PENDING
+  ACTIVE
+  /// Temporarily unusable, and reversible — which is why it is distinct from
+  /// termination. Freezing a card somebody has mislaid must not throw away the
+  /// card they will find in an hour.
+  FROZEN
+  /// Permanent. A terminated card is never reactivated: the provider has
+  /// destroyed the credential, and pretending otherwise would leave a card
+  /// that looks alive and declines every charge.
+  TERMINATED
+}
+
+/// How often a card limit resets.
+enum LimitPeriod {
+  PER_TRANSACTION
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  /// Never resets. The card carries a lifetime ceiling.
+  TOTAL
+}
+
+/// A spending authorisation, not a payment credential.
+model Card {
+  id             String @id @map("_id")
+  organizationId String
+
+  /// What people call it. "Marketing — ad spend", not a number.
+  name String
+
+  cardType CardType   @default(VIRTUAL)
+  status   CardStatus @default(PENDING)
+
+  holderMembershipId String
+  entityId           String
+  departmentId       String?
+  projectId          String?
+  categoryId         String?
+
+  /// The policy that governs spend on this card, when one is named explicitly.
+  /// Null means the organisation's ordinary policy set applies.
+  policyId String?
+
+  /// The **current** limit, denormalised from the newest `CardLimit` row so a
+  /// list of cards does not need a join per row. `card_limits` remains the
+  /// record; this is a cache of its latest value, written in the same
+  /// transaction that writes the row.
+  limitAmount   String
+  limitCurrency String
+  limitPeriod   LimitPeriod @default(MONTHLY)
+
+  /// Everything the issuer knows and this system does not.
+  provider       String
+  providerCardId String?
+
+  /// Enough to recognise a card. Never enough to use one.
+  lastFour    String?
+  expiryMonth Int?
+  expiryYear  Int?
+
+  validFrom  DateTime?
+  validUntil DateTime?
+
+  /// Why it was frozen or terminated. Shown to the holder, who otherwise has a
+  /// card that stopped working with no explanation.
+  statusReason String?
+
+  version    Int       @default(1)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  holder       Membership   @relation("CardHolder", fields: [holderMembershipId], references: [id])
+  entity       Entity       @relation(fields: [entityId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
+
+  limits       CardLimit[]
+  transactions Transaction[]
+
+  @@unique([organizationId, provider, providerCardId])
+  @@index([organizationId, status])
+  @@index([organizationId, holderMembershipId])
+  @@index([holderMembershipId])
+  @@index([entityId])
+  @@index([departmentId])
+  @@map("cards")
+}
+
+/// One limit, as it was set. Append-only.
+///
+/// The history is the point. "Who raised this card to 50,000 and when?" is a
+/// question an auditor asks and an `UPDATE` cannot answer — so a change writes
+/// a row rather than editing one, and the card's denormalised limit is the
+/// newest row's value.
+model CardLimit {
+  id             String @id @map("_id")
+  organizationId String
+  cardId         String
+
+  amount   String
+  currency String
+  period   LimitPeriod
+
+  reason String?
+
+  setByMembershipId String?
+  effectiveFrom     DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  card         Card         @relation(fields: [cardId], references: [id])
+  setBy        Membership?  @relation("CardLimitAuthor", fields: [setByMembershipId], references: [id])
+
+  @@index([organizationId, cardId, effectiveFrom])
+  @@index([cardId])
+  @@index([setByMembershipId])
+  @@map("card_limits")
+}
+
+/// Where a transaction came from.
+enum TransactionSource {
+  CARD
+  IMPORT
+  MANUAL
+  PROVIDER
+}
+
+/// Has the money moved?
+enum TransactionStatus {
+  /// Authorised, not settled. The amount can still change.
+  PENDING
+  /// Settled. Financial fields are immutable from here (docs/09 §7.2).
+  POSTED
+  /// The authorisation lapsed or was refused. No money moved.
+  DECLINED
+  REVERSED
+}
+
+/// Is there evidence?
+enum ReceiptStatus {
+  NOT_REQUIRED
+  MISSING
+  REQUESTED
+  ATTACHED
+}
+
+/// Has finance looked at it?
+enum ReviewStatus {
+  PENDING
+  IN_REVIEW
+  REVIEWED
+  /// Reviewed and found wrong. Distinct from `PENDING`, because "nobody has
+  /// looked" and "somebody looked and disagreed" are different queues with
+  /// different next actions.
+  DISPUTED
+}
+
+/// Is it coded and exported?
+enum AccountingStatus {
+  UNMAPPED
+  MAPPED
+  EXPORTED
+}
+
+/// Did it match an authorisation?
+enum MatchStatus {
+  UNMATCHED
+  /// Matched automatically — marked as such so a human can tell a guess from
+  /// a decision, and reverse it without wondering who made it.
+  AUTO_MATCHED
+  MANUALLY_MATCHED
+  /// Deliberately matched to nothing: a genuine unplanned purchase.
+  NOT_APPLICABLE
+}
+
+/// Money that has actually moved.
+///
+/// **Four independent status axes**, and the independence is the design. A
+/// transaction can be posted, missing its receipt, unreviewed, and unmapped all
+/// at once — which is the ordinary state of a card charge on the day it lands.
+/// Collapsing them into one `status` column forces an order on four processes
+/// that genuinely run in parallel, and produces a list nobody can filter
+/// usefully.
+model Transaction {
+  id             String @id @map("_id")
+  organizationId String
+
+  entityId           String
+  cardId             String?
+  memberMembershipId String?
+  departmentId       String?
+  projectId          String?
+  categoryId         String?
+  vendorId           String?
+
+  /// The authorisation this fulfils, if any. Set by auto-match on import.
+  spendRequestId String?
+
+  /// Cleaned for display; `merchantRaw` is exactly what the provider sent.
+  /// Both, because the cleaned one is what people search and the raw one is
+  /// what an investigation needs on the day the cleaning was wrong.
+  merchantName         String
+  merchantRaw          String?
+  merchantCategoryCode String?
+
+  /// A decimal string. Prisma's MongoDB connector has no `Decimal`, and a
+  /// float amount is a rounding error waiting for a total (ADR-0017).
+  amount   String
+  currency String
+
+  /// What the organisation was actually billed, in its own currency.
+  billingAmount   String?
+  billingCurrency String?
+
+  /// Recorded together or not at all. A converted amount whose rate nobody can
+  /// reproduce is a number that cannot be checked.
+  fxRate       String?
+  fxRateSource String?
+  fxRateAsOf   DateTime?
+
+  source           TransactionSource @default(CARD)
+  status           TransactionStatus @default(PENDING)
+  receiptStatus    ReceiptStatus     @default(MISSING)
+  reviewStatus     ReviewStatus      @default(PENDING)
+  accountingStatus AccountingStatus  @default(UNMAPPED)
+  matchStatus      MatchStatus       @default(UNMATCHED)
+
+  memo String?
+
+  /// When the money moved, as the merchant saw it. Distinct from `postedAt`,
+  /// which is when it settled, and from `createdAt`, which is when this system
+  /// first heard about it. Reports that conflate the three drift by days.
+  occurredAt DateTime
+  postedAt   DateTime?
+
+  reviewedByMembershipId String?
+  reviewedAt             DateTime?
+  reviewNote             String?
+
+  provider              String
+  providerTransactionId String
+
+  /// Everything the provider sent, verbatim. The one place a field nobody has
+  /// modelled yet survives, which is what makes a reconciliation possible
+  /// before the schema catches up.
+  providerPayload Json?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  entity       Entity        @relation(fields: [entityId], references: [id])
+  card         Card?         @relation(fields: [cardId], references: [id])
+  member       Membership?   @relation("TransactionMember", fields: [memberMembershipId], references: [id])
+  reviewedBy   Membership?   @relation("TransactionReviewer", fields: [reviewedByMembershipId], references: [id])
+  department   Department?   @relation(fields: [departmentId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  category     Category?     @relation(fields: [categoryId], references: [id])
+  spendRequest SpendRequest? @relation(fields: [spendRequestId], references: [id])
+
+  adjustments TransactionAdjustment[]
+
+  /// The idempotency guarantee for imports. Re-running the same file writes
+  /// nothing new, because every row carries the provider's own identifier and
+  /// this index refuses the second copy.
+  @@unique([organizationId, provider, providerTransactionId])
+  @@index([organizationId, occurredAt])
+  @@index([organizationId, reviewStatus])
+  @@index([organizationId, receiptStatus])
+  @@index([organizationId, cardId, occurredAt])
+  @@index([organizationId, departmentId, occurredAt])
+  @@index([organizationId, categoryId, occurredAt])
+  @@index([cardId])
+  @@index([entityId])
+  @@index([memberMembershipId])
+  @@index([reviewedByMembershipId])
+  @@index([departmentId])
+  @@index([projectId])
+  @@index([categoryId])
+  @@index([spendRequestId])
+  @@map("transactions")
+}
+
+/// A correction to a posted transaction, as a new linked row.
+///
+/// Never an edit. A posted transaction's financial fields are immutable
+/// (docs/09 §1.6) because somebody has already reconciled against them, and a
+/// correction that rewrote the original would silently change a figure that
+/// has been reported.
+model TransactionAdjustment {
+  id             String @id @map("_id")
+  organizationId String
+  transactionId  String
+
+  /// `REFUND`, `CHARGEBACK`, `FEE`, `CORRECTION`.
+  adjustmentType String
+
+  amount   String
+  currency String
+
+  reason String
+
+  createdByMembershipId String?
+  createdAt             DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  transaction  Transaction  @relation(fields: [transactionId], references: [id])
+  createdBy    Membership?  @relation("AdjustmentAuthor", fields: [createdByMembershipId], references: [id])
+
+  @@index([organizationId, transactionId])
+  @@index([transactionId])
+  @@index([createdByMembershipId])
+  @@map("transaction_adjustments")
 }

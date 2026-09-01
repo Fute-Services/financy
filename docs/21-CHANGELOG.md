@@ -13,6 +13,44 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **Cards and transactions** — `/v1/cards` and `/v1/transactions` (Epic 2.4, and the screens for
+  both from Epic 2.6). **Nothing anywhere carries a card number**: there is no `pan`, no `cvv`,
+  and no full expiry — not redacted, absent — because a field that does not exist cannot be
+  logged, cannot appear in an error envelope, and cannot be in a backup. What travels is a
+  provider reference, the last four digits, and an expiry month and year. The issuer's own
+  identifier is read from the row and never put on it. A card's limit always carries a **period**,
+  with no default: "€2,000" means nothing until you say whether that is per transaction, per
+  month, or for the life of the card. Every limit change is a row with a mandatory reason, so
+  "who raised this to 50,000, and why?" has an answer years later; `cards.limitAmount` is a cache
+  of the newest row, written in the same transaction, and nothing reads it to decide anything.
+  Freezing and terminating are separate operations with separate permissions — freezing is what
+  somebody does when a card is mislaid, termination is permanent because the issuer destroys the
+  credential, and a single "deactivate" doing whichever seemed right is how a card somebody would
+  have found in an hour gets thrown away.
+- Transactions carry **four independent status axes** — settlement, receipt, review, and
+  accounting — because a charge on the day it lands is posted, missing its receipt, unreviewed,
+  and unmapped simultaneously and legitimately. One column would impose an order on four processes
+  that genuinely run in parallel and make "settled but still needing a receipt" impossible to ask
+  for. A posted transaction's **money is immutable** — amount, currency, merchant, and when it
+  happened — because somebody has already reconciled against it; a correction is a new linked
+  adjustment row, and there is no `POST /transactions` and no `DELETE` at all.
+- **Import is idempotent on the provider's own identifier**, which is a unique index rather than a
+  check, so it holds under two people importing the same file at the same moment. Each row is its
+  own transaction and each row gets its own result: "417 imported, 3 already present, 1 failed on
+  row 88 because its entity is archived" is something somebody can act on, and one malformed row
+  does not roll back the other four hundred and ninety-nine. Auto-match is **off unless asked
+  for**, requires the entity, the amount, and the timing to agree, refuses to choose between two
+  equally good candidates, and is recorded as `AUTO_MATCHED` rather than `MANUALLY_MATCHED` — a
+  guess that quietly consumes somebody's authorisation is worse than no match at all.
+- `card:read_all`, completing the set of organisation-wide read permissions. `spend_request` and
+  `transaction` each had one and `card` did not, so card visibility had been borrowing the
+  transaction permission to answer a question about cards. A contract test now asserts the three
+  are granted together or not at all, because a role holding one and not another sees the whole
+  organisation's cards and only its own charges — a split nobody designed and nobody would notice.
+- Thirty-four end-to-end tests against a real database covering the properties above, including
+  the one asserted against the whole serialised response rather than field by field: no card
+  number in any of it.
+
 - **Spend requests and approvals, end to end** — `/v1/spend-requests` and `/v1/approvals`
   (Epics 2.1–2.3). Creating produces a draft; **submitting** is what evaluates policy, records the
   decision verbatim, and opens the approval chain. A create that could arrive already approved
@@ -167,6 +205,31 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   which is Phase 2.
 
 ### Fixed
+
+- **A permission added to or removed from the catalogue never reached an organisation that already
+  existed.** Roles are per-organisation, and the routine that converges their grants ran exactly
+  once, at registration — so a new capability arrived for new tenants and no existing one, and a
+  capability _withdrawn_ stayed granted forever everywhere it had already been given out. Both
+  failures were silent and the second is a security one: the permission somebody thought they had
+  revoked was still held. The system seed, which runs on every deploy, now converges every
+  organisation's grants — one transaction per organisation, so a failure halfway leaves each
+  tenant either converged or untouched. Running it on the development database brought 219
+  organisations back into step; they were between one and five grants behind.
+- **A scope enforced only when listing is not a scope.** The card and transaction list routes
+  narrowed to the caller's own records without `card:read_all` / `transaction:read_all`, and the
+  detail routes did not — so an employee could read a colleague's charge, or their limit and what
+  had been spent against it, by id. Ids travel: in a support ticket, a screen share, a browser
+  history. One method now decides visibility for every read _and_ every write pre-read in both
+  modules, derived from the caller's permissions rather than passed in by the controller, because
+  an argument is something a new route can forget to pass and the resulting endpoint shows
+  everybody's spending and looks like it works.
+
+### Fixed (development)
+
+- `prisma generate` and the test suites raced on Windows. `prisma generate` rewrites the shared
+  query-engine binary in `node_modules`, and Turbo was free to run `@financy/db#build` while
+  another package's tests had that binary loaded, which failed the build with `EPERM` — a broken
+  run with nothing wrong in it. Every `test` task now waits for `@financy/db#build`.
 
 - **A policy naming a role that cannot approve opened a chain nobody could finish.** Two of the
   five roles do not hold `approval:act` — `ORG_ADMIN` administers people and structure while

@@ -24,6 +24,8 @@ export * from './policy.js';
 export * from './policy-admin.js';
 export * from './spend.js';
 export * from './approvals.js';
+export * from './cards.js';
+export * from './transactions.js';
 export * from './audit.js';
 export * from './errors.js';
 export * from './pagination.js';

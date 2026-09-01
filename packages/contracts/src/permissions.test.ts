@@ -150,6 +150,40 @@ describe('the invariants docs/03 §4 states', () => {
     expect(granted.has('user:read')).toBe(false);
   });
 
+  /**
+   * The `:read_all` permissions are what the services use to decide whether a
+   * read is narrowed to the caller's own records, so a role holding one and
+   * not another sees the whole organisation's cards and only its own charges —
+   * a split nobody designed and nobody would notice.
+   */
+  it('gives the three organisation-wide reads together, or not at all', () => {
+    const companions = ['spend_request:read_all', 'transaction:read_all', 'card:read_all'] as const;
+
+    for (const role of ROLE_KEYS) {
+      const granted = permissionsForRole(role);
+      const held = companions.filter((permission) => granted.has(permission));
+
+      expect(
+        held.length === 0 || held.length === companions.length,
+        `${role}: ${held.join(', ')}`,
+      ).toBe(true);
+    }
+  });
+
+  it('narrows every role that reads without an organisation-wide grant', () => {
+    for (const role of ROLE_KEYS) {
+      const granted = permissionsForRole(role);
+
+      // `card:read` without `card:read_all` is the scoped case, and it is the
+      // one the service must narrow. Asserted here so that adding a role with
+      // an unscoped read is a decision somebody makes rather than one that
+      // arrives by copying a list.
+      if (granted.has('card:read') && !granted.has('card:read_all')) {
+        expect(DEFAULT_ROLE_SCOPE[role], role).not.toBe('ORGANISATION');
+      }
+    }
+  });
+
   it('every role that can raise a spend request can also edit its own draft', () => {
     for (const role of ROLE_KEYS) {
       const granted = permissionsForRole(role);

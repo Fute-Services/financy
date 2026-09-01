@@ -37,6 +37,10 @@ export const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set<string>([
   'ApprovalStep',
   'ApprovalAction',
   'ApprovalDelegation',
+  'Card',
+  'CardLimit',
+  'Transaction',
+  'TransactionAdjustment',
 ]);
 
 /**
