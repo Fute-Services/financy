@@ -20,7 +20,7 @@ export const metadata: Metadata = { title: 'People' };
 /**
  * Everyone in this organisation.
  *
- * A server component reading `GET /v1/people` directly — no client fetch, no
+ * A server component reading `GET /v1/memberships` directly — no client fetch, no
  * loading skeleton, no chance of the browser and the server disagreeing about
  * who the caller is. The permission check below is a *usability* affordance;
  * the endpoint enforces `user:read` independently, so a caller who reaches
@@ -73,7 +73,7 @@ export default async function PeoplePage({ searchParams }: Props): Promise<React
   query.set('page', page);
   query.set('pageSize', '25');
 
-  const result = await apiFetch<OffsetCollection<Person>>(`/people?${query.toString()}`);
+  const result = await apiFetch<OffsetCollection<Person>>(`/memberships?${query.toString()}`);
   const isFiltered = q !== undefined || status !== undefined || roleKey !== undefined;
 
   const columns: ReadonlyArray<Column<Person>> = [

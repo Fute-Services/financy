@@ -20,6 +20,16 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   makes the same check atomically; the change and its audit event commit in one transaction or
   neither does. `organizationSummarySchema` now carries `version`, because a screen with no
   version to send has no precondition to make.
+- **Membership writes** — `/v1/memberships` with `role`, `deactivate`, and `reactivate` as
+  separate endpoints (tasks 1.5.5 and 1.5.7). The role is not a field on the `PATCH`: it needs
+  step-up re-authentication, refuses self-elevation and the demotion of the last administrator,
+  and writes a security event alongside the audit event, and folding it in would make every one of
+  those a conditional inside a handler that mostly does something else. Deactivation revokes every
+  session behind the membership and clears any department it headed.
+- **`POST /v1/auth/step-up`** — re-proves the password on the session already held, stamping
+  `steppedUpAt`. Without it `@RequireStepUp()` was a permanent `403`: nothing else set that field,
+  so every route carrying the decorator was unreachable by anyone. A failure counts towards the
+  same lockout as a failed login and records a `STEP_UP_FAILED` event.
 - **The department tree** — `GET/POST /v1/departments`, `GET/PATCH /v1/departments/{id}`, and
   `POST /v1/departments/{id}/archive`·`/restore` (task 1.5.3). Moving a node rewrites the `path`
   of its whole subtree in the same transaction as the move; a cycle is refused by one path
@@ -63,6 +73,10 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Changed
 
+- **`GET /v1/people` is now `GET /v1/memberships`.** The specification named the second; the first
+  shipped by accident. One endpoint with two names is a drift that only widens, so the old name is
+  gone rather than aliased — one line in the web app. The browser route stays `/people`, because
+  that is the screen's name and nothing about the URL bar is part of the API contract.
 - **The database is MongoDB Atlas, temporarily** (ADR-0017). PostgreSQL remains the design and
   the documents still describe it; no PostgreSQL was reachable on the development host, and the
   alternative was blocking Phase 1 entirely. Composite foreign keys, `CHECK` constraints,

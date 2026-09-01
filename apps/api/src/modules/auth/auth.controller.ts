@@ -1,9 +1,12 @@
 import {
   loginRequestSchema,
   registerRequestSchema,
+  stepUpRequestSchema,
   type LoginRequest,
   type RegisterRequest,
   type SessionResponse,
+  type StepUpRequest,
+  type StepUpResponse,
 } from '@financy/contracts';
 import { UnauthenticatedError } from '@financy/core';
 import { Body, Controller, Get, HttpCode, Post, Res } from '@nestjs/common';
@@ -66,6 +69,38 @@ export class AuthController {
     this.setSessionCookie(response, result.session);
 
     return this.auth.describeSession(result.membershipId, result.session.absoluteExpiresAt);
+  }
+
+  /**
+   * Re-prove the password on the session already in hand (FR-AUTH-010).
+   *
+   * Deliberately **not** `@Public()`: it operates on an existing session, and
+   * a public version taking an email would be a second login endpoint with a
+   * different name and none of login's protections.
+   *
+   * No `@RequirePermission()` either, and no `@RequireStepUp()` — requiring
+   * step-up to obtain step-up is a lock whose key is inside it. Like
+   * `session` and `logout`, this acts on the caller's own session rather than
+   * on organisation data, so it is session-scoped: the route-access meta-test
+   * names all three explicitly, so a fourth is a decision rather than an
+   * oversight.
+   *
+   * Borrowing an unrelated permission every role happens to hold would have
+   * satisfied the meta-test and taught the next reader that permissions here
+   * are decorative.
+   */
+  @Post('step-up')
+  @HttpCode(200)
+  async stepUp(
+    @Body(new ZodValidationPipe(stepUpRequestSchema)) dto: StepUpRequest,
+  ): Promise<StepUpResponse> {
+    const sessionId = getContext()?.sessionId;
+
+    if (sessionId === undefined) throw new UnauthenticatedError();
+
+    const expiresAt = await this.auth.stepUp(sessionId, dto.password);
+
+    return { expiresAt: expiresAt.toISOString() };
   }
 
   /**

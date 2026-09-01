@@ -22,7 +22,7 @@ import { AppModule } from '../src/app.module.js';
  *   customers and these specs are the only thing checking it still stands.
  * - **Permission enforcement at the route.** Hiding a nav item is a usability
  *   affordance; the endpoint refusing is the security control. An employee
- *   must get `403` from `/v1/people` whatever the sidebar showed them.
+ *   must get `403` from `/v1/memberships` whatever the sidebar showed them.
  */
 const HAS_DATABASE =
   (process.env['DATABASE_TEST_URL'] ?? process.env['DATABASE_URL']) !== undefined;
@@ -106,12 +106,12 @@ describeWithDatabase('directory', () => {
     };
   }
 
-  // ── /v1/people ───────────────────────────────────────────────────────────
+  // ── /v1/memberships ───────────────────────────────────────────────────────────
 
-  describe('GET /v1/people', () => {
+  describe('GET /v1/memberships', () => {
     it('lists the caller’s own organisation', async () => {
       const response = await request(server)
-        .get('/v1/people')
+        .get('/v1/memberships')
         .set('Cookie', alpha.cookie)
         .expect(200);
 
@@ -130,7 +130,7 @@ describeWithDatabase('directory', () => {
      */
     it('never returns another organisation’s members', async () => {
       const response = await request(server)
-        .get('/v1/people')
+        .get('/v1/memberships')
         .set('Cookie', beta.cookie)
         .expect(200);
 
@@ -143,7 +143,7 @@ describeWithDatabase('directory', () => {
 
     it('reports pagination a reader can act on', async () => {
       const response = await request(server)
-        .get('/v1/people?page=1&pageSize=10')
+        .get('/v1/memberships?page=1&pageSize=10')
         .set('Cookie', alpha.cookie)
         .expect(200);
 
@@ -152,7 +152,7 @@ describeWithDatabase('directory', () => {
 
     it('filters by a search term without leaking on a miss', async () => {
       const hit = await request(server)
-        .get('/v1/people?q=Owner alpha')
+        .get('/v1/memberships?q=Owner alpha')
         .set('Cookie', alpha.cookie)
         .expect(200);
       expect(hit.body.data).toHaveLength(1);
@@ -160,7 +160,7 @@ describeWithDatabase('directory', () => {
       // The same query from beta finds nothing — the term matches a real
       // person, just not one of theirs.
       const miss = await request(server)
-        .get('/v1/people?q=Owner alpha')
+        .get('/v1/memberships?q=Owner alpha')
         .set('Cookie', beta.cookie)
         .expect(200);
       expect(miss.body.data).toHaveLength(0);
@@ -170,13 +170,13 @@ describeWithDatabase('directory', () => {
       // Strict schemas: a typo'd filter must fail loudly. Silently ignoring
       // `?statuss=INACTIVE` returns every member and looks like it worked.
       await request(server)
-        .get('/v1/people?statuss=INACTIVE')
+        .get('/v1/memberships?statuss=INACTIVE')
         .set('Cookie', alpha.cookie)
         .expect(422);
     });
 
     it('refuses an unauthenticated caller', async () => {
-      await request(server).get('/v1/people').expect(401);
+      await request(server).get('/v1/memberships').expect(401);
     });
   });
 

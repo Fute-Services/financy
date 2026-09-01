@@ -69,6 +69,32 @@ export const switchOrganizationRequestSchema = z.strictObject({
   organizationId: idSchema,
 });
 
+/**
+ * `POST /v1/auth/step-up` — re-prove the password on the session you already
+ * hold (FR-AUTH-010, docs/12 §4).
+ *
+ * Not a second login: it issues no session and changes no cookie. It stamps
+ * `steppedUpAt` on the current one, which routes marked `@RequireStepUp()`
+ * check against `STEP_UP_WINDOW_MINUTES`.
+ *
+ * The reason it exists is the failure it prevents. A stolen session cookie is
+ * enough to read everything the victim can read; without a step-up it would
+ * also be enough to promote an attacker's own account to `ORG_ADMIN`, which
+ * turns a session theft into a permanent tenancy takeover. Requiring the
+ * password again puts a secret the cookie does not contain between the two.
+ *
+ * No email field: the session already says who is asking, and accepting one
+ * would let a caller step up as somebody else if the pair happened to match.
+ */
+export const stepUpRequestSchema = z.strictObject({
+  password: z.string().min(1, { error: 'is required' }),
+});
+
+export const stepUpResponseSchema = z.object({
+  /** When the window closes. The UI counts down against it. */
+  expiresAt: timestampSchema,
+});
+
 // ── Responses ─────────────────────────────────────────────────────────────
 
 export const sessionUserSchema = z.object({
@@ -130,3 +156,5 @@ export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
 export type SwitchOrganizationRequest = z.infer<typeof switchOrganizationRequestSchema>;
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 export type ActiveSession = z.infer<typeof activeSessionSchema>;
+export type StepUpRequest = z.infer<typeof stepUpRequestSchema>;
+export type StepUpResponse = z.infer<typeof stepUpResponseSchema>;

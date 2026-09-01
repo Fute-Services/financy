@@ -196,9 +196,9 @@ than null (ADR-0017). Both were plausible code that a reader would have approved
 | 1.5.2 | Entities CRUD + archive                                                         | ✅ API; no screen yet |
 | 1.5.3 | Departments: tree, path maintenance, cycle rejection, head                      | ✅ API; no screen yet |
 | 1.5.4 | Projects and categories CRUD                                                    | ✅ API; no screen yet |
-| 1.5.5 | Memberships: list, detail, update, role change (step-up), deactivate/reactivate |                       |
+| 1.5.5 | Memberships: list, detail, update, role change (step-up), deactivate/reactivate | ✅ API; no screen yet |
 | 1.5.6 | Invitations: create, accept, revoke, resend, expiry                             |                       |
-| 1.5.7 | Last-admin and self-elevation guards (INV-03, INV-04)                           |                       |
+| 1.5.7 | Last-admin and self-elevation guards (INV-03, INV-04)                           | ✅ see the note below |
 | 1.5.8 | Session management for another user (step-up)                                   |                       |
 
 **1.5.1 and 1.5.2 are the API only, and the status column says so.** The endpoints exist, enforce
@@ -226,6 +226,39 @@ anything is written, by one path comparison rather than by walking parents.
 members is a `409` naming what is in the way. Cascading would archive rows nobody asked about,
 and restoring the parent afterwards cannot know which children the cascade archived and which
 were already archived on their own.
+
+**`@RequireStepUp()` was a lock with no key, and 1.5.5 could not ship without cutting one.**
+Nothing in the application set `steppedUpAt`, so every route carrying that decorator would have
+answered `403` to everybody, forever — which reads to an operator as a bug and to a developer as a
+reason to delete the decorator. `POST /v1/auth/step-up` (part of 1.3.6, brought forward) re-proves
+the password on the session already held: it issues nothing, changes no cookie, stamps
+`steppedUpAt`, and a failure counts towards the same lockout as a failed login and writes a
+`STEP_UP_FAILED` event. It is session-scoped rather than permission-gated, and the route-access
+meta-test names it alongside `session` and `logout` — requiring step-up to obtain step-up is a
+lock whose key is inside it, and borrowing a permission every role happens to hold would have
+satisfied the meta-test while teaching the next reader that permissions here are decorative.
+
+**INV-03 is two rules, and the second is the one that gets missed.** Nobody changes their own
+role — refused before the target role is even read, so the message cannot vary with the role that
+was requested — and nobody grants a role carrying a permission they do not themselves hold. The
+second matters for a delegated administrator: without it they could grant a role exceeding their
+own and adopt it through a colleague. It is compared as permission _sets_ rather than by role
+name, so a future custom role is covered by the same check with no extra code.
+
+**INV-04's own path is implemented but not yet provable end-to-end, and that is worth stating.**
+The last-administrator check runs on both demotion and deactivation, counted through the
+organisation's own `ORG_ADMIN` role row rather than a global one. But every route to it in a test
+today goes through a _self_-change, which INV-03 refuses first — and a second administrator cannot
+be created until invitations exist (1.5.6). The e2e suite proves the self-guards and says so; the
+multi-administrator case gets its test with 1.5.6, and until then that branch is reviewed code
+rather than tested code.
+
+**`/v1/people` became `/v1/memberships`.** The specification (docs/10 §5.3) named the second; the
+first shipped by accident and matched nothing. One endpoint with two names is a drift that only
+widens, so the old name is gone rather than aliased — one line in the web app and the e2e suite.
+The _language_ stays: "people" is what the screen is called, because a `Membership` is an
+account's presence in one organisation and that is the distinction the domain cares about, not
+the one the URL should carry.
 
 **A category key is create-only, and that is 1.5.4's one real constraint.** A policy rule says
 "airfare over 500 needs finance approval" by naming `travel_airfare`. Letting a `PATCH` change the

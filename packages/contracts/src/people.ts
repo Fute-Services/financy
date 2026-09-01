@@ -13,7 +13,13 @@
 import { z } from 'zod';
 
 import { MEMBERSHIP_SCOPES, ROLE_KEYS } from './permissions.js';
-import { emailSchema, idSchema, nonEmptyString, timestampSchema } from './primitives.js';
+import {
+  emailSchema,
+  idSchema,
+  nonEmptyString,
+  timestampSchema,
+  versionSchema,
+} from './primitives.js';
 import { strictQuery } from './filters.js';
 import { offsetPaginationQuerySchema } from './pagination.js';
 
@@ -94,3 +100,79 @@ export const listPeopleQuerySchema = strictQuery({
 });
 
 export type ListPeopleQuery = z.infer<typeof listPeopleQuerySchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Writes (docs/10 §5.3, tasks 1.5.5 and 1.5.7)
+//
+//  The role is **not** in `updateMembershipSchema`. It has its own endpoint
+//  because it is the one field whose change is a privilege decision rather
+//  than a data correction: it needs step-up re-authentication, it must refuse
+//  self-elevation (INV-03) and the demotion of the last administrator
+//  (INV-04), and it writes a security event as well as an audit event
+//  (INV-08). Folding it into the general PATCH would make every one of those
+//  a conditional inside a handler that mostly does something else.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * `PATCH /v1/memberships/{id}` — department, manager, and scope.
+ *
+ * `status` is absent: deactivation revokes sessions and has its own endpoint,
+ * and a PATCH that could set `INACTIVE` would be a way to sign someone out
+ * without the audit trail saying that is what happened.
+ */
+export const updateMembershipSchema = z
+  .strictObject({
+    departmentId: idSchema.nullable().optional(),
+    /** `null` clears the reporting line. Cycles are refused by the service. */
+    managerMembershipId: idSchema.nullable().optional(),
+    scope: z.enum(MEMBERSHIP_SCOPES).optional(),
+    /**
+     * Which entities this membership may see, when `scope` is `ENTITY`.
+     *
+     * PostgreSQL required at least one via a CHECK; the service does now. An
+     * `ENTITY`-scoped membership with an empty list can see nothing at all,
+     * which reads to the person as a broken account rather than as a
+     * deliberate restriction.
+     */
+    entityScope: z.array(idSchema).max(50).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'Supply at least one field to change.',
+  });
+
+/**
+ * `POST /v1/memberships/{id}/role`.
+ *
+ * A reason is mandatory and is not decoration: a role change is the single
+ * most consequential thing an administrator can do to another person's
+ * account, and six months later "why does this person have finance access"
+ * is a question the audit log should be able to answer without asking anyone.
+ */
+export const changeRoleSchema = z.strictObject({
+  roleKey: z.enum(ROLE_KEYS),
+  reason: nonEmptyString(500),
+});
+
+/** `POST /v1/memberships/{id}/deactivate`. */
+export const deactivateMembershipSchema = z.strictObject({
+  reason: nonEmptyString(500),
+});
+
+/**
+ * One membership in full, as the detail screen and every write return it.
+ *
+ * `permissions` is resolved from the role rather than stored, so the list a
+ * reader sees is the list the guard will enforce — a cached copy would drift
+ * the moment the catalogue changed.
+ */
+export const membershipDetailSchema = personSchema.extend({
+  managerMembershipId: idSchema.nullable(),
+  entityScope: z.array(idSchema),
+  permissions: z.array(z.string()),
+  version: versionSchema,
+});
+
+export type UpdateMembership = z.infer<typeof updateMembershipSchema>;
+export type ChangeRole = z.infer<typeof changeRoleSchema>;
+export type DeactivateMembership = z.infer<typeof deactivateMembershipSchema>;
+export type MembershipDetail = z.infer<typeof membershipDetailSchema>;

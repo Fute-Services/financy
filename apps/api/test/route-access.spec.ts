@@ -97,7 +97,14 @@ describe('every route declares its access', () => {
      * are listed by name so adding another one is a decision rather than an
      * oversight.
      */
-    const sessionOnly = ['AuthController.session', 'AuthController.logout'];
+    const sessionOnly = [
+      'AuthController.session',
+      'AuthController.logout',
+      // Step-up cannot require a permission: it is how a caller proves
+      // themselves again, and gating it behind one borrowed from elsewhere
+      // would teach the next reader that permissions here are decorative.
+      'AuthController.stepUp',
+    ];
     const unexplained = undeclared.filter((label) => !sessionOnly.includes(label));
 
     expect(

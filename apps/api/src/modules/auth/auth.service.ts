@@ -227,6 +227,87 @@ export class AuthService {
     });
   }
 
+  /**
+   * Re-prove the password on the session already in hand (FR-AUTH-010).
+   *
+   * Not a second login: no session is issued, no cookie changes. It stamps
+   * `steppedUpAt` on the current session, which `@RequireStepUp()` routes
+   * check against `STEP_UP_WINDOW_MINUTES`.
+   *
+   * **Without this, `@RequireStepUp()` is a permanent refusal.** Nothing else
+   * in the application sets `steppedUpAt`, so every route carrying that
+   * decorator would answer `403` to everyone, forever — a lock with no key,
+   * which reads to an operator as a bug and to a developer as a reason to
+   * remove the decorator.
+   *
+   * A failure here counts towards the same lockout as a failed login and
+   * records a `STEP_UP_FAILED` event. Someone holding a stolen cookie and
+   * guessing at the password is exactly the signal the security log exists
+   * for, and it must not have an unlimited number of attempts merely because
+   * it arrived through a different endpoint.
+   */
+  async stepUp(sessionId: string, password: string): Promise<Date> {
+    return this.database.unscoped.$transaction(async (tx) => {
+      const session = await tx.session.findUnique({
+        where: { id: sessionId },
+        select: {
+          userId: true,
+          activeMembership: { select: { id: true, organizationId: true } },
+        },
+      });
+
+      // The guard resolved this session moments ago, so a miss means it was
+      // revoked in between — which is an expired session, not a bad password.
+      if (session === null) throw new UnauthenticatedError();
+
+      const user = await tx.user.findUnique({
+        where: { id: session.userId },
+        select: { id: true, passwordHash: true, failedLoginCount: true, lockedUntil: true },
+      });
+
+      if (user === null) throw new UnauthenticatedError();
+
+      const now = new Date();
+
+      if (user.lockedUntil !== null && user.lockedUntil > now) {
+        await this.password.verifyDummy(password);
+        throw new UnauthenticatedError('Password is incorrect.');
+      }
+
+      const valid = await this.password.verify(user.passwordHash, password);
+
+      if (!valid) {
+        await this.recordFailedLogin(tx, user.id, user.failedLoginCount, now);
+
+        if (session.activeMembership !== null) {
+          await this.security.record(tx, {
+            type: 'STEP_UP_FAILED',
+            organizationId: session.activeMembership.organizationId,
+            userId: user.id,
+            membershipId: session.activeMembership.id,
+          });
+        }
+
+        throw new UnauthenticatedError('Password is incorrect.');
+      }
+
+      await tx.session.update({
+        where: { id: sessionId },
+        data: { steppedUpAt: now },
+      });
+
+      // Reset the counter, as a successful login does: the person has proven
+      // who they are, and leaving nine failures banked would lock them out on
+      // their next typo.
+      await tx.user.update({
+        where: { id: user.id },
+        data: { failedLoginCount: 0, lockedUntil: null },
+      });
+
+      return new Date(now.getTime() + this.config.get('STEP_UP_WINDOW_MINUTES') * 60_000);
+    });
+  }
+
   async logout(sessionId: string): Promise<void> {
     await this.database.unscoped.$transaction(async (tx) => {
       await this.sessions.revoke(tx, sessionId, 'USER_LOGOUT');
