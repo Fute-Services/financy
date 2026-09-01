@@ -190,16 +190,32 @@ than null (ADR-0017). Both were plausible code that a reader would have approved
 
 ### Epic 1.5 — Organisation and people
 
-| ID    | Task                                                                            |
-| ----- | ------------------------------------------------------------------------------- |
-| 1.5.1 | Organisation CRUD + currency lock                                               |
-| 1.5.2 | Entities CRUD + archive                                                         |
-| 1.5.3 | Departments: tree, path maintenance, cycle rejection, head                      |
-| 1.5.4 | Projects and categories CRUD                                                    |
-| 1.5.5 | Memberships: list, detail, update, role change (step-up), deactivate/reactivate |
-| 1.5.6 | Invitations: create, accept, revoke, resend, expiry                             |
-| 1.5.7 | Last-admin and self-elevation guards (INV-03, INV-04)                           |
-| 1.5.8 | Session management for another user (step-up)                                   |
+| ID    | Task                                                                            | Status                |
+| ----- | ------------------------------------------------------------------------------- | --------------------- |
+| 1.5.1 | Organisation CRUD + currency lock                                               | ✅ API; no screen yet |
+| 1.5.2 | Entities CRUD + archive                                                         | ✅ API; no screen yet |
+| 1.5.3 | Departments: tree, path maintenance, cycle rejection, head                      |                       |
+| 1.5.4 | Projects and categories CRUD                                                    |                       |
+| 1.5.5 | Memberships: list, detail, update, role change (step-up), deactivate/reactivate |                       |
+| 1.5.6 | Invitations: create, accept, revoke, resend, expiry                             |                       |
+| 1.5.7 | Last-admin and self-elevation guards (INV-03, INV-04)                           |                       |
+| 1.5.8 | Session management for another user (step-up)                                   |                       |
+
+**1.5.1 and 1.5.2 are the API only, and the status column says so.** The endpoints exist, enforce
+their permission, take a mandatory `If-Match`, and write an audit event inside the same
+transaction as the change; the settings screen still renders them read-only. Marking the rows
+plainly done would claim a form that does not exist.
+
+**The currency lock is a method, not a `false`.** `isBaseCurrencyLocked()` is called by both the
+read — which sets `baseCurrencyLocked` on the payload — and the write, so the field the screen
+disables and the change the endpoint refuses can never disagree. It answers `false` today because
+nothing financial exists before Phase 2; when transactions and bills arrive it becomes an
+existence check across them and every caller is already asking the right question.
+
+**Three error codes were added rather than reusing `INVALID_STATE_TRANSITION`** (docs/10 §6):
+`DUPLICATE_NAME`, `ARCHIVED_RECORD_IMMUTABLE`, `LAST_ACTIVE_ENTITY`. Nothing transitions when a
+name collides, and a client told "invalid state transition" cannot put the message next to the
+field that caused it.
 
 ### Epic 1.6 — Audit
 

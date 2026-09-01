@@ -33,6 +33,9 @@ export type ErrorCode =
   | 'EXPENSE_ALREADY_REIMBURSED'
   | 'BUDGET_EXCEEDED'
   | 'LAST_ADMIN'
+  | 'LAST_ACTIVE_ENTITY'
+  | 'DUPLICATE_NAME'
+  | 'ARCHIVED_RECORD_IMMUTABLE'
   | 'CURRENCY_LOCKED'
   | 'MEMBERSHIP_EXISTS'
   | 'POLICY_BLOCKED'
@@ -276,6 +279,65 @@ export class LastAdminError extends ConflictError {
       'This is the last organisation administrator and cannot be removed or demoted. Promote another member first.',
       options,
     );
+  }
+}
+
+/**
+ * The organisation would be left with no active legal entity.
+ *
+ * A distinct code rather than a generic conflict, and for the same reason
+ * `LAST_ADMIN` is one: the client's response is specific — offer to create
+ * another entity — and a client should not have to match on message text to
+ * know that.
+ */
+export class LastActiveEntityError extends ConflictError {
+  override readonly code: ErrorCode = 'LAST_ACTIVE_ENTITY';
+  constructor(options?: AppErrorOptions) {
+    super(
+      'An organisation must keep at least one active entity. Create another before archiving this one.',
+      options,
+    );
+  }
+}
+
+/**
+ * A name that has to be unique within the organisation is already taken.
+ *
+ * `INVALID_STATE_TRANSITION` was the nearest existing code and it is wrong:
+ * nothing transitioned, and a client told "invalid state transition" for a
+ * duplicate name cannot put the message next to the field that caused it.
+ */
+export class DuplicateNameError extends ConflictError {
+  override readonly code: ErrorCode = 'DUPLICATE_NAME';
+  constructor(entity: string, name: string, options?: AppErrorOptions) {
+    // Phrased without an indefinite article on purpose: "a entity" / "an
+    // department" is the bug you get from interpolating a caller's noun after
+    // "a", and the fix is not a vowel check — it is a sentence that does not
+    // need one.
+    super(`Another ${entity.toLowerCase()} already uses the name "${name}".`, {
+      ...options,
+      // The field is named, so a form can attach the message to the input the
+      // person typed into rather than to a banner at the top of the page.
+      details: { ...options?.details, entity, field: 'name', value: name },
+    });
+  }
+}
+
+/**
+ * An archived record cannot be edited.
+ *
+ * Archiving exists so that history reads the same way tomorrow as it did when
+ * it was written; editing an archived row retroactively changes every export
+ * already produced from it. Restore it first, deliberately, and the change
+ * becomes visible in the audit trail as two events instead of a silent one.
+ */
+export class ArchivedRecordImmutableError extends ConflictError {
+  override readonly code: ErrorCode = 'ARCHIVED_RECORD_IMMUTABLE';
+  constructor(entity: string, options?: AppErrorOptions) {
+    super(`This ${entity.toLowerCase()} is archived. Restore it before editing.`, {
+      ...options,
+      details: { ...options?.details, entity },
+    });
   }
 }
 

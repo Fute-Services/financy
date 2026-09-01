@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   countryCodeSchema,
+  createEntitySchema,
   depthOfPath,
   entitySummarySchema,
   organizationSettingsSchema,
   organizationSummarySchema,
+  updateEntitySchema,
+  updateOrganizationSchema,
 } from './organization.js';
 
 const ORG_ID = '0192f3a1-9c2b-7d4e-8f01-2a3b4c5d6e7f';
@@ -67,6 +70,7 @@ describe('organizationSummarySchema', () => {
     countryCode: 'US',
     timezone: 'America/New_York',
     fiscalYearStartMonth: 1,
+    version: 1,
     createdAt: '2026-08-31T10:00:00.000Z',
   };
 
@@ -128,6 +132,7 @@ describe('organizationSettingsSchema', () => {
         countryCode: 'GB',
         timezone: 'UTC',
         fiscalYearStartMonth: 4,
+        version: 1,
         createdAt: '2026-08-31T10:00:00.000Z',
       },
       entities: [],
@@ -137,5 +142,118 @@ describe('organizationSettingsSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe('updateOrganizationSchema', () => {
+  it('accepts a single field', () => {
+    expect(updateOrganizationSchema.safeParse({ name: 'Acme Group' }).success).toBe(true);
+  });
+
+  /**
+   * An empty PATCH would burn a version and write an audit event describing
+   * no change, which makes the audit log longer and less true at once.
+   */
+  it('rejects an empty body', () => {
+    expect(updateOrganizationSchema.safeParse({}).success).toBe(false);
+  });
+
+  /**
+   * The slug appears in URLs people bookmark. It is not in the schema, so a
+   * client that sends one is told, rather than having it quietly dropped and
+   * believing the rename worked.
+   */
+  it('rejects slug, which is not editable', () => {
+    expect(updateOrganizationSchema.safeParse({ slug: 'renamed' }).success).toBe(false);
+  });
+
+  it('rejects the server-owned fields outright', () => {
+    for (const field of ['id', 'version', 'createdAt', 'baseCurrencyLocked']) {
+      expect(updateOrganizationSchema.safeParse({ name: 'Acme', [field]: 1 }).success).toBe(false);
+    }
+  });
+
+  /**
+   * `null` clears the legal name; omitting it leaves the existing one alone.
+   * Collapsing the two would make "remove our legal name" impossible to say.
+   */
+  it('distinguishes clearing the legal name from not touching it', () => {
+    expect(updateOrganizationSchema.safeParse({ legalName: null }).success).toBe(true);
+  });
+
+  /**
+   * A key whose value is `undefined` carries no instruction — the service
+   * skips an undefined field — so it must not count towards "at least one".
+   * JSON cannot express this, but a client assembling the body in TypeScript
+   * (`{ legalName: form.legalName || undefined }`) produces it constantly, and
+   * letting it through is a write that changes nothing, burns a version, and
+   * invalidates every other client's `If-Match`.
+   */
+  it('treats a key set to undefined as no field at all', () => {
+    expect(updateOrganizationSchema.safeParse({ legalName: undefined }).success).toBe(false);
+    expect(
+      updateOrganizationSchema.safeParse({ name: 'Acme Group', legalName: undefined }).success,
+    ).toBe(true);
+  });
+
+  it('normalises the country code rather than merely accepting it', () => {
+    const result = updateOrganizationSchema.safeParse({ countryCode: ' in ' });
+    expect(result.success && result.data.countryCode).toBe('IN');
+  });
+
+  it.each([0, 13, -1, 1.5])('rejects fiscal month %s', (month) => {
+    expect(updateOrganizationSchema.safeParse({ fiscalYearStartMonth: month }).success).toBe(false);
+  });
+});
+
+describe('createEntitySchema', () => {
+  const valid = { name: 'Acme UK', countryCode: 'GB', functionalCurrency: 'GBP' };
+
+  it('accepts the minimum an entity needs', () => {
+    expect(createEntitySchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('upper-cases the codes, so two spellings cannot become two values', () => {
+    const result = createEntitySchema.safeParse({
+      ...valid,
+      countryCode: 'gb',
+      functionalCurrency: 'gbp',
+    });
+    expect(result.success && result.data).toMatchObject({
+      countryCode: 'GB',
+      functionalCurrency: 'GBP',
+    });
+  });
+
+  it.each(['name', 'countryCode', 'functionalCurrency'])('requires %s', (field) => {
+    const { [field]: _omitted, ...rest } = valid as Record<string, unknown>;
+    expect(createEntitySchema.safeParse(rest).success).toBe(false);
+  });
+
+  /**
+   * `status` is the server's. A client that could post `ARCHIVED` here would
+   * be able to create a record that never had an active life, which nothing
+   * downstream expects to encounter.
+   */
+  it('rejects a client-supplied status', () => {
+    expect(createEntitySchema.safeParse({ ...valid, status: 'ARCHIVED' }).success).toBe(false);
+  });
+});
+
+describe('updateEntitySchema', () => {
+  it('accepts a single field', () => {
+    expect(updateEntitySchema.safeParse({ name: 'Acme UK Ltd' }).success).toBe(true);
+  });
+
+  it('rejects an empty body', () => {
+    expect(updateEntitySchema.safeParse({}).success).toBe(false);
+  });
+
+  /**
+   * Archiving is its own endpoint with its own guard — an organisation must
+   * keep one active entity. A `status` field here would route around it.
+   */
+  it('rejects status, which has its own endpoint and its own guard', () => {
+    expect(updateEntitySchema.safeParse({ status: 'ARCHIVED' }).success).toBe(false);
   });
 });

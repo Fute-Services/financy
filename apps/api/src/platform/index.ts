@@ -9,6 +9,7 @@
 
 export * from './audit/index.js';
 export * from './authorization/index.js';
+export * from './concurrency/index.js';
 export * from './config/index.js';
 export * from './crypto/index.js';
 export * from './database/index.js';

@@ -13,6 +13,26 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **The first settings writes** — `PATCH /v1/organization` (task 1.5.1) and the entity endpoints
+  `GET/POST /v1/entities`, `GET/PATCH /v1/entities/{id}`, and
+  `POST /v1/entities/{id}/archive`·`/restore` (task 1.5.2). Every write takes `If-Match` carrying
+  the record `version`, compares it, and then repeats it in the `where` clause so the database
+  makes the same check atomically; the change and its audit event commit in one transaction or
+  neither does. `organizationSummarySchema` now carries `version`, because a screen with no
+  version to send has no precondition to make.
+- **`@IfMatch()`** (`platform/concurrency`) — the precondition is a header rather than a body
+  field, and it is mandatory: an optional one is a client that forgets, and the lost edit it
+  prevents is invisible when it happens.
+- **Three error codes**, because the nearest existing one was `INVALID_STATE_TRANSITION` and it
+  was a lie in each case — nothing transitions when a name collides. `DUPLICATE_NAME` names the
+  offending field so a form can put the message under the input; `ARCHIVED_RECORD_IMMUTABLE` says
+  restore-then-edit rather than refusing without a route forward; `LAST_ACTIVE_ENTITY` mirrors
+  `LAST_ADMIN` — an organisation with no active entity can be logged into and can record no spend
+  at all, a dead end reachable by one button click.
+- `apps/api/test/settings-writes.e2e.spec.ts` — thirteen end-to-end tests covering the three
+  properties no unit test can show: that two saves from the same version leave the _first_
+  writer's value in place, that the audit event commits with its change and names only the fields
+  that moved, and that a cross-tenant `PATCH` is a `404` rather than a `403`.
 - **People, Settings, and the Audit log** — the three screens that finish Phase 1. Each reads a
   live endpoint (`GET /v1/people`, `GET /v1/organization`, `GET /v1/audit-events`), enforces its
   permission at the route as well as in the navigation, and shows the caller's own organisation
@@ -39,6 +59,12 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Fixed
 
+- **An update body of `{ field: undefined }` counted as a change.** The "at least one field" rule
+  counted keys, and a key set to `undefined` carries no instruction — the services skip it — so the
+  request wrote nothing, incremented the version anyway, and invalidated every other client's
+  `If-Match`. JSON cannot express it; a client assembling the body in TypeScript
+  (`{ legalName: form.legalName || undefined }`) produces it constantly. The rule counts defined
+  values now, and a contract test says so.
 - **A bare `organization.findFirst()` returned another tenant's organisation.** `Organization` is
   a global model in the tenant registry — scoping the tenant by its own id would be circular — so
   the extension adds no predicate and the caller must supply one. Caught by the end-to-end suite,

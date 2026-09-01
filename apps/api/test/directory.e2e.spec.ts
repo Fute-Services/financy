@@ -38,6 +38,25 @@ interface SessionBody {
   permissions: string[];
 }
 
+/**
+ * Assert a status, and say what came back when it is wrong.
+ *
+ * Supertest's `.expect(201)` reports "expected 201, got 500" and nothing
+ * else. Against a remote database that is one push-and-wait cycle per guess:
+ * the response body carries the error code and message the API actually
+ * produced, and printing it turns a guessing game into a reading exercise.
+ */
+function expectStatus(response: request.Response, status: number): request.Response {
+  if (response.status !== status) {
+    throw new Error(
+      `Expected ${String(status)} from ${response.request.method} ${response.request.url}, got ${String(response.status)}.
+Body: ${JSON.stringify(response.body, null, 2)}`,
+    );
+  }
+
+  return response;
+}
+
 describeWithDatabase('directory', () => {
   let app: INestApplication;
   let server: Server;
@@ -65,17 +84,19 @@ describeWithDatabase('directory', () => {
   });
 
   async function register(name: string): Promise<{ cookie: string; session: SessionBody }> {
-    const response = await request(server)
-      .post('/v1/auth/register')
-      .send({
-        organizationName: `Directory ${name} ${RUN}`,
-        fullName: `Owner ${name}`,
-        email: `${name}-${RUN}@directory.test`,
-        password: PASSWORD,
-        baseCurrency: 'USD',
-        countryCode: 'US',
-      })
-      .expect(201);
+    const response = expectStatus(
+      await request(server)
+        .post('/v1/auth/register')
+        .send({
+          organizationName: `Directory ${name} ${RUN}`,
+          fullName: `Owner ${name}`,
+          email: `${name}-${RUN}@directory.test`,
+          password: PASSWORD,
+          baseCurrency: 'USD',
+          countryCode: 'US',
+        }),
+      201,
+    );
 
     const setCookie = response.headers['set-cookie'] as unknown as string[];
 

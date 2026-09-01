@@ -3,11 +3,16 @@ import {
   ROLE_KEYS,
   ROLE_PERMISSIONS,
   depthOfPath,
+  type OrganizationSummary,
   type OrganizationSettings,
+  type UpdateOrganization,
 } from '@financy/contracts';
-import { NotFoundError } from '@financy/core';
+import { CurrencyLockedError, NotFoundError } from '@financy/core';
+import type { Prisma } from '@financy/db';
 import { Injectable } from '@nestjs/common';
 
+import { AuditService } from '../../platform/audit/index.js';
+import { guardVersion } from '../../platform/concurrency/index.js';
 import { DatabaseService } from '../../platform/database/index.js';
 import { getOrganizationId } from '../../platform/request-context/index.js';
 
@@ -20,7 +25,10 @@ import { getOrganizationId } from '../../platform/request-context/index.js';
  */
 @Injectable()
 export class OrganizationService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly audit: AuditService,
+  ) {}
 
   async settings(): Promise<OrganizationSettings> {
     const client = this.database.client;
@@ -48,6 +56,7 @@ export class OrganizationService {
             countryCode: true,
             timezone: true,
             fiscalYearStartMonth: true,
+            version: true,
             createdAt: true,
           },
         }),
@@ -153,13 +162,11 @@ export class OrganizationService {
         name: organization.name,
         legalName: organization.legalName,
         baseCurrency: organization.baseCurrency,
-        // Nothing financial exists before Phase 2, so nothing can lock it yet.
-        // Stated as a computed value rather than a hard `false` so that the
-        // screen already renders the locked case correctly when it arrives.
-        baseCurrencyLocked: false,
+        baseCurrencyLocked: await this.isBaseCurrencyLocked(),
         countryCode: organization.countryCode,
         timezone: organization.timezone,
         fiscalYearStartMonth: organization.fiscalYearStartMonth,
+        version: organization.version,
         createdAt: organization.createdAt.toISOString(),
       },
       entities: entities
@@ -198,6 +205,129 @@ export class OrganizationService {
     };
   }
 
+  /**
+   * `PATCH /v1/organization` (docs/10 §5.4).
+   *
+   * Read, compare versions, write with the version in the `where` clause,
+   * audit — all inside one transaction, so a concurrent save cannot land
+   * between the check and the write, and the audit event cannot survive a
+   * rolled-back change.
+   *
+   * The returned summary is the *written* row rather than the request body
+   * merged onto the old one. They differ whenever the database normalised
+   * something, and returning the body would tell the client its edit took
+   * effect exactly as sent even when it did not.
+   */
+  async update(input: UpdateOrganization, expectedVersion: number): Promise<OrganizationSummary> {
+    const id = getOrganizationId();
+
+    // The guard binds the tenant before any handler runs, so an absent id
+    // here is a wiring mistake upstream — not a request to be answered.
+    if (id === undefined) {
+      throw new Error('The organisation cannot be updated with no tenant context.');
+    }
+
+    // Refused before the transaction opens, because re-denominating an
+    // organisation is not something an `If-Match` can make safe: the existing
+    // amounts do not convert, they simply start meaning something else.
+    if (input.baseCurrency !== undefined && (await this.isBaseCurrencyLocked())) {
+      throw new CurrencyLockedError();
+    }
+
+    return this.database.unscoped.$transaction(async (tx) => {
+      const before = await tx.organization.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          legalName: true,
+          baseCurrency: true,
+          countryCode: true,
+          timezone: true,
+          fiscalYearStartMonth: true,
+          version: true,
+          createdAt: true,
+        },
+      });
+
+      if (before === null) throw new NotFoundError('Organization');
+
+      guardVersion('Organization', expectedVersion, before.version);
+
+      const after = await tx.organization.update({
+        // `version` in the `where`, not only in the check above. Between the
+        // read and this line another transaction can commit; without it, that
+        // request's change is overwritten and nobody is told.
+        where: { id, version: expectedVersion },
+        data: {
+          ...(input.name === undefined ? {} : { name: input.name }),
+          ...(input.legalName === undefined ? {} : { legalName: input.legalName }),
+          ...(input.baseCurrency === undefined ? {} : { baseCurrency: input.baseCurrency }),
+          ...(input.countryCode === undefined ? {} : { countryCode: input.countryCode }),
+          ...(input.timezone === undefined ? {} : { timezone: input.timezone }),
+          ...(input.fiscalYearStartMonth === undefined
+            ? {}
+            : { fiscalYearStartMonth: input.fiscalYearStartMonth }),
+          version: { increment: 1 },
+        },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          legalName: true,
+          baseCurrency: true,
+          countryCode: true,
+          timezone: true,
+          fiscalYearStartMonth: true,
+          version: true,
+          createdAt: true,
+        },
+      });
+
+      await this.audit.record(tx, {
+        action: 'organization.updated',
+        resourceType: 'organization',
+        resourceId: id,
+        // Only the fields that actually moved. A diff of every column makes
+        // the audit log unreadable at exactly the moment somebody is reading
+        // it to find out what one person changed.
+        before: changedFields(before, after),
+        after: changedFields(after, before),
+      });
+
+      return {
+        id: after.id,
+        slug: after.slug,
+        name: after.name,
+        legalName: after.legalName,
+        baseCurrency: after.baseCurrency,
+        baseCurrencyLocked: await this.isBaseCurrencyLocked(),
+        countryCode: after.countryCode,
+        timezone: after.timezone,
+        fiscalYearStartMonth: after.fiscalYearStartMonth,
+        version: after.version,
+        createdAt: after.createdAt.toISOString(),
+      };
+    });
+  }
+
+  /**
+   * Whether the base currency may still change.
+   *
+   * One method, called by both the read and the write, because the screen
+   * disabling a field and the endpoint refusing it must never disagree — a
+   * form that offers an edit the server rejects is worse than one that
+   * explains why the field is locked.
+   *
+   * Always `false` today: nothing financial exists before Phase 2. When
+   * transactions, expenses, and bills arrive, this becomes a existence check
+   * across them, and every caller already asks the right question.
+   */
+  private async isBaseCurrencyLocked(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
   /** Re-key the per-role counts from role id to role key. */
   private async roleMemberCountsByKey(byId: Map<string, number>): Promise<Map<string, number>> {
     if (byId.size === 0) return new Map();
@@ -209,4 +339,29 @@ export class OrganizationService {
 
     return new Map(roles.map((role) => [role.key, byId.get(role.id) ?? 0]));
   }
+}
+
+/**
+ * The fields of `source` that differ from `other`, for the audit record.
+ *
+ * Called twice — once each way — so the event carries a before and an after
+ * containing the same key set. Scalar comparison is enough: every field on
+ * this record is a string, a number, or null.
+ */
+function changedFields<T extends Record<string, unknown>>(
+  source: T,
+  other: T,
+): Prisma.InputJsonObject {
+  // A plain record while it is being assembled, cast once on the way out:
+  // `InputJsonObject` has a read-only index signature, which is right for a
+  // value Prisma is about to store and useless for one still being built.
+  const changed: Record<string, Prisma.InputJsonValue> = {};
+
+  for (const [key, value] of Object.entries(source)) {
+    // `version` always differs and says nothing; `createdAt` never does.
+    if (key === 'version' || key === 'createdAt') continue;
+    if (value !== other[key]) changed[key] = value as Prisma.InputJsonValue;
+  }
+
+  return changed;
 }

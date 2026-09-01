@@ -33,6 +33,25 @@ function email(name: string): string {
   return `${name}-${RUN}@auth.test`;
 }
 
+/**
+ * Assert a status, and say what came back when it is wrong.
+ *
+ * Supertest's `.expect(201)` reports "expected 201, got 500" and nothing
+ * else. Against a remote database that is one push-and-wait cycle per guess:
+ * the response body carries the error code and message the API actually
+ * produced, and printing it turns a guessing game into a reading exercise.
+ */
+function expectStatus(response: request.Response, status: number): request.Response {
+  if (response.status !== status) {
+    throw new Error(
+      `Expected ${String(status)} from ${response.request.method} ${response.request.url}, got ${String(response.status)}.
+Body: ${JSON.stringify(response.body, null, 2)}`,
+    );
+  }
+
+  return response;
+}
+
 describeWithDatabase('authentication', () => {
   let app: INestApplication;
   let server: Server;
@@ -57,15 +76,17 @@ describeWithDatabase('authentication', () => {
 
   /** Register and return the session cookie. */
   async function register(name: string): Promise<{ cookie: string; body: SessionBody }> {
-    const response = await request(server)
-      .post('/v1/auth/register')
-      .send({
-        organizationName: `Org ${name} ${RUN}`,
-        fullName: 'Ada Lovelace',
-        email: email(name),
-        password: PASSWORD,
-      })
-      .expect(201);
+    const response = expectStatus(
+      await request(server)
+        .post('/v1/auth/register')
+        .send({
+          organizationName: `Org ${name} ${RUN}`,
+          fullName: 'Ada Lovelace',
+          email: email(name),
+          password: PASSWORD,
+        }),
+      201,
+    );
 
     return { cookie: cookieFrom(response), body: response.body as SessionBody };
   }
