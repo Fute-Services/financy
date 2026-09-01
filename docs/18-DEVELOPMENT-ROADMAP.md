@@ -350,7 +350,7 @@ climbs 1, 2, 3 across three requests, which is only true if each one commits.
 | 1.7.4  | State components: EmptyState (×3), LoadingSkeleton, ErrorState, PermissionState                   | ✅                          |
 | 1.7.5  | App shell: sidebar (permission-filtered), top bar, org switcher, user menu                        | ✅                          |
 | 1.7.6  | Auth screens: login, register, invite acceptance, forgot/reset                                    | ⚠️ login/register only      |
-| 1.7.7  | People: list, detail, invite flow with permission preview                                         | ⚠️ list only                |
+| 1.7.7  | People: list, detail, invite flow with permission preview                                         | ✅ list + writes; no detail |
 | 1.7.8  | Settings: organisation, entities, departments, categories                                         | ✅ writes; categories read  |
 | 1.7.9  | Audit log: stream, filters, event detail                                                          | ⚠️ stream only              |
 | 1.7.10 | API client + session handling + `useSession`                                                      | ✅                          |
@@ -373,6 +373,25 @@ initial value to call `useActionState`, and `lib/actions` cannot supply them —
 `revalidatePath` into the browser bundle and failed the build. That failure was the useful kind:
 the alternative to splitting was dropping `server-only`, which is what keeps the API client and
 its session cookie out of the browser.
+
+**The invite dialog previews what the role grants, from the shared catalogue.** Choosing a role is
+choosing what somebody may do to the organisation's money, and a select showing five names says
+nothing about the difference. `permissionsForRole()` is the same function the server's guard
+reads, so the preview cannot promise access the endpoint would refuse.
+
+**A role change asks for the password in the same submission as the role.** The API answers
+`403 STEP_UP_REQUIRED` until the caller has re-proved themselves, so the dialog collects both and
+the action steps up first. Doing it as two visible steps — confirm, then choose — would leave a
+window in which the person is re-authenticated and has not yet decided, which is the state step-up
+exists to prevent. A wrong password fails the step-up and the role change never runs.
+
+**The caller's own row offers "You" rather than two disabled buttons.** The API refuses a self
+role change (INV-03) and a self deactivation, so a control there would only ever produce a 403,
+and a control that exists and never works is worse than one that does not.
+
+**`version` moved onto `personSchema`.** The people screen acts from the row, and without it every
+action would need a detail fetch first — one request per row for a field the list query already
+reads.
 
 **Three bugs came out of writing the browser tests, and none of them changed any response.**
 

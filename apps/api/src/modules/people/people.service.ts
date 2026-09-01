@@ -38,6 +38,7 @@ export class PeopleService {
           scope: true,
           status: true,
           createdAt: true,
+          version: true,
           user: { select: { email: true, fullName: true, lastLoginAt: true } },
           role: { select: { key: true, name: true } },
           department: { select: { id: true, name: true, code: true } },
@@ -71,6 +72,7 @@ export class PeopleService {
         status: membership.status,
         lastLoginAt: membership.user.lastLoginAt?.toISOString() ?? null,
         joinedAt: membership.createdAt.toISOString(),
+        version: membership.version,
       })),
     } as PeoplePage;
   }

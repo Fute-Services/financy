@@ -13,6 +13,13 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **The people screen writes.** Invite with a preview of what the role grants, change a role
+  behind step-up, deactivate, reactivate, and resend or revoke a pending invitation (task 1.7.7).
+  The role dialog collects the new role, the mandatory reason, and the password in one submission:
+  the API refuses without step-up, and asking for the password as a separate first step would
+  leave a window in which the person is re-authenticated and has not yet decided. The caller's own
+  row shows "You" rather than two controls that would only ever answer `403`. `personSchema` now
+  carries `version`, so acting from a row does not need a detail fetch per row.
 - **The settings screen writes.** The organisation form, entity create/edit/archive, and the
   department tree with re-parenting all save through server actions (task 1.7.8). Every form
   carries the record version it was rendered with in a hidden input — the version the person

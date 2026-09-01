@@ -85,12 +85,23 @@ export function humanizeStatus(status: string): string {
 
 export interface StatusBadgeProps extends Omit<BadgeProps, 'children' | 'tone'> {
   status: string;
+  /**
+   * Overrides the humanised enum.
+   *
+   * `humanizeStatus` turns `INACTIVE` into "Inactive", which is right for most
+   * states and wrong for that one: "inactive" reads as "has not logged in
+   * lately", while a deactivated member has been signed out of every device
+   * and cannot get back in. Where a domain has chosen its own word — the
+   * membership catalogue says "Deactivated" — that word wins, and passing it
+   * here keeps the tone and the dot without a second badge component.
+   */
+  label?: string | undefined;
 }
 
-export function StatusBadge({ status, ...rest }: StatusBadgeProps): React.JSX.Element {
+export function StatusBadge({ status, label, ...rest }: StatusBadgeProps): React.JSX.Element {
   return (
     <Badge tone={toneForStatus(status)} dot {...rest}>
-      {humanizeStatus(status)}
+      {label ?? humanizeStatus(status)}
     </Badge>
   );
 }

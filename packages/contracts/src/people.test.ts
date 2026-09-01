@@ -54,6 +54,7 @@ describe('personSchema', () => {
     status: 'ACTIVE',
     lastLoginAt: null,
     joinedAt: '2026-08-31T10:00:00.000Z',
+    version: 1,
   };
 
   it('accepts a member with no department and no login yet', () => {

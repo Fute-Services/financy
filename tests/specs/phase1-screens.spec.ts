@@ -86,15 +86,22 @@ test.describe('phase 1 screens', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await expect(page.locator('body')).not.toHaveText(NOT_BUILT);
 
-    // The organisation, read back from the database rather than echoed. Read
-    // from the definition list specifically — the name is also in the sidebar
-    // and in the organisation switcher.
-    const details = page.locator('dl').first();
-    await expect(details).toContainText(`Phase1 ${id}`);
-    await expect(details).toContainText('USD');
+    // The organisation, read back from the database rather than echoed.
+    // Read from the form's own fields — the name is also in the sidebar and
+    // in the organisation switcher, so an unscoped match proves nothing.
+    //
+    // This was a definition list until the writes landed (task 1.7.8). The
+    // screen is a form now, and the assertion follows it rather than being
+    // loosened to whatever still passes.
+    await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(
+      `Phase1 ${id}`,
+    );
+    await expect(page.getByRole('textbox', { name: 'Base currency', exact: true })).toHaveValue(
+      'USD',
+    );
 
     // Registration creates one default entity and the full category tree.
-    await expect(page.getByRole('table').filter({ hasText: 'Functional currency' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Legal entities' })).toBeVisible();
 
     // All five roles, with the permission counts the catalogue grants. A
     // count of zero everywhere would mean the join table never got seeded.
@@ -102,9 +109,10 @@ test.describe('phase 1 screens', () => {
     await expect(roles).toContainText('Organisation admin');
     await expect(roles).toContainText('Auditor');
 
-    // The base currency explains its own lock state rather than leaving a
-    // field greyed out with no reason.
-    await expect(page.getByText(/until the first financial record/i)).toBeVisible();
+    // The base currency is disabled and explains why, rather than being a
+    // greyed box with no reason — which is indistinguishable from a broken one.
+    await expect(page.getByRole('textbox', { name: 'Base currency', exact: true })).toBeDisabled();
+    await expect(page.getByText(/Set at registration/i)).toBeVisible();
   });
 
   test('the Audit log shows what registration recorded, and offers no way to write', async ({

@@ -79,6 +79,15 @@ export const personSchema = z.object({
    */
   lastLoginAt: timestampSchema.nullable(),
   joinedAt: timestampSchema,
+  /**
+   * Sent straight back as `If-Match` on a write against this membership.
+   *
+   * On the list rather than only on the detail, because the people screen
+   * offers a role change and a deactivation from the row: without it, every
+   * action would need a detail fetch first, which is one request per row for
+   * a field the list query already reads.
+   */
+  version: versionSchema,
 });
 
 export type Person = z.infer<typeof personSchema>;
@@ -170,7 +179,6 @@ export const membershipDetailSchema = personSchema.extend({
   managerMembershipId: idSchema.nullable(),
   entityScope: z.array(idSchema),
   permissions: z.array(z.string()),
-  version: versionSchema,
 });
 
 export type UpdateMembership = z.infer<typeof updateMembershipSchema>;

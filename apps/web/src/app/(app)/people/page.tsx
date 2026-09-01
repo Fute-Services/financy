@@ -1,8 +1,17 @@
 import type { Metadata } from 'next';
-import { SCOPE_LABELS, type OffsetCollection, type Person } from '@financy/contracts';
+import {
+  SCOPE_LABELS,
+  STATUS_LABELS,
+  type DepartmentRecord,
+  type Invitation,
+  type OffsetCollection,
+  type Person,
+  type Resource,
+} from '@financy/contracts';
 import {
   Badge,
   Card,
+  CardBody,
   DataTable,
   FilteredEmptyState,
   PermissionState,
@@ -14,6 +23,8 @@ import { PageHeader } from '@/components/page-header';
 import { apiFetch } from '@/lib/api';
 import { can, getSession } from '@/lib/session';
 import { PeopleFilters } from './filters';
+import { InvitePanel } from './invite-panel';
+import { MemberActions } from './member-actions';
 
 export const metadata: Metadata = { title: 'People' };
 
@@ -27,10 +38,11 @@ export const metadata: Metadata = { title: 'People' };
  * this URL without it gets a 403 from the API regardless of what this file
  * decides to render.
  *
- * Read-only, deliberately. Inviting someone, changing a role, and deactivating
- * a member each need an audit event and — for role changes — a self-elevation
- * refusal. They arrive with task 1.5. A button that skipped those would be
- * worse than no button (docs/19 §5).
+ * The writes live in dialogs, and each of them asks for something before it
+ * proceeds — a reason, a password, or both — because the API requires them.
+ * A role change without a reason is a 422 and one without step-up is a 403,
+ * so a button that fired straight into a refusal would be a button that
+ * teaches people to ignore it (docs/19 §5).
  */
 
 interface Props {
@@ -73,7 +85,27 @@ export default async function PeoplePage({ searchParams }: Props): Promise<React
   query.set('page', page);
   query.set('pageSize', '25');
 
-  const result = await apiFetch<OffsetCollection<Person>>(`/memberships?${query.toString()}`);
+  const canInvite = can(session, 'user:invite');
+  const canChangeRole = can(session, 'membership:manage_role');
+  const canDeactivate = can(session, 'user:deactivate');
+
+  // Issued together. They are independent reads, and against a remote
+  // database three sequential round trips is three times the latency for no
+  // consistency any reader could observe.
+  //
+  // The invitations and departments are skipped entirely without
+  // `user:invite`: asking anyway would turn the whole page into a 403 for
+  // somebody who is allowed to read the list.
+  const [result, invitations, departments] = await Promise.all([
+    apiFetch<OffsetCollection<Person>>(`/memberships?${query.toString()}`),
+    canInvite
+      ? apiFetch<Resource<Invitation[]>>('/memberships/invitations')
+      : Promise.resolve({ data: [] as Invitation[] }),
+    canInvite
+      ? apiFetch<Resource<DepartmentRecord[]>>('/departments')
+      : Promise.resolve({ data: [] as DepartmentRecord[] }),
+  ]);
+
   const isFiltered = q !== undefined || status !== undefined || roleKey !== undefined;
 
   const columns: ReadonlyArray<Column<Person>> = [
@@ -123,12 +155,35 @@ export default async function PeoplePage({ searchParams }: Props): Promise<React
       key: 'status',
       header: 'Status',
       align: 'right',
-      // `StatusBadge` derives its own label and tone from the status, so the
-      // catalogue label is not passed in — two sources for one string is how
-      // a table ends up saying "INACTIVE" in one column and "Deactivated" in
-      // the next.
-      render: (person) => <StatusBadge status={person.status} />,
+      // The label comes from the contract's catalogue, not from
+      // `StatusBadge`'s humaniser, which renders "Inactive". The catalogue
+      // says "Deactivated" deliberately: "inactive" reads as "has not logged
+      // in lately", while this person has been signed out of every device and
+      // cannot get back in. The tone and the dot still come from the badge.
+      render: (person) => (
+        <StatusBadge status={person.status} label={STATUS_LABELS[person.status]} />
+      ),
     },
+    ...(canChangeRole || canDeactivate
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            align: 'right' as const,
+            render: (person: Person) => (
+              <MemberActions
+                person={person}
+                canChangeRole={canChangeRole}
+                canDeactivate={canDeactivate}
+                // The API refuses a self role change and a self deactivation,
+                // so the row shows "You" rather than two controls that would
+                // only ever answer 403.
+                isSelf={person.id === session.membership.id}
+              />
+            ),
+          },
+        ]
+      : []),
   ];
 
   const { totalCount, totalPages, page: currentPage } = result.pagination;
@@ -140,6 +195,18 @@ export default async function PeoplePage({ searchParams }: Props): Promise<React
         description="Everyone with access to this organisation, and what each of them can see."
         count={`${String(totalCount)} ${totalCount === 1 ? 'person' : 'people'}`}
       />
+
+      {canInvite ? (
+        <Card className="mb-4">
+          <CardBody>
+            <InvitePanel
+              invitations={invitations.data}
+              departments={departments.data}
+              canInvite={canInvite}
+            />
+          </CardBody>
+        </Card>
+      ) : null}
 
       <PeopleFilters />
 
