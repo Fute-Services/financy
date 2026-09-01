@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation';
+import type { NotificationRecord, OffsetCollection, QueueItem, Resource } from '@financy/contracts';
 
 import { SessionProvider } from '@/components/session-provider';
 import { Shell } from '@/components/shell';
-import { getSession } from '@/lib/session';
+import { apiFetch } from '@/lib/api';
+import { can, getSession } from '@/lib/session';
 
 /**
  * The authenticated shell.
@@ -21,6 +23,20 @@ import { getSession } from '@/lib/session';
  * unauthenticated request; this only saves the user from a screen full of
  * empty states.
  */
+
+/**
+ * Highest roadmap phase whose modules actually exist.
+ *
+ * Raised as each phase lands, and only once the *screens* are real — not once
+ * the endpoints behind them are. Phase 2 now qualifies: policies, spend
+ * requests, the approval queue, cards, transactions, and notifications each
+ * read a live endpoint and enforce their permission.
+ *
+ * Raising this number ahead of the screens would silently turn every "not
+ * built yet" marker into a promise the application does not keep.
+ */
+const BUILT_PHASES = 2;
+
 export default async function AppLayout({
   children,
 }: {
@@ -34,7 +50,42 @@ export default async function AppLayout({
 
   return (
     <SessionProvider session={session}>
-      <Shell>{children}</Shell>
+      <Shell builtPhases={BUILT_PHASES} counts={await navCounts(session)}>
+        {children}
+      </Shell>
     </SessionProvider>
   );
+}
+
+/**
+ * The two numbers on the sidebar.
+ *
+ * **Both requests can fail without taking the page with them.** A count is
+ * decoration around navigation; a layout that threw because the approval queue
+ * was briefly unavailable would take out every screen in the application to
+ * avoid showing one badge. On failure the badge is absent, never stale and
+ * never zero — "0 waiting" and "we could not ask" are different statements and
+ * only one of them is true.
+ *
+ * Fetched in the layout rather than by each page, because they appear on every
+ * screen. `apiFetch` is uncached, so they are as current as the render.
+ */
+async function navCounts(
+  session: NonNullable<Awaited<ReturnType<typeof getSession>>>,
+): Promise<Partial<Record<string, number>>> {
+  const [queue, inbox] = await Promise.all([
+    can(session, 'approval:read')
+      ? apiFetch<Resource<QueueItem[]>>('/approvals/queue').catch(() => null)
+      : Promise.resolve(null),
+    can(session, 'notification:read_own')
+      ? apiFetch<OffsetCollection<NotificationRecord> & { summary: { unread: number } }>(
+          '/notifications?pageSize=1&unreadOnly=true',
+        ).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
+  return {
+    ...(queue === null ? {} : { '/approvals': queue.data.length }),
+    ...(inbox === null ? {} : { '/notifications': inbox.summary.unread }),
+  };
 }

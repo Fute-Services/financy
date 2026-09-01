@@ -98,6 +98,18 @@ export const NAV_ITEMS: NavItem[] = [
     pinned: true,
     keywords: ['queue', 'waiting', 'approve', 'reject'],
   },
+  {
+    // Pinned, and it earns the slot for the same reason Approvals does: it is
+    // one of the two things on this panel that changes during a working day.
+    label: 'Notifications',
+    href: '/notifications',
+    permission: 'notification:read_own',
+    section: 'workspace',
+    phase: 2,
+    icon: 'inbox',
+    pinned: true,
+    keywords: ['inbox', 'alerts', 'unread', 'email preferences'],
+  },
 
   // ── Spend ────────────────────────────────────────────────────────────────
   {

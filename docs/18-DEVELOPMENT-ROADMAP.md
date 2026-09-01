@@ -581,8 +581,32 @@ something this epic should invent for cards alone.
 
 ### Epic 2.5 — Notifications
 
-In-app schema and API · `NotificationProvider` port + console/SMTP adapters · templates ·
-preferences · queued delivery.
+| ID    | Task                                                             | Status                                    |
+| ----- | ---------------------------------------------------------------- | ----------------------------------------- |
+| 2.5.1 | In-app schema and API                                            | ✅                                        |
+| 2.5.2 | `NotificationProvider` port + console and SMTP adapters          | ✅ console default; SMTP untested locally |
+| 2.5.3 | Templates                                                        | ✅ one renderer for both channels         |
+| 2.5.4 | Preferences, per event type per channel                          | ✅                                        |
+| 2.5.5 | Queued delivery                                                  | ✅                                        |
+| 2.5.6 | `QueuePort` + `InlineQueueAdapter` (task 1.2.5, brought forward) | ✅ BullMQ adapter still absent            |
+
+**The queue arrived here rather than in Phase 1 because nothing needed it until now.** A queue with
+no jobs is scaffolding: it cannot be tested against anything real, and the six requirements of the
+job contract (docs/14 §3) have nothing to hold. It ships with its first consumer instead.
+
+**`REDIS_URL` being set now fails startup**, rather than silently using the in-process adapter. A
+deployment that has provisioned a broker and is running the inline queue looks like a working queue
+and loses every job on restart; refusing is the only honest answer until `BullMqQueueAdapter`
+exists.
+
+**The SMTP adapter is written and has never sent a message here.** The development host has no mail
+server; CI's compose file has Mailpit. It is marked as such rather than as done — the console
+adapter is the default, declares `isSandbox`, and that value already travels into the session
+response.
+
+**Known gap:** delivery is in-process, so a job waiting on a backoff timer when the process stops
+never runs again. Its `job_executions` row stays `RESERVED`, which is deliberately visible rather
+than tidy: a sweep can find it, and a status that lied would be worse than one that is stuck.
 
 ### Epic 2.6 — Frontend
 

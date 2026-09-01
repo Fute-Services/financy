@@ -17,11 +17,12 @@ import {
   type PolicyDecision,
 } from '@financy/core';
 import type { Prisma } from '@financy/db';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { AuditService } from '../../platform/audit/index.js';
 import { guardVersion } from '../../platform/concurrency/index.js';
 import { DatabaseService } from '../../platform/database/index.js';
+import { QUEUE_PORT, type QueuePort } from '../../platform/queue/index.js';
 import { getContext, getOrganizationId } from '../../platform/request-context/index.js';
 import { ApprovalService } from '../approvals/approval.service.js';
 import { PolicyContextService } from '../policies/policy-context.service.js';
@@ -82,6 +83,7 @@ export class SpendRequestService {
     private readonly policyContext: PolicyContextService,
     private readonly policies: PolicyRepositoryService,
     private readonly approvals: ApprovalService,
+    @Inject(QUEUE_PORT) private readonly queue: QueuePort,
   ) {}
 
   async list(
@@ -260,7 +262,7 @@ export class SpendRequestService {
     const organizationId = requireOrganization();
     const now = new Date();
 
-    return this.database.unscoped.$transaction(async (tx) => {
+    const { record, activatedStepId } = await this.database.unscoped.$transaction(async (tx) => {
       const before = await tx.spendRequest.findFirst({
         where: { id, organizationId },
         select: SELECT,
@@ -384,8 +386,25 @@ export class SpendRequestService {
         },
       });
 
-      return toRecord(after);
+      return { record: toRecord(after), activatedStepId: chain?.activatedStepId ?? null };
     });
+
+    if (activatedStepId !== null) {
+      // After the commit, never inside it (docs/14 §1). A job enqueued inside
+      // a transaction that then rolled back would ask five people to approve
+      // a request that does not exist, and an email cannot be rolled back.
+      //
+      // The key names the step, so a redelivery is one notification rather
+      // than two — which is the queue guarantee this has to absorb rather
+      // than assume away.
+      await this.queue.enqueue(
+        'notification.approval_requested',
+        { organizationId, approvalStepId: activatedStepId },
+        { idempotencyKey: `step:${activatedStepId}:requested` },
+      );
+    }
+
+    return record;
   }
 
   async cancel(id: string, expectedVersion: number): Promise<SpendRequestRecord> {

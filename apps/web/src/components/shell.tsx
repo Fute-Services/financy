@@ -15,38 +15,28 @@ import { useSession } from './session-provider';
  * What is left is one vertical rule and the content, which is the point: on a
  * screen full of financial data, chrome is the thing competing with the
  * numbers for attention.
- */
-
-/**
- * Highest roadmap phase whose modules actually exist.
  *
- * Raised as each phase lands, and only once the *screens* are real — not once
- * the endpoints behind them are. Phase 1 now qualifies: People, Settings, and
- * the Audit log each read a live endpoint, enforce their permission, and show
- * the caller's own organisation and nobody else's.
- *
- * Everything from Phase 2 up is still a stub, and the palette marks it as one.
- * Raising this number ahead of the screens would silently turn every "not
- * built yet" marker into a promise the application does not keep.
+ * **The counts arrive as props, resolved on the server by the layout.** They
+ * were hard-coded to nothing while the endpoints behind them did not exist —
+ * a plausible number beside Approvals would have been the most convincing lie
+ * on the screen, since it is exactly the number a person acts on (docs/19 §5).
+ * Now the endpoints exist, so the numbers are real or they are absent, and
+ * a failure to fetch one shows no badge rather than a stale one.
  */
-const BUILT_PHASES = 1;
-
-/**
- * Counts beside a pinned item, keyed by href.
- *
- * Empty until the endpoints behind them exist. A hard-coded `3` next to
- * Approvals would be the most convincing lie on the screen — it is exactly the
- * number a person acts on — so there is nothing here rather than a plausible
- * number (docs/19 §5).
- */
-const NAV_COUNTS: Partial<Record<string, number>> = {};
-
-export function Shell({ children }: { children: React.ReactNode }): React.JSX.Element {
+export function Shell({
+  children,
+  builtPhases,
+  counts,
+}: {
+  children: React.ReactNode;
+  builtPhases: number;
+  counts: Partial<Record<string, number>>;
+}): React.JSX.Element {
   const session = useSession();
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--surface-page)]">
-      <Sidebar session={session} builtPhases={BUILT_PHASES} counts={NAV_COUNTS} />
+      <Sidebar session={session} builtPhases={builtPhases} counts={counts} />
 
       <main className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[1180px] px-8 py-7">{children}</div>

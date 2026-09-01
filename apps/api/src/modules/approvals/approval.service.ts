@@ -42,6 +42,21 @@ export interface ChainSettled {
 }
 
 /**
+ * What an action did, for the caller to act on *after* the transaction.
+ *
+ * The step that became active travels back rather than being notified from in
+ * here, because notifying means enqueuing and enqueuing inside a transaction
+ * that then rolls back produces a job about an approval nobody was ever asked
+ * for (docs/14 §1). The service reports what happened; the caller enqueues
+ * once the commit has actually happened.
+ */
+export interface ActionResult {
+  readonly settled: ChainSettled | null;
+  /** The step that became active as a result of this action, if any. */
+  readonly activatedStepId: string | null;
+}
+
+/**
  * The approval state machine (tasks 2.2.4 to 2.2.6, docs/11 §7).
  *
  * **Steps run in sequence; approvers within a step run in parallel.** Only one
@@ -74,7 +89,7 @@ export class ApprovalService {
     tx: Prisma.TransactionClient,
     organizationId: string,
     input: OpenChainInput,
-  ): Promise<{ instanceId: string }> {
+  ): Promise<{ instanceId: string; activatedStepId: string | null }> {
     const steps = await this.resolver.resolve(
       tx,
       organizationId,
@@ -100,12 +115,17 @@ export class ApprovalService {
       },
     });
 
+    let activatedStepId: string | null = null;
+
     for (const [index, step] of steps.entries()) {
       const isFirst = index === 0;
+      const stepId = newId();
+
+      if (isFirst) activatedStepId = stepId;
 
       await tx.approvalStep.create({
         data: {
-          id: newId(),
+          id: stepId,
           organizationId,
           approvalInstanceId: instanceId,
           sequence: step.sequence,
@@ -132,7 +152,7 @@ export class ApprovalService {
       },
     });
 
-    return { instanceId };
+    return { instanceId, activatedStepId };
   }
 
   /**
@@ -148,7 +168,7 @@ export class ApprovalService {
     instanceId: string,
     action: 'APPROVE' | 'REJECT' | 'RETURN' | 'OVERRIDE',
     comment: string | null,
-  ): Promise<ChainSettled | null> {
+  ): Promise<ActionResult> {
     const actorMembershipId = getContext()?.membershipId;
 
     if (actorMembershipId === undefined) {
@@ -266,9 +286,13 @@ export class ApprovalService {
       await this.closeInstance(tx, instance.id, instance.version, instanceStatus);
 
       return {
-        subjectType: instance.subjectType,
-        subjectId: instance.subjectId,
-        outcome: action === 'REJECT' ? 'REJECTED' : action === 'RETURN' ? 'RETURNED' : 'OVERRIDDEN',
+        settled: {
+          subjectType: instance.subjectType,
+          subjectId: instance.subjectId,
+          outcome:
+            action === 'REJECT' ? 'REJECTED' : action === 'RETURN' ? 'RETURNED' : 'OVERRIDDEN',
+        },
+        activatedStepId: null,
       };
     }
 
@@ -282,8 +306,11 @@ export class ApprovalService {
         approvals,
       )
     ) {
-      // Still waiting on other approvers in this step. Nothing else moves.
-      return null;
+      // Still waiting on other approvers in this step. Nothing else moves,
+      // and nobody is notified: the people who can act were told when the step
+      // opened, and a second message every time a colleague approves is how a
+      // notification list becomes something people stop reading.
+      return { settled: null, activatedStepId: null };
     }
 
     await this.closeStep(tx, step.id, step.version, 'APPROVED');
@@ -303,9 +330,12 @@ export class ApprovalService {
       await this.closeInstance(tx, instance.id, instance.version, 'APPROVED');
 
       return {
-        subjectType: instance.subjectType,
-        subjectId: instance.subjectId,
-        outcome: 'APPROVED',
+        settled: {
+          subjectType: instance.subjectType,
+          subjectId: instance.subjectId,
+          outcome: 'APPROVED',
+        },
+        activatedStepId: null,
       };
     }
 
@@ -319,7 +349,10 @@ export class ApprovalService {
       data: { currentStepSequence: next.sequence, version: { increment: 1 } },
     });
 
-    return null;
+    // The chain moved on. The next step's approvers have not been told
+    // anything yet, and the caller enqueues that once this transaction has
+    // committed.
+    return { settled: null, activatedStepId: next.id };
   }
 
   async cancel(

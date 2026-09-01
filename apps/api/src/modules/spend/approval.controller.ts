@@ -6,17 +6,19 @@ import {
   type Resource,
 } from '@financy/contracts';
 import { ForbiddenError, NotFoundError } from '@financy/core';
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post } from '@nestjs/common';
 
 import { RequirePermission } from '../../platform/authorization/index.js';
 import { DatabaseService } from '../../platform/database/index.js';
+import { QUEUE_PORT, type QueuePort } from '../../platform/queue/index.js';
 import {
   callerHas,
+  getContext,
   getCorrelationId,
   getOrganizationId,
 } from '../../platform/request-context/index.js';
 import { ZodValidationPipe } from '../../platform/validation/index.js';
-import { ApprovalService } from '../approvals/index.js';
+import { ApprovalService, type ActionResult } from '../approvals/index.js';
 import { SpendRequestService } from './spend-request.service.js';
 
 /**
@@ -39,6 +41,7 @@ export class ApprovalController {
     private readonly approvals: ApprovalService,
     private readonly spend: SpendRequestService,
     private readonly database: DatabaseService,
+    @Inject(QUEUE_PORT) private readonly jobs: QueuePort,
   ) {}
 
   /**
@@ -150,8 +153,8 @@ export class ApprovalController {
       );
     }
 
-    const settled = await this.database.unscoped.$transaction(async (tx) => {
-      const result = await this.approvals.act(
+    const result = await this.database.unscoped.$transaction(async (tx) => {
+      const outcome = await this.approvals.act(
         tx,
         organizationId,
         instanceId,
@@ -159,19 +162,77 @@ export class ApprovalController {
         body.comment ?? null,
       );
 
-      if (result !== null && result.subjectType === 'spend_request') {
+      if (outcome.settled !== null && outcome.settled.subjectType === 'spend_request') {
         // The subject is told inside the same transaction. A chain that
         // settled without its request moving is a request stuck in
         // `PENDING_APPROVAL` with nothing left to approve it.
-        await this.spend.onApprovalSettled(tx, organizationId, result.subjectId, result.outcome);
+        await this.spend.onApprovalSettled(
+          tx,
+          organizationId,
+          outcome.settled.subjectId,
+          outcome.settled.outcome,
+        );
       }
 
-      return result;
+      return outcome;
     });
 
+    // Enqueued **after** the commit, never inside it (docs/14 §1). A job
+    // scheduled inside a transaction that then rolled back would tell somebody
+    // "your request was approved" about an approval that did not happen — and
+    // an email, unlike a database row, does not roll back.
+    await this.announce(organizationId, result, body.comment ?? null);
+
     return {
-      data: { settled: settled !== null, outcome: settled?.outcome ?? null },
+      data: { settled: result.settled !== null, outcome: result.settled?.outcome ?? null },
       meta: { correlationId: getCorrelationId() },
     };
+  }
+
+  /**
+   * Tell the people the action concerns.
+   *
+   * Two audiences and they never overlap: the requester learns the chain
+   * settled, and the next step's approvers learn there is something waiting.
+   * A chain that advanced settles nothing, so exactly one of the two branches
+   * fires per action.
+   *
+   * **The idempotency keys name the record, not the moment.** `step:{id}:
+   * requested` delivered twice is one notification; a key with a timestamp in
+   * it would make every redelivery a new message, which is the failure the
+   * queue's guarantee is supposed to absorb.
+   */
+  private async announce(
+    organizationId: string,
+    result: ActionResult,
+    comment: string | null,
+  ): Promise<void> {
+    if (result.settled !== null && result.settled.subjectType === 'spend_request') {
+      await this.jobs.enqueue(
+        'notification.approval_decided',
+        {
+          organizationId,
+          spendRequestId: result.settled.subjectId,
+          // `RETURNED` is the chain's word for it and `CHANGES_REQUESTED` is
+          // the request's; the notification is about the request, so it uses
+          // the request's.
+          outcome:
+            result.settled.outcome === 'RETURNED' ? 'CHANGES_REQUESTED' : result.settled.outcome,
+          actedByMembershipId: getContext()?.membershipId ?? null,
+          comment,
+        },
+        { idempotencyKey: `request:${result.settled.subjectId}:${result.settled.outcome}` },
+      );
+
+      return;
+    }
+
+    if (result.activatedStepId !== null) {
+      await this.jobs.enqueue(
+        'notification.approval_requested',
+        { organizationId, approvalStepId: result.activatedStepId },
+        { idempotencyKey: `step:${result.activatedStepId}:requested` },
+      );
+    }
   }
 }

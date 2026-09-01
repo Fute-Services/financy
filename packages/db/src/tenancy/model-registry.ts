@@ -41,6 +41,8 @@ export const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set<string>([
   'CardLimit',
   'Transaction',
   'TransactionAdjustment',
+  'Notification',
+  'NotificationPreference',
 ]);
 
 /**
@@ -75,6 +77,12 @@ export const GLOBAL_MODELS: ReadonlySet<string> = new Set<string>([
   'RolePermission',
   'Session',
   'MfaFactor',
+  // A job execution is the queue's own record, not a tenant's. It carries a
+  // nullable `organizationId` for the jobs that have one — a nightly sweep
+  // that fans out per organisation has none — and scoping the table by it
+  // would make the row for a cross-tenant job unreadable by the runner that
+  // wrote it.
+  'JobExecution',
 ]);
 
 export type ModelClassification = 'tenant-scoped' | 'global' | 'unregistered';

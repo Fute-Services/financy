@@ -168,6 +168,9 @@ model Organization {
   transactions           Transaction[]
   transactionAdjustments TransactionAdjustment[]
 
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+
   @@map("organizations")
 }
 
@@ -395,6 +398,9 @@ model Membership {
   transactions           Transaction[]           @relation("TransactionMember")
   transactionsReviewed   Transaction[]           @relation("TransactionReviewer")
   adjustmentsAuthored    TransactionAdjustment[] @relation("AdjustmentAuthor")
+
+  notifications          Notification[]           @relation("NotificationRecipient")
+  notificationPreferences NotificationPreference[] @relation("NotificationPreferenceOwner")
 
   /// One membership per user per organisation.
   @@unique([organizationId, userId])
@@ -1377,4 +1383,154 @@ model TransactionAdjustment {
   @@index([transactionId])
   @@index([createdByMembershipId])
   @@map("transaction_adjustments")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Notifications and jobs (epic 2.5, docs/14)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// One thing somebody needs to know about, addressed to one membership.
+///
+/// **Addressed to a membership, not a user.** The same person in two
+/// organisations must not see one organisation's approvals while looking at
+/// the other, and a notification keyed by user would have no tenant to be
+/// scoped by.
+///
+/// **Rendered when it is written, not when it is read.** The title and body
+/// are stored as text, because a notification that rendered from its resource
+/// at read time would change wording — or vanish — when the thing it refers to
+/// changes. "Your €4,000 request was approved" must still say that after the
+/// request is amended to €40.
+model Notification {
+  id                     String @id @map("_id")
+  organizationId         String
+  recipientMembershipId  String
+
+  /// One of `NOTIFICATION_EVENTS` in `@financy/contracts`. Not an enum in the
+  /// schema: the catalogue grows every phase, and a Prisma enum would make
+  /// adding an event type a schema migration rather than a code change.
+  eventType String
+
+  /// What makes redelivery a no-op.
+  ///
+  /// The queue's idempotency key stops a job running twice; this stops a job
+  /// that failed *halfway* from writing a second copy for the recipients it
+  /// already reached. Requirement 1 of the job contract asks for a unique
+  /// constraint on the effect rather than trust in exactly-once delivery, and
+  /// the effect is this row.
+  dedupeKey String
+
+  title String
+  body  String
+
+  /// Where the notification points. Nullable because a digest points at a
+  /// screen rather than at one record.
+  resourceType String?
+  resourceId   String?
+
+  /// `IN_APP`, `EMAIL` — what was actually delivered, not what was intended.
+  /// An email that failed every retry must not leave a record claiming it was
+  /// sent.
+  channelsDelivered String[] @default([])
+
+  /// Anything the screen needs that is not in the text — an amount to format,
+  /// a status to colour. Never the source of truth for the wording.
+  metadata Json?
+
+  readAt    DateTime?
+  /// Soft delete (docs/09 §4): dismissing removes it from the list and keeps
+  /// the record, so "I never got told" is answerable.
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  recipient    Membership   @relation("NotificationRecipient", fields: [recipientMembershipId], references: [id])
+
+  @@unique([recipientMembershipId, dedupeKey])
+  @@index([organizationId, recipientMembershipId, readAt, createdAt])
+  @@index([organizationId, recipientMembershipId, createdAt])
+  @@index([recipientMembershipId])
+  @@map("notifications")
+}
+
+/// What one person wants to be told about, and how.
+///
+/// A row exists only where somebody has changed something. The absence of a
+/// row means the defaults in `@financy/contracts` apply — storing a row per
+/// member per event type at registration would be thirty rows nobody chose,
+/// and would freeze today's defaults for every account created before a
+/// default changed.
+model NotificationPreference {
+  id             String @id @map("_id")
+  organizationId String
+  membershipId   String
+
+  eventType String
+
+  inApp Boolean @default(true)
+  email Boolean @default(true)
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  membership   Membership   @relation("NotificationPreferenceOwner", fields: [membershipId], references: [id])
+
+  /// One preference per member per event type. This is what makes a
+  /// preference write an upsert rather than a read-then-insert that races.
+  @@unique([membershipId, eventType])
+  @@index([organizationId, membershipId])
+  @@map("notification_preferences")
+}
+
+/// One attempt at one job, and the thing that makes delivery idempotent.
+///
+/// **The unique index on `(jobName, idempotencyKey)` is the guarantee**, not
+/// the check that precedes it. A queue promises at-least-once delivery; two
+/// deliveries of the same job arriving at the same moment both find nothing
+/// when they look, and the second insert is what refuses. Reserving the row
+/// *before* the handler runs is deliberate — reserving afterwards would let
+/// both copies run and only then discover they were duplicates.
+///
+/// The row is kept after success: `job_executions` is where "did the
+/// notification for step X ever go out?" is answered, and a table that only
+/// held failures could not answer it.
+model JobExecution {
+  id String @id @map("_id")
+
+  jobName        String
+  idempotencyKey String
+
+  /// Nullable because a few jobs are genuinely cross-tenant (a nightly sweep
+  /// that fans out per organisation). Every job that touches tenant data
+  /// carries one and establishes a request context from it.
+  organizationId String?
+
+  /// `RESERVED`, `SUCCEEDED`, `FAILED`, `DEAD_LETTERED`.
+  status String @default("RESERVED")
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(5)
+
+  payload Json
+
+  /// The final error, classified. A permanent failure dead-letters on the
+  /// first attempt — retrying a validation error five times is pure waste and
+  /// delays the alert (docs/14 §3).
+  errorMessage String?
+  errorKind    String?
+
+  scheduledFor DateTime?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([jobName, idempotencyKey])
+  @@index([status, scheduledFor])
+  @@index([organizationId, jobName, createdAt])
+  @@map("job_executions")
 }

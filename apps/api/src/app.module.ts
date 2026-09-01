@@ -9,6 +9,7 @@ import {
   DatabaseModule,
   HealthModule,
   LoggingModule,
+  QueueModule,
   RequestContextMiddleware,
 } from './platform/index.js';
 import { AuthModule } from './modules/auth/index.js';
@@ -20,6 +21,7 @@ import { PeopleModule } from './modules/people/index.js';
 import { PoliciesModule } from './modules/policies/index.js';
 import { ProjectsModule } from './modules/projects/index.js';
 import { CardsModule } from './modules/cards/index.js';
+import { NotificationsModule } from './modules/notifications/index.js';
 import { TransactionsModule } from './modules/transactions/index.js';
 import { SpendModule } from './modules/spend/index.js';
 
@@ -42,6 +44,7 @@ import { SpendModule } from './modules/spend/index.js';
     LoggingModule,
     DatabaseModule,
     AuditModule,
+    QueueModule,
     HealthModule,
     AuthModule,
     PeopleModule,
@@ -53,6 +56,7 @@ import { SpendModule } from './modules/spend/index.js';
     SpendModule,
     CardsModule,
     TransactionsModule,
+    NotificationsModule,
     AuditReadModule,
   ],
   providers: [

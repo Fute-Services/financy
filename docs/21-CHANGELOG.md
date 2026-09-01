@@ -13,6 +13,46 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **Notifications, and the queue underneath them** (Epic 2.5, plus the queue port from ADR-0006).
+  Submitting a request tells the people who can approve it; deciding one tells the person who
+  raised it. Both go through a **job, never through the request** (FR-NOT-003) — a provider outage
+  inside a request would make _approving a spend request_ fail because the notification failed, and
+  the person pressing the button would reasonably conclude the approval had not happened.
+- **Every job is enqueued after the transaction commits, never inside it** (docs/14 §1). A job
+  scheduled inside a transaction that then rolled back would tell five people to approve a request
+  that does not exist, and an email — unlike a database row — does not roll back. The approval
+  service now reports which step became active instead of notifying from inside its own
+  transaction.
+- **Idempotency is a unique index in two places, not a check in either.** `(jobName,
+idempotencyKey)` is reserved _before_ the handler runs, so two simultaneous deliveries produce
+  one execution rather than two that discover each other afterwards; and `(recipient, dedupeKey)`
+  on the notification itself means a job that failed halfway does not write a second copy for the
+  people it already reached. A test enqueues the same job twice on purpose and asserts one row.
+- **Failures are classified rather than retried uniformly.** Anything that is a business outcome —
+  a record that is not there, a validation failure, a state that forbids the transition —
+  dead-letters on the first attempt, because retrying it five times reaches the same conclusion and
+  delays the alert by the whole backoff ladder. Everything else backs off exponentially with full
+  jitter, capped at five attempts and fifteen minutes.
+- **A job about a record that has moved on succeeds.** A step approved between the enqueue and the
+  run needs no "please approve this" notification, and treating that as a failure would fill the
+  dead-letter queue with jobs that did exactly the right thing.
+- **Preferences are per event type, not per channel**, because "email me about approvals but not
+  about receipts" is the sentence people actually say — and a model that can only express "no
+  email" is one where the first person who wants less turns off the approvals too. Defaults live
+  in the contract rather than as rows written at registration, so today's defaults are not frozen
+  into every account created before they change. Turning a channel off never suppresses the
+  record: `channelsDelivered` says what actually happened, so "I was never told" stays answerable
+  and an email that failed every retry cannot leave a row claiming it was sent.
+- **The notification centre**, with the preference grid beside what it controls rather than in
+  Settings — somebody deciding they get too much of this is looking at the too-much when they
+  decide it. Opening a notification marks it read, because a person who opened the request has read
+  the notification about it. Dismissing is a soft delete for the same reason the record survives a
+  preference.
+- The sidebar's counts are real. They were hard-coded empty while the endpoints behind them did not
+  exist — a plausible number beside Approvals would have been the most convincing lie on the screen
+  — and are now resolved on the server per render, with a failed fetch showing no badge rather than
+  a stale one.
+
 - **Cards and transactions** — `/v1/cards` and `/v1/transactions` (Epic 2.4, and the screens for
   both from Epic 2.6). **Nothing anywhere carries a card number**: there is no `pan`, no `cvv`,
   and no full expiry — not redacted, absent — because a field that does not exist cannot be
