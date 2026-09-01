@@ -151,6 +151,22 @@ test.describe('authentication', () => {
 
     // Subsequence matching: four letters, none of them a prefix.
     await search.fill('aprv');
+
+    /**
+     * Wait for the list to have filtered before pressing Enter.
+     *
+     * Typing and pressing immediately races the re-render: the key lands while
+     * the highlighted index still points into the unfiltered list, and Enter
+     * navigates to whatever was there — or to nothing. It passed alone and
+     * failed about one run in three under two workers, which is the shape of
+     * flake that gets a test deleted rather than fixed.
+     */
+    // The highlighted row *is* the precondition for Enter, so it is what to
+    // wait for — asserting a result count would hard-code today's navigation
+    // (`aprv` also matches "Policies") and break the day somebody adds a
+    // module.
+    await expect(palette.locator('button[data-highlighted="true"]')).toHaveText(/Approvals/);
+
     await page.keyboard.press('Enter');
 
     await expect(page).toHaveURL(/\/approvals$/);

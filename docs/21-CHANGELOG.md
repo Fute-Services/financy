@@ -34,6 +34,12 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   deliberately, and it is why the resolver excludes the requester before _and_ after delegation.
 - **Concurrent approvals asserted as simultaneous, not sequential** (FR-APR-011): two approvers
   fired together produce exactly one completion, one recorded action, and one settled request.
+- **The vertical slice, in a real browser** (Epic 2.7, docs/05 §0): register, invite a finance
+  admin, author a policy in the rule builder, publish it, raise a request that the policy routes,
+  and approve it from the other person's session. It exists for the failures that live in the
+  seams and pass every cheaper test — a rule the builder can express and the engine cannot read, a
+  decision the API returns and the screen does not show, a queue offering a step its approver
+  cannot act on.
 
 - **Approval reminders, escalation, and request expiry** (tasks 2.2.7 and 2.3.8, FR-APR-008,
   FR-SPD-008). One sweep finds the work and writes nothing; everything it finds becomes a bounded
@@ -298,6 +304,15 @@ idempotencyKey)` is reserved _before_ the handler runs, so two simultaneous deli
   which is Phase 2.
 
 ### Fixed
+
+- **The rule builder defaulted a step to a role that does not exist.** Choosing "Role" as the
+  approver produced `FINANCE_MANAGER`, which is not one of the five — so the select showed the
+  first real role while the rule stored the invented one, and the chain it opened resolved to
+  nobody. The same invented key is named in the demo seed as a mistake made once before. The
+  builder now offers only the roles that hold `approval:act`, which is a smaller fix than it
+  sounds: `ORG_ADMIN` and `AUDITOR` cannot approve spend (docs/03 §2.1), so naming either was
+  always a step nobody could finish — legible at submission, but far too late for the policy
+  author who has gone.
 
 - **A simultaneous approval answered `500`.** MongoDB aborts one of two transactions touching the
   same step at the same instant and Prisma reports `P2034`; nothing mapped it, so the approver who

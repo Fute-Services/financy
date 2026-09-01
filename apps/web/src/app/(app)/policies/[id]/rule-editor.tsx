@@ -8,6 +8,7 @@ import {
   POLICY_FIELD_LABELS,
   ROLE_KEYS,
   ROLE_LABELS,
+  permissionsForRole,
   SPEND_TYPE_LABELS,
   STEP_TYPE_LABELS,
   APPROVER_KIND_LABELS,
@@ -110,6 +111,21 @@ interface EditRule {
   outcomes: Outcome[];
   terminal: boolean;
 }
+
+/**
+ * The roles a step may name, which is not all of them.
+ *
+ * `ORG_ADMIN` and `AUDITOR` do not hold `approval:act` — administering people
+ * and structure is separate from approving spend (docs/03 §2.1) — so a rule
+ * naming either resolves to a step nobody can complete. The API raises
+ * `UNRESOLVABLE_APPROVER` at submission, which is legible but late: the policy
+ * author has gone, and the person who finds out is the requester whose money
+ * is stuck.
+ *
+ * Filtering here is the same principle as the closed field set: the builder
+ * should not be able to express a rule that cannot fire.
+ */
+const APPROVING_ROLES = ROLE_KEYS.filter((key) => permissionsForRole(key).has('approval:act'));
 
 const CONTROL =
   'h-8 rounded-[var(--radius-sm)] border border-[var(--border-strong)] bg-[var(--surface-raised)] ' +
@@ -1039,7 +1055,7 @@ function ApproverFields({
             aria-label="Role"
             className={`${CONTROL} w-[160px]`}
           >
-            {ROLE_KEYS.map((key) => (
+            {APPROVING_ROLES.map((key) => (
               <option key={key} value={key}>
                 {ROLE_LABELS[key]}
               </option>
@@ -1220,7 +1236,11 @@ function defaultOutcome(type: string): Outcome {
 function defaultApprover(kind: string): Extract<Outcome, { type: 'REQUIRE_APPROVER' }>['approver'] {
   switch (kind) {
     case 'ROLE':
-      return { kind: 'ROLE', roleKey: 'FINANCE_MANAGER', scope: 'ORGANIZATION' };
+      return {
+        kind: 'ROLE',
+        roleKey: APPROVING_ROLES[0] ?? 'FINANCE_ADMIN',
+        scope: 'ORGANIZATION',
+      };
     case 'DEPARTMENT_HEAD':
       return { kind: 'DEPARTMENT_HEAD', levelsUp: 0 };
     case 'MANAGER_CHAIN':
