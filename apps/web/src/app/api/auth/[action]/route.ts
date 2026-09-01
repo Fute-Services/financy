@@ -19,7 +19,23 @@ import { API_BASE_URL } from '@/lib/api';
  * would be wrong.
  */
 
-const ALLOWED_ACTIONS = new Set(['login', 'register', 'logout']);
+/**
+ * The upstream path each allowed action maps to.
+ *
+ * A map rather than a set, because invitation acceptance lives at
+ * `/auth/invitations/accept` and interpolating the action name would either
+ * miss it or require the browser to name a path — which is the pass-through
+ * this allow-list exists to prevent.
+ */
+const ALLOWED_ACTIONS: Readonly<Record<string, string>> = {
+  login: 'login',
+  register: 'register',
+  logout: 'logout',
+  // Creates the session it runs under, which is why it is proxied at all: the
+  // `Set-Cookie` has to reach the browser, and a server action's would land
+  // on the server's own fetch.
+  'accept-invitation': 'invitations/accept',
+};
 
 export async function POST(
   request: NextRequest,
@@ -29,7 +45,9 @@ export async function POST(
 
   // An allow-list, not a pass-through. Without it this route would proxy any
   // path under `/v1/auth/` that a caller cared to name.
-  if (!ALLOWED_ACTIONS.has(action)) {
+  const upstreamPath = ALLOWED_ACTIONS[action];
+
+  if (upstreamPath === undefined) {
     return NextResponse.json(
       { error: { code: 'RESOURCE_NOT_FOUND', message: 'Not found.' } },
       { status: 404 },
@@ -38,7 +56,7 @@ export async function POST(
 
   const body = action === 'logout' ? undefined : await request.text();
 
-  const upstream = await fetch(`${API_BASE_URL}/v1/auth/${action}`, {
+  const upstream = await fetch(`${API_BASE_URL}/v1/auth/${upstreamPath}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

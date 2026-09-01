@@ -27,6 +27,16 @@ export interface FormState {
   fields?: Record<string, string[]>;
   /** `STALE_VERSION`. Offer a reload, not a retry. */
   conflict?: boolean;
+  /**
+   * A one-time link the write produced, shown once and never recoverable.
+   *
+   * Only invitations use it. The acceptance token exists in exactly two
+   * responses — the create and the resend — and is stored as a hash, so if
+   * the inviter does not see it here they cannot get it back and must issue
+   * a new invitation. That is why the dialog stays open on success instead of
+   * closing like every other one.
+   */
+  link?: string;
 }
 
 export const IDLE: FormState = { status: 'idle' };

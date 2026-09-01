@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useCallback, useEffect, useState } from 'react';
+import { useActionState, useCallback, useState } from 'react';
 import {
   ROLE_DESCRIPTIONS,
   ROLE_KEYS,
@@ -157,11 +157,13 @@ function InviteDialog({
   const [state, action, pending] = useActionState(inviteMember, IDLE);
   const [role, setRole] = useState<RoleKey>('EMPLOYEE');
 
-  useEffect(() => {
-    if (state.status === 'success') onClose();
-  }, [state.status, onClose]);
-
   const field = (name: string): string | undefined => state.fields?.[name]?.[0];
+
+  // Deliberately **not** closed on success, unlike every other dialog here.
+  // The acceptance token exists in this one response and is stored as a hash;
+  // if the inviter does not copy the link now they cannot get it back and
+  // must issue a new invitation. Closing on their behalf would throw it away.
+  const issued = state.status === 'success' && state.link !== undefined;
 
   // Resolved from the shared catalogue — the same one the server's guard
   // reads — so the preview cannot promise access the endpoint would refuse.
@@ -175,15 +177,23 @@ function InviteDialog({
       description="They arrive with the role you choose here, so it is worth choosing deliberately."
       width="lg"
       footer={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form="invite-form" variant="primary" loading={pending}>
-            Send invitation
+        issued ? (
+          <Button onClick={onClose} variant="primary">
+            Done
           </Button>
-        </>
+        ) : (
+          <>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button type="submit" form="invite-form" variant="primary" loading={pending}>
+              Send invitation
+            </Button>
+          </>
+        )
       }
     >
-      <form id="invite-form" action={action} className="flex flex-col gap-4">
+      {issued ? <IssuedLink link={state.link ?? ''} message={state.message} /> : null}
+
+      <form id="invite-form" action={action} className="flex flex-col gap-4" hidden={issued}>
         {state.status === 'error' && state.message !== undefined ? (
           <FormMessage>{state.message}</FormMessage>
         ) : null}
@@ -240,5 +250,46 @@ function InviteDialog({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/**
+ * The one-time acceptance link.
+ *
+ * Rendered as selectable text rather than behind a "copy" button alone: a
+ * clipboard write can fail silently on an insecure origin or a locked-down
+ * browser, and the person would be left believing they had copied a link they
+ * cannot get back.
+ */
+function IssuedLink({
+  link,
+  message,
+}: {
+  link: string;
+  message?: string | undefined;
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-3">
+      <FormMessage tone="success">{message ?? 'Invitation created.'}</FormMessage>
+
+      <label className="text-[13px] font-medium text-ink-700" htmlFor="invite-link">
+        Send them this link
+      </label>
+
+      <input
+        id="invite-link"
+        readOnly
+        value={link}
+        onFocus={(event) => {
+          event.currentTarget.select();
+        }}
+        className="w-full rounded-md border border-[var(--border-strong)] bg-ink-50 px-3 py-2 font-mono text-[12px] text-ink-700"
+      />
+
+      <p className="text-[13px] text-ink-500">
+        It is shown once. The token is stored hashed, so it cannot be recovered afterwards — if it
+        is lost, resend the invitation to issue a fresh one.
+      </p>
+    </div>
   );
 }

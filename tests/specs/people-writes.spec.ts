@@ -70,8 +70,83 @@ test.describe('people writes', () => {
 
     await page.getByRole('button', { name: 'Send invitation' }).click();
 
+    // The dialog stays open and shows the acceptance link. It is the one
+    // response that carries the token, and the token is stored hashed — so
+    // closing on the inviter's behalf would throw away something they cannot
+    // get back.
+    await expect(dialog(page).getByRole('textbox', { name: 'Send them this link' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Done' }).click();
     await expect(dialog(page)).toBeHidden();
     await expect(page.getByText(`preview-${id}@people.test`)).toBeVisible();
+  });
+
+  /**
+   * The whole invitation journey, end to end and entirely through screens.
+   *
+   * The token is copied out of the dialog rather than out of a mailbox,
+   * because that is where it lives: the create response carries it once, and
+   * it is stored hashed, so an invitation that only existed in an email would
+   * be silently dead whenever delivery failed.
+   */
+  test('an invited colleague follows the link and joins', async ({ page, browser }) => {
+    const id = await registerOrganisation(page);
+    const email = `arrival-${id}@people.test`;
+
+    await page.goto('/people');
+    await page.getByRole('button', { name: 'Invite someone' }).click();
+    await dialog(page).getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+    await dialog(page).getByRole('combobox', { name: 'Role', exact: true }).selectOption('MANAGER');
+    await page.getByRole('button', { name: 'Send invitation' }).click();
+
+    // The dialog stays open on success, unlike every other one here: the
+    // token is in this response and nowhere else.
+    const link = await dialog(page)
+      .getByRole('textbox', { name: 'Send them this link' })
+      .inputValue();
+    expect(link).toContain('/invite/');
+    await page.getByRole('button', { name: 'Done' }).click();
+
+    // A fresh context, because the invitee is not the inviter and must not
+    // inherit their session.
+    const theirContext = await browser.newContext();
+    const theirPage = await theirContext.newPage();
+
+    await theirPage.goto(link);
+
+    await expect(theirPage.getByRole('heading', { name: /^Join / })).toBeVisible();
+    // The address they were invited at, shown and not editable — a link
+    // followed from a shared inbox should say which address it is for.
+    await expect(theirPage.getByRole('textbox', { name: 'Email', exact: true })).toHaveValue(email);
+
+    await theirPage.getByRole('textbox', { name: 'Your name', exact: true }).fill('Mary Jackson');
+    await theirPage.getByLabel(/Choose a password/).fill(JOINER_PASSWORD);
+    await theirPage.getByRole('button', { name: /Create account and join/ }).click();
+
+    await theirPage.waitForURL('**/overview');
+
+    // The link works once. Following it again finds a spent token, which the
+    // API answers exactly as it answers an unknown one.
+    const secondPage = await theirContext.newPage();
+    await secondPage.goto(link);
+    await expect(secondPage.getByText(/does not work/i)).toBeVisible();
+
+    await theirContext.close();
+
+    // And they are in the organisation, with the role they were invited as.
+    await page.goto('/people');
+    await expect(page.getByRole('row').filter({ hasText: 'Mary Jackson' })).toContainText(
+      'Manager',
+    );
+  });
+
+  test('shows a dead link its own page rather than a form that cannot work', async ({ page }) => {
+    await page.goto('/invite/not-a-real-token');
+
+    await expect(page.getByText(/does not work/i)).toBeVisible();
+    // No form: asking somebody to choose a password before telling them the
+    // link is dead is the sequence this page exists to avoid.
+    await expect(page.getByRole('button', { name: /join/i })).toHaveCount(0);
   });
 
   test('offers nothing on the caller’s own row', async ({ page }) => {
@@ -102,6 +177,7 @@ test.describe('people writes', () => {
       .getByRole('combobox', { name: 'Role', exact: true })
       .selectOption('EMPLOYEE');
     await page.getByRole('button', { name: 'Send invitation' }).click();
+    await page.getByRole('button', { name: 'Done' }).click();
     await expect(dialog(page)).toBeHidden();
 
     const cookies = await page.context().cookies();

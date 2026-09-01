@@ -71,6 +71,8 @@ export function Field({
   errors,
   required = true,
   defaultValue,
+  value,
+  readOnly = false,
 }: {
   label: string;
   name: string;
@@ -81,6 +83,14 @@ export function Field({
   errors?: string[] | undefined;
   required?: boolean;
   defaultValue?: string;
+  /**
+   * A fixed value the person cannot change — the invitation's email address
+   * is the only one today. Shown rather than hidden: they need to see which
+   * address they are joining as, and a hidden field would leave them
+   * guessing after clicking a link from an inbox they may share.
+   */
+  value?: string;
+  readOnly?: boolean;
 }): React.JSX.Element {
   const errorId = `${name}-error`;
   const hintId = `${name}-hint`;
@@ -99,7 +109,8 @@ export function Field({
         required={required}
         autoComplete={autoComplete}
         placeholder={placeholder}
-        defaultValue={defaultValue}
+        {...(value === undefined ? { defaultValue } : { value, readOnly: true })}
+        readOnly={readOnly || value !== undefined}
         aria-invalid={invalid}
         // Both are announced, so a screen reader hears the requirement and the
         // failure rather than only one of them.
@@ -110,6 +121,9 @@ export function Field({
           'h-10 w-full rounded-[var(--radius-sm)] border bg-white px-3 text-sm text-ink-900',
           'placeholder:text-ink-400',
           invalid ? 'border-danger-border' : 'border-[var(--border-default)]',
+          // A read-only field looks read-only. Styling it like an editable
+          // box invites people to try, and then to wonder what is broken.
+          readOnly || value !== undefined ? 'bg-ink-50 text-ink-600' : '',
         ].join(' ')}
       />
 

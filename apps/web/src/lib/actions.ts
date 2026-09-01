@@ -21,22 +21,34 @@ export { IDLE, type FormState } from './form-state';
  * aggressively, and without this the table the user just edited re-renders
  * from the pre-edit cache and looks like the save was ignored.
  */
-export async function runWrite(
+export async function runWrite<T>(
   paths: readonly string[],
-  write: () => Promise<unknown>,
+  write: () => Promise<T>,
   successMessage?: string,
+  /**
+   * Turns the write's result into extra state for the form.
+   *
+   * Only invitations use it, to surface the one-time acceptance link. Most
+   * writes need nothing from their result — the page re-renders from the
+   * server — so the parameter is optional and usually absent.
+   */
+  describe?: (result: T) => Partial<FormState>,
 ): Promise<FormState> {
+  let result: T;
+
   try {
-    await write();
+    result = await write();
   } catch (error) {
     return toFormState(error);
   }
 
   for (const path of paths) revalidatePath(path);
 
-  return successMessage === undefined
-    ? { status: 'success' }
-    : { status: 'success', message: successMessage };
+  return {
+    status: 'success',
+    ...(successMessage === undefined ? {} : { message: successMessage }),
+    ...(describe === undefined ? {} : describe(result)),
+  };
 }
 
 function toFormState(error: unknown): FormState {

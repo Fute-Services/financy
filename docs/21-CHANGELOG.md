@@ -13,6 +13,15 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **The invitation acceptance screen** at `/invite/{token}` (task 1.7.6), and the one-time link
+  surfaced in the invite dialog so there is something to send. The preview is fetched on the
+  server before anything renders — asking somebody to choose a password and only then telling them
+  the link expired is the sequence this avoids — and it decides whether a password is asked for at
+  all: an address that already has an account must not have its password set by whoever holds an
+  invitation to a different organisation. Every way a token can fail gets the same page, because
+  the API answers all four the same way. The invite dialog is the one dialog that does not close
+  on success: the token exists in that response and is stored hashed, so closing would throw away
+  something unrecoverable.
 - **The people screen writes.** Invite with a preview of what the role grants, change a role
   behind step-up, deactivate, reactivate, and resend or revoke a pending invitation (task 1.7.7).
   The role dialog collects the new role, the mandatory reason, and the password in one submission:

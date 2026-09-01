@@ -349,7 +349,7 @@ climbs 1, 2, 3 across three requests, which is only true if each one commits.
 | 1.7.3  | `DataTable` with sort, select, sticky header, keyboard nav, and all four states                   | ✅                          |
 | 1.7.4  | State components: EmptyState (×3), LoadingSkeleton, ErrorState, PermissionState                   | ✅                          |
 | 1.7.5  | App shell: sidebar (permission-filtered), top bar, org switcher, user menu                        | ✅                          |
-| 1.7.6  | Auth screens: login, register, invite acceptance, forgot/reset                                    | ⚠️ login/register only      |
+| 1.7.6  | Auth screens: login, register, invite acceptance, forgot/reset                                    | ⚠️ no forgot/reset yet      |
 | 1.7.7  | People: list, detail, invite flow with permission preview                                         | ✅ list + writes; no detail |
 | 1.7.8  | Settings: organisation, entities, departments, categories                                         | ✅ writes; categories read  |
 | 1.7.9  | Audit log: stream, filters, event detail                                                          | ⚠️ stream only              |

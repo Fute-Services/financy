@@ -40,6 +40,21 @@ import {
 
 const PEOPLE = '/people';
 
+/**
+ * Where the person receiving an invitation should be sent.
+ *
+ * Built from the configured web origin rather than from a request header. A
+ * link assembled from `Host` is a link an attacker can aim at their own
+ * domain with one forged header — and this one is handed to a colleague as
+ * trustworthy, alongside a token that lets whoever follows it join the
+ * organisation.
+ */
+function acceptUrl(token: string): string {
+  const base = process.env['WEB_BASE_URL'] ?? 'http://localhost:3100';
+
+  return `${base}/invite/${encodeURIComponent(token)}`;
+}
+
 export async function inviteMember(_previous: FormState, form: FormData): Promise<FormState> {
   return runWrite(
     [PEOPLE],
@@ -49,7 +64,8 @@ export async function inviteMember(_previous: FormState, form: FormData): Promis
         roleKey: optional(form, 'roleKey'),
         departmentId: optional(form, 'departmentId') ?? null,
       }),
-    'Invitation sent.',
+    'Invitation created. The link below is shown once.',
+    (response) => ({ link: acceptUrl(response.data.token) }),
   );
 }
 
@@ -72,7 +88,8 @@ export async function resendInvitation(_previous: FormState, form: FormData): Pr
       apiFetch<Resource<IssuedInvitation>>(`/memberships/invitations/${id}/resend`, {
         method: 'POST',
       }),
-    'A fresh invitation link has been issued; the previous one no longer works.',
+    'A fresh link. The previous one no longer works.',
+    (response) => ({ link: acceptUrl(response.data.token) }),
   );
 }
 
