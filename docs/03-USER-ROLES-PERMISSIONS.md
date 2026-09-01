@@ -186,6 +186,7 @@ Legend: **✔** granted · **○** granted, scope-limited (see column note) · *
 | ------------------------- | :-------: | :-----------: | :-----: | :---------------: | :-----: |
 | `expense:create`          |     ✔     |       ✔       |    ✔    |         ✔         |    ✖    |
 | `expense:read`            |     ✔     |       ✔       | ○ dept  |      ○ self       |    ✔    |
+| `expense:read_all`        |     ✔     |       ✔       |    ✖    |         ✖         |    ✔    |
 | `expense:approve`         |     ✖     |       ✔       | ○ dept  |         ✖         |    ✖    |
 | `receipt:upload`          |     ✔     |       ✔       |    ✔    |         ✔         |    ✖    |
 | `receipt:read`            |     ✔     |       ✔       | ○ dept  |      ○ self       |    ✔    |
@@ -193,6 +194,7 @@ Legend: **✔** granted · **○** granted, scope-limited (see column note) · *
 | `receipt:delete`          |     ✖     |       ✔       |    ✖    | ○ own, unattached |    ✖    |
 | `reimbursement:create`    |     ✔     |       ✔       |    ✔    |         ✔         |    ✖    |
 | `reimbursement:read`      |     ✔     |       ✔       | ○ dept  |      ○ self       |    ✔    |
+| `reimbursement:read_all`  |     ✔     |       ✔       |    ✖    |         ✖         |    ✔    |
 | `reimbursement:approve`   |     ✖     |       ✔       | ○ dept  |         ✖         |    ✖    |
 | `reimbursement:mark_paid` |     ✖     |       ✔       |    ✖    |         ✖         |    ✖    |
 

@@ -31,7 +31,8 @@ export interface ApprovalRequestedVariables {
   amount: string;
   purpose: string;
   reference: string;
-  spendRequestId: string;
+  /** Where the notification points; the subject decides, not the template. */
+  path: string;
   dueAt: string | null;
 }
 
@@ -42,7 +43,8 @@ export interface ApprovalDecidedVariables {
   outcome: 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'OVERRIDDEN';
   deciderName: string | null;
   comment: string | null;
-  spendRequestId: string;
+  /** Where the notification points; the subject decides, not the template. */
+  path: string;
 }
 
 export interface ApprovalReminderVariables {
@@ -50,7 +52,8 @@ export interface ApprovalReminderVariables {
   amount: string;
   purpose: string;
   reference: string;
-  spendRequestId: string;
+  /** Where the notification points; the subject decides, not the template. */
+  path: string;
   waitingSince: string;
 }
 
@@ -59,7 +62,8 @@ export interface ApprovalEscalatedVariables {
   amount: string;
   purpose: string;
   reference: string;
-  spendRequestId: string;
+  /** Where the notification points; the subject decides, not the template. */
+  path: string;
   dueAt: string;
 }
 
@@ -71,7 +75,7 @@ export const templates = {
       title: `${variables.requesterName} needs your approval for ${variables.amount}`,
       body: `${variables.reference} — ${variables.purpose}.${due}`,
       actionLabel: 'Review this request',
-      path: `/spend/${variables.spendRequestId}`,
+      path: variables.path,
     };
   },
 
@@ -108,7 +112,7 @@ export const templates = {
       title: chosen.title,
       body: `${chosen.lead}${comment}`,
       actionLabel: 'Open the request',
-      path: `/spend/${variables.spendRequestId}`,
+      path: variables.path,
     };
   },
 
@@ -120,7 +124,7 @@ export const templates = {
       title: `Escalated to you: ${variables.amount} for ${variables.requesterName}`,
       body: `${variables.reference} — ${variables.purpose} — passed its deadline of ${formatDay(variables.dueAt)} without a decision, so it has come to you as well.`,
       actionLabel: 'Review this request',
-      path: `/spend/${variables.spendRequestId}`,
+      path: variables.path,
     };
   },
 
@@ -129,7 +133,7 @@ export const templates = {
       title: `Still waiting on you: ${variables.amount} for ${variables.requesterName}`,
       body: `${variables.reference} — ${variables.purpose} — has been waiting since ${formatDay(variables.waitingSince)}.`,
       actionLabel: 'Review this request',
-      path: `/spend/${variables.spendRequestId}`,
+      path: variables.path,
     };
   },
 } as const;

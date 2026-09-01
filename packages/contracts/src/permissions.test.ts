@@ -162,6 +162,8 @@ describe('the invariants docs/03 §4 states', () => {
       'transaction:read_all',
       'card:read_all',
       'receipt:read_all',
+      'expense:read_all',
+      'reimbursement:read_all',
     ] as const;
 
     for (const role of ROLE_KEYS) {

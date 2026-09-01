@@ -172,6 +172,10 @@ model Organization {
   notificationPreferences NotificationPreference[]
   receipts                Receipt[]
   receiptAttachments      ReceiptAttachment[]
+  expenses                Expense[]
+  expenseItems            ExpenseItem[]
+  reimbursementBatches    ReimbursementBatch[]
+  reimbursementLines      ReimbursementLine[]
 
   @@map("organizations")
 }
@@ -403,6 +407,10 @@ model Membership {
 
   notifications          Notification[]           @relation("NotificationRecipient")
   receiptsUploaded       Receipt[]                @relation("ReceiptUploader")
+  expensesSubmitted      Expense[]                @relation("ExpenseSubmitter")
+  reimbursementsReceived ReimbursementBatch[]     @relation("ReimbursementPayee")
+  reimbursementsApproved ReimbursementBatch[]     @relation("ReimbursementApprover")
+  reimbursementsPaid     ReimbursementBatch[]     @relation("ReimbursementPayer")
   receiptsAttached       ReceiptAttachment[]      @relation("ReceiptAttacher")
   receiptsDetached       ReceiptAttachment[]      @relation("ReceiptDetacher")
   notificationPreferences NotificationPreference[] @relation("NotificationPreferenceOwner")
@@ -439,6 +447,8 @@ model Entity {
   spendRequests SpendRequest[]
   cards         Card[]
   transactions  Transaction[]
+  expenses      Expense[]
+  reimbursementBatches ReimbursementBatch[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -486,6 +496,7 @@ model Department {
   spendRequests SpendRequest[]
   cards         Card[]
   transactions  Transaction[]
+  expenses      Expense[]
 
   /// **Not** unique on (organizationId, code), though PostgreSQL made it so.
   /// MongoDB treats every missing or null value in a unique index as the same
@@ -525,6 +536,7 @@ model Project {
   department    Department?    @relation(fields: [departmentId], references: [id])
   spendRequests SpendRequest[]
   transactions  Transaction[]
+  expenses      Expense[]
 
   /// **Not** unique on (organizationId, code), though PostgreSQL made it so.
   /// MongoDB treats every missing or null value in a unique index as the same
@@ -565,6 +577,8 @@ model Category {
 
   spendRequests SpendRequest[]
   transactions  Transaction[]
+  expenses      Expense[]
+  expenseItems  ExpenseItem[]
 
   @@unique([organizationId, key])
   @@index([organizationId, parentId])
@@ -1347,6 +1361,7 @@ model Transaction {
   spendRequest SpendRequest? @relation(fields: [spendRequestId], references: [id])
 
   adjustments TransactionAdjustment[]
+  expenses    Expense[]
 
   /// The idempotency guarantee for imports. Re-running the same file writes
   /// nothing new, because every row carries the provider's own identifier and
@@ -1651,4 +1666,221 @@ model ReceiptAttachment {
   @@index([attachedByMembershipId])
   @@index([detachedByMembershipId])
   @@map("receipt_attachments")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Expenses and reimbursements (epics 3.2, 3.3)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum ExpenseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+  /// Approved, batched, and paid. Terminal, and the only status a
+  /// reimbursement line may point at.
+  REIMBURSED
+}
+
+/// Money somebody has already spent, asking to have it recognised.
+///
+/// **The opposite of a spend request in one important way.** A spend request
+/// asks *before*; an expense reports *after*, and the money is already gone.
+/// That is why a rejected expense is a conversation rather than a control: it
+/// does not stop the spending, it refuses the reimbursement — and the two are
+/// different enough that collapsing them into one record would make the word
+/// "rejected" mean two things.
+///
+/// **How it was paid decides what approval is for.** Out of pocket, approval
+/// authorises paying somebody back. On a company card, the money has already
+/// left the company and approval is a review — so the two carry different
+/// spend types into the policy engine and can be governed by different rules.
+model Expense {
+  id             String @id @map("_id")
+  organizationId String
+
+  /// Human-facing, sequential per organisation: `EXP-00042`.
+  reference String
+
+  submitterMembershipId String
+
+  /// `OUT_OF_POCKET` or `COMPANY_CARD`.
+  paymentMethod String @default("OUT_OF_POCKET")
+
+  /// Set when this expense explains a card charge. The link is what stops the
+  /// same spend being both reimbursed and paid by the company.
+  transactionId String?
+
+  entityId     String
+  departmentId String?
+  projectId    String?
+  categoryId   String?
+
+  merchantName String
+  /// The total. Server-computed from the items when there are any, so a
+  /// client cannot assert a total that does not match its own lines
+  /// (FR-SPD-006 applies here for the same reason).
+  amount               String
+  currency             String
+  amountInBaseCurrency String
+
+  /// When the money was spent, which is not when the claim was filed.
+  expenseDate DateTime
+  memo        String?
+
+  status ExpenseStatus @default(DRAFT)
+
+  /// The decision as it was made, stored verbatim (docs/11 §8).
+  policyDecision     Json?
+  approvalInstanceId String?
+
+  submittedAt DateTime?
+  decidedAt   DateTime?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  submitter    Membership    @relation("ExpenseSubmitter", fields: [submitterMembershipId], references: [id])
+  entity       Entity        @relation(fields: [entityId], references: [id])
+  department   Department?   @relation(fields: [departmentId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  category     Category?     @relation(fields: [categoryId], references: [id])
+  transaction  Transaction?  @relation(fields: [transactionId], references: [id])
+  items        ExpenseItem[]
+
+  reimbursementLine ReimbursementLine?
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status, expenseDate])
+  @@index([organizationId, submitterMembershipId, status])
+  @@index([submitterMembershipId])
+  @@index([entityId])
+  @@index([departmentId])
+  @@index([projectId])
+  @@index([categoryId])
+  @@index([transactionId])
+  @@map("expenses")
+}
+
+/// One line of an expense — a meal, a fare, a night in a hotel.
+///
+/// Optional: most expenses are one thing. They exist for the claim that covers
+/// a three-day trip, where one category and one memo would lose exactly the
+/// detail finance needs to code it.
+model ExpenseItem {
+  id             String @id @map("_id")
+  organizationId String
+  expenseId      String
+
+  description String
+  amount      String
+  currency    String
+  categoryId  String?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  expense      Expense      @relation(fields: [expenseId], references: [id])
+  category     Category?    @relation(fields: [categoryId], references: [id])
+
+  @@index([organizationId, expenseId])
+  @@index([expenseId])
+  @@index([categoryId])
+  @@map("expense_items")
+}
+
+/// A batch of approved out-of-pocket expenses, paid as one payment.
+///
+/// **Grouped by person, entity, currency, and period** (FR-EXP-008). Each is
+/// forced: one payment goes to one person, from one legal entity, in one
+/// currency — mixing any of them produces a batch nobody can actually pay. The
+/// period is what makes a batch a decision rather than a running total.
+///
+/// The total is computed from the lines, never supplied. A batch whose stated
+/// total disagreed with its lines is the kind of number that gets paid and
+/// then reconciled by hand for a week.
+model ReimbursementBatch {
+  id             String @id @map("_id")
+  organizationId String
+
+  reference String
+
+  /// Who is being paid.
+  payeeMembershipId String
+  entityId          String
+  currency          String
+
+  /// The window the batch covers, so "March's expenses" is a thing that exists.
+  periodStart DateTime
+  periodEnd   DateTime
+
+  /// `DRAFT`, `APPROVED`, `PAID`, `CANCELLED`.
+  status String @default("DRAFT")
+
+  /// Summed from the lines inside the transaction that writes them.
+  totalAmount String @default("0.0000")
+
+  /// Mandatory before a batch can be marked paid (FR-EXP-010). A payment
+  /// nobody can find in a bank statement is a payment nobody can prove.
+  paymentReference String?
+  paidAt           DateTime?
+  paidByMembershipId String?
+
+  approvedAt             DateTime?
+  approvedByMembershipId String?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  payee        Membership          @relation("ReimbursementPayee", fields: [payeeMembershipId], references: [id])
+  entity       Entity              @relation(fields: [entityId], references: [id])
+  approvedBy   Membership?         @relation("ReimbursementApprover", fields: [approvedByMembershipId], references: [id])
+  paidBy       Membership?         @relation("ReimbursementPayer", fields: [paidByMembershipId], references: [id])
+  lines        ReimbursementLine[]
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, payeeMembershipId, status])
+  @@index([payeeMembershipId])
+  @@index([entityId])
+  @@index([approvedByMembershipId])
+  @@index([paidByMembershipId])
+  @@map("reimbursement_batches")
+}
+
+/// One expense inside one batch.
+///
+/// **`expenseId` is unique across every batch, and that index is the control**
+/// (FR-EXP-009). Paying the same claim twice is the most ordinary financial
+/// error there is — two people batching on the same afternoon, a retry after a
+/// timeout — and it is prevented by the database rather than by a check that
+/// two concurrent writers both pass.
+model ReimbursementLine {
+  id             String @id @map("_id")
+  organizationId String
+  batchId        String
+
+  expenseId String
+
+  amount   String
+  currency String
+
+  createdAt DateTime @default(now())
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  batch        ReimbursementBatch @relation(fields: [batchId], references: [id])
+  expense      Expense            @relation(fields: [expenseId], references: [id])
+
+  /// The invariant. One expense, one line, ever — across all batches, not
+  /// merely within one.
+  @@unique([expenseId])
+  @@index([organizationId, batchId])
+  @@index([batchId])
+  @@map("reimbursement_lines")
 }

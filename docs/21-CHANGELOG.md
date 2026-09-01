@@ -13,6 +13,42 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **Expenses and reimbursements** (Epics 3.2 and 3.3). An expense is the opposite of a spend
+  request in one important way: a request asks _before_ and an expense reports _after_, when the
+  money is already gone. So a blocked expense stops nothing — it asks for a receipt and stays
+  editable (FR-EXP-003) — and a rejected one refuses the reimbursement rather than the purchase.
+- **How it was paid decides what approval is for.** Out of pocket, approving authorises paying
+  somebody back; on a company card the money has already left and approving is a review. The two
+  carry different spend types — `REIMBURSEMENT` and `CARD` — into the same policy engine, so an
+  organisation can govern them differently without any code knowing that is what they did. It is
+  also the first time two spend types exist at once, which is a thing the policy suite could not
+  assert before.
+- **The approval machinery grew its second subject type, and lost its knowledge of the first.**
+  Settling a chain used to call the spend module directly, with a comment saying what would happen
+  when a second subject arrived. Each module now registers what an approval _means_ for its own
+  record, the controller dispatches through `ApprovalSubjectRegistry`, and a chain whose subject
+  nobody owns is refused loudly rather than settling the instance and leaving the record stuck in
+  `PENDING_APPROVAL` forever. The route moved back to the approvals module, where it belongs.
+- **The notification jobs stopped assuming a spend request.** Every template now takes a reference,
+  a line of text, a formatted amount and a path, and both subject types are mapped onto that shape
+  in one place — so the day a bill arrives it is a third case in one switch rather than a third set
+  of templates.
+- **An expense totals itself from its items.** A stated total that disagrees with its own lines is
+  refused rather than reconciled: picking one means picking a number nobody chose, and the two
+  obvious rules are wrong in opposite directions. Items in mixed currencies are refused for the
+  same reason a cross-currency comparison raises.
+- **An expense cannot be paid twice** (FR-EXP-009). `UNIQUE(expense_id)` across every line in every
+  batch, asserted by building two batches _simultaneously_ — the case a pre-flight check passes
+  twice and pays twice. Company-card spend is never batched at all: the company already paid, and
+  including it would pay for one dinner from two directions with each payment looking ordinary.
+- **A batch is grouped by person, entity, currency, and period**, and the caller names the group
+  rather than the expenses. Every one of those is a constraint on what a payment can be, not a
+  preference — a batch mixing any of them is a payment nobody can make, and discovering that at the
+  bank is discovering it far too late. Approving a batch and marking it paid are two routes with
+  two permissions, because one route doing both would let a person pay themselves.
+- Receipts now attach to expenses as well as transactions, and only while the claim is a draft:
+  attaching evidence to a settled claim would change what an approver agreed to after they agreed.
+
 - **Receipts, and the private storage behind them** (Epic 3.1, FR-EXP-004…007). The upload is
   three steps and the middle one never touches this API: an intent writes a `PENDING` row and
   returns a short-lived signed URL, the browser PUTs the file straight to storage, and completion

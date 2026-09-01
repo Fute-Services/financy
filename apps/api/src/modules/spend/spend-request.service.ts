@@ -17,7 +17,7 @@ import {
   type PolicyDecision,
 } from '@financy/core';
 import type { Prisma } from '@financy/db';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 
 import { AuditService } from '../../platform/audit/index.js';
 import { guardVersion } from '../../platform/concurrency/index.js';
@@ -25,6 +25,7 @@ import { DatabaseService } from '../../platform/database/index.js';
 import { QUEUE_PORT, type QueuePort } from '../../platform/queue/index.js';
 import { getContext, getOrganizationId } from '../../platform/request-context/index.js';
 import { ApprovalService } from '../approvals/approval.service.js';
+import { ApprovalSubjectRegistry } from '../approvals/approval-subjects.js';
 import { PolicyContextService } from '../policies/policy-context.service.js';
 import { PolicyRepositoryService } from '../policies/policy-repository.service.js';
 
@@ -76,15 +77,25 @@ const SELECT = {
  * is an approval queue full of ghosts.
  */
 @Injectable()
-export class SpendRequestService {
+export class SpendRequestService implements OnModuleInit {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly policyContext: PolicyContextService,
     private readonly policies: PolicyRepositoryService,
     private readonly approvals: ApprovalService,
+    private readonly subjects: ApprovalSubjectRegistry,
     @Inject(QUEUE_PORT) private readonly queue: QueuePort,
   ) {}
+
+  onModuleInit(): void {
+    // What an approval *means* for a spend request lives here, with the
+    // record it changes — not in the controller that dispatches it.
+    this.subjects.register('spend_request', {
+      onApprovalSettled: (tx, organizationId, subjectId, outcome) =>
+        this.onApprovalSettled(tx, organizationId, subjectId, outcome),
+    });
+  }
 
   async list(
     query: ListSpendRequestsQuery,

@@ -19,28 +19,27 @@ import {
   getOrganizationId,
 } from '../../platform/request-context/index.js';
 import { ZodValidationPipe } from '../../platform/validation/index.js';
-import { ApprovalService, type ActionResult } from '../approvals/index.js';
-import { SpendRequestService } from './spend-request.service.js';
+import { ApprovalService, type ActionResult } from './approval.service.js';
+import { ApprovalSubjectRegistry } from './approval-subjects.js';
 
 /**
  * `/v1/approvals` — the queue, the timeline, and acting on a step (docs/10 §5.6).
  *
- * **It lives in the spend module rather than the approvals module, and that is
- * temporary.** Acting on an approval settles the chain, and settling has to
- * tell the *subject* — a spend request today, an expense or a bill from
- * Phase 3. The approval machinery deliberately knows nothing about any of
- * them, so something has to join the two, and today that is one dependency in
- * one direction. When the second subject type arrives this becomes a
- * dispatcher registered per subject, and the controller moves back.
+ * **It lived in the spend module until expenses arrived, and now it does not.**
+ * Acting on an approval settles the chain, and settling has to tell the
+ * *subject* — which was a spend request and is now also an expense. While
+ * there was one subject the controller called that module directly and a
+ * comment said what would happen when a second appeared; this is that, and the
+ * dependency now runs through `ApprovalSubjectRegistry` instead.
  *
- * Writing it the other way — the approvals module importing every subject —
- * is the arrangement that does not survive the second subject.
+ * The alternative — the approvals module importing every subject — is the
+ * arrangement that does not survive the third.
  */
 @Controller('approvals')
 export class ApprovalController {
   constructor(
     private readonly approvals: ApprovalService,
-    private readonly spend: SpendRequestService,
+    private readonly subjects: ApprovalSubjectRegistry,
     private readonly database: DatabaseService,
     @Inject(QUEUE_PORT) private readonly jobs: QueuePort,
   ) {}
@@ -199,11 +198,28 @@ export class ApprovalController {
           body.comment ?? null,
         );
 
-        if (outcome.settled !== null && outcome.settled.subjectType === 'spend_request') {
-          // The subject is told inside the same transaction. A chain that
-          // settled without its request moving is a request stuck in
+        if (outcome.settled !== null) {
+          const handler = this.subjects.resolve(outcome.settled.subjectType);
+
+          if (handler === undefined) {
+            /**
+             * A chain whose subject nobody owns.
+             *
+             * Refused rather than skipped: skipping would settle the
+             * *instance* and leave the record in `PENDING_APPROVAL` forever
+             * with an approved chain beside it and nothing saying why — the
+             * exact stuck state this module exists to prevent. Throwing rolls
+             * the whole action back, which is recoverable.
+             */
+            throw new Error(
+              `No module owns approval subject "${outcome.settled.subjectType}". Register one with ApprovalSubjectRegistry.`,
+            );
+          }
+
+          // The subject moves inside the same transaction as the step. A chain
+          // that settled without its subject moving is a record stuck in
           // `PENDING_APPROVAL` with nothing left to approve it.
-          await this.spend.onApprovalSettled(
+          await handler.onApprovalSettled(
             tx,
             organizationId,
             outcome.settled.subjectId,
@@ -238,12 +254,13 @@ export class ApprovalController {
     result: ActionResult,
     comment: string | null,
   ): Promise<void> {
-    if (result.settled !== null && result.settled.subjectType === 'spend_request') {
+    if (result.settled !== null) {
       await this.jobs.enqueue(
         'notification.approval_decided',
         {
           organizationId,
-          spendRequestId: result.settled.subjectId,
+          subjectType: result.settled.subjectType as 'spend_request' | 'expense',
+          subjectId: result.settled.subjectId,
           // `RETURNED` is the chain's word for it and `CHANGES_REQUESTED` is
           // the request's; the notification is about the request, so it uses
           // the request's.
@@ -252,7 +269,9 @@ export class ApprovalController {
           actedByMembershipId: getContext()?.membershipId ?? null,
           comment,
         },
-        { idempotencyKey: `request:${result.settled.subjectId}:${result.settled.outcome}` },
+        {
+          idempotencyKey: `${result.settled.subjectType}:${result.settled.subjectId}:${result.settled.outcome}`,
+        },
       );
 
       return;

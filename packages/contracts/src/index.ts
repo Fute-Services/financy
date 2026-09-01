@@ -28,6 +28,7 @@ export * from './cards.js';
 export * from './transactions.js';
 export * from './notifications.js';
 export * from './receipts.js';
+export * from './expenses.js';
 export * from './audit.js';
 export * from './errors.js';
 export * from './pagination.js';

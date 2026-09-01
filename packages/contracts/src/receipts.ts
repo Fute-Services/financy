@@ -82,11 +82,12 @@ export type OcrStatus = (typeof OCR_STATUSES)[number];
 /**
  * What a receipt can be attached to.
  *
- * `expense` joins this list with Epic 3.2, and it is deliberately absent until
- * then: a contract that named a target type the API would refuse is a contract
- * that lies to whoever reads it first.
+ * Both, and never both at once: one receipt has one open attachment
+ * (FR-EXP-007). The same image on an expense claim *and* on a card charge is
+ * how one dinner gets paid for twice, from two directions, with each payment
+ * looking perfectly ordinary on its own.
  */
-export const RECEIPT_TARGET_TYPES = ['transaction'] as const;
+export const RECEIPT_TARGET_TYPES = ['transaction', 'expense'] as const;
 export type ReceiptTargetType = (typeof RECEIPT_TARGET_TYPES)[number];
 
 /**

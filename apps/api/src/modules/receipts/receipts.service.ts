@@ -310,7 +310,7 @@ export class ReceiptsService {
       ...toRecord(receipt),
       history: history.map((row) => ({
         id: row.id,
-        targetType: row.targetType as 'transaction',
+        targetType: row.targetType as 'transaction' | 'expense',
         targetId: row.targetId,
         attachedBy: row.attachedBy.user.fullName,
         attachedAt: row.attachedAt.toISOString(),
@@ -499,7 +499,7 @@ export class ReceiptsService {
   private async assertTargetIsOurs(
     tx: Prisma.TransactionClient,
     organizationId: string,
-    targetType: 'transaction',
+    targetType: 'transaction' | 'expense',
     targetId: string,
   ): Promise<void> {
     switch (targetType) {
@@ -510,6 +510,25 @@ export class ReceiptsService {
         });
 
         if (transaction === null) throw new NotFoundError('Transaction');
+        return;
+      }
+
+      case 'expense': {
+        const expense = await tx.expense.findFirst({
+          where: { id: targetId, organizationId },
+          select: { id: true, status: true },
+        });
+
+        if (expense === null) throw new NotFoundError('Expense');
+
+        // Attaching evidence to a settled claim would change what an approver
+        // agreed to after they agreed to it.
+        if (expense.status !== 'DRAFT' && expense.status !== 'CHANGES_REQUESTED') {
+          throw new ConflictError(
+            'That expense has been submitted. Receipts can only be attached while it is a draft.',
+          );
+        }
+
         return;
       }
     }
@@ -582,7 +601,7 @@ function toRecord(row: Row): ReceiptRecord {
       row.attachedTargetId === null || row.attachedTargetType === null
         ? null
         : {
-            targetType: row.attachedTargetType as 'transaction',
+            targetType: row.attachedTargetType as 'transaction' | 'expense',
             targetId: row.attachedTargetId,
           },
     createdAt: row.createdAt.toISOString(),

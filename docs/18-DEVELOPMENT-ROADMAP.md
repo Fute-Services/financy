@@ -663,8 +663,8 @@ covered by a test; approval and verdict audited with the policy version applied.
 | Epic               | Contents                                                                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 3.1 Receipts       | ✅ Upload intent → signed URL → complete with magic-byte validation; scan and OCR jobs; attach/detach with history; `OCRProvider` port + no-op adapter |
-| 3.2 Expenses       | Schema, items, state machine, policy evaluation, submit/approve/return                                                                                 |
-| 3.3 Reimbursements | Batching by person/entity/currency/period; `UNIQUE(expense_id)`; approval; mark paid with reference                                                    |
+| 3.2 Expenses       | ✅ Schema, items, state machine, policy evaluation, submit/approve/return                                                                              |
+| 3.3 Reimbursements | ✅ Batching by person/entity/currency/period; `UNIQUE(expense_id)`; approval; mark paid with reference                                                 |
 | 3.4 Finance review | Review queue (keyboard-driven), categorisation, exceptions, bulk actions                                                                               |
 | 3.5 Linkage        | request → approval → transaction → receipt → review → audit, end to end                                                                                |
 | 3.6 Frontend       | Expenses (tabs), receipt-first creation, receipt preview, reimbursement batches, review queue                                                          |

@@ -61,7 +61,11 @@ export class NotificationJobs implements OnModuleInit {
 
     if (step.status !== 'ACTIVE' && step.status !== 'ESCALATED') return;
 
-    const subject = await this.subjectOf(payload.organizationId, step.instance.subjectId);
+    const subject = await this.subjectOf(
+      payload.organizationId,
+      step.instance.subjectType,
+      step.instance.subjectId,
+    );
 
     if (subject === null) return;
 
@@ -70,7 +74,7 @@ export class NotificationJobs implements OnModuleInit {
       amount: subject.amount,
       purpose: subject.purpose,
       reference: subject.reference,
-      spendRequestId: subject.id,
+      path: subject.path,
       dueAt: step.dueAt?.toISOString() ?? null,
     });
 
@@ -83,7 +87,7 @@ export class NotificationJobs implements OnModuleInit {
       recipientMembershipIds: step.eligibleMembershipIds,
       dedupeKey: `step:${step.id}:requested`,
       ...rendered,
-      resourceType: 'spend_request',
+      resourceType: subject.resourceType,
       resourceId: subject.id,
       metadata: { reference: subject.reference, amount: subject.amount, stepId: step.id },
     });
@@ -92,10 +96,14 @@ export class NotificationJobs implements OnModuleInit {
   private async approvalDecided(
     payload: JobPayload<'notification.approval_decided'>,
   ): Promise<void> {
-    const subject = await this.subjectOf(payload.organizationId, payload.spendRequestId);
+    const subject = await this.subjectOf(
+      payload.organizationId,
+      payload.subjectType,
+      payload.subjectId,
+    );
 
     if (subject === null) {
-      throw new PermanentJobError(`Spend request ${payload.spendRequestId} no longer exists.`);
+      throw new PermanentJobError(`${payload.subjectType} ${payload.subjectId} no longer exists.`);
     }
 
     const decider =
@@ -113,7 +121,7 @@ export class NotificationJobs implements OnModuleInit {
       outcome: payload.outcome,
       deciderName: decider?.user.fullName ?? null,
       comment: payload.comment,
-      spendRequestId: subject.id,
+      path: subject.path,
     });
 
     await this.notifications.deliver({
@@ -124,9 +132,9 @@ export class NotificationJobs implements OnModuleInit {
       eventType:
         payload.outcome === 'CHANGES_REQUESTED' ? 'spend_request.returned' : 'approval.decided',
       recipientMembershipIds: [subject.requesterMembershipId],
-      dedupeKey: `request:${subject.id}:${payload.outcome}`,
+      dedupeKey: `${payload.subjectType}:${subject.id}:${payload.outcome}`,
       ...rendered,
-      resourceType: 'spend_request',
+      resourceType: subject.resourceType,
       resourceId: subject.id,
       metadata: { reference: subject.reference, outcome: payload.outcome },
     });
@@ -142,7 +150,11 @@ export class NotificationJobs implements OnModuleInit {
     // The ordinary outcome: somebody acted between the sweep and the job.
     if (step.status !== 'ACTIVE' && step.status !== 'ESCALATED') return;
 
-    const subject = await this.subjectOf(payload.organizationId, step.instance.subjectId);
+    const subject = await this.subjectOf(
+      payload.organizationId,
+      step.instance.subjectType,
+      step.instance.subjectId,
+    );
 
     if (subject === null) return;
 
@@ -151,7 +163,7 @@ export class NotificationJobs implements OnModuleInit {
       amount: subject.amount,
       purpose: subject.purpose,
       reference: subject.reference,
-      spendRequestId: subject.id,
+      path: subject.path,
       waitingSince: (step.activatedAt ?? step.createdAt).toISOString(),
     });
 
@@ -163,7 +175,7 @@ export class NotificationJobs implements OnModuleInit {
       // duplicate of the first and nobody is chased again.
       dedupeKey: `step:${step.id}:reminder:${String(payload.nth)}`,
       ...rendered,
-      resourceType: 'spend_request',
+      resourceType: subject.resourceType,
       resourceId: subject.id,
       metadata: { reference: subject.reference, nth: payload.nth },
     });
@@ -190,7 +202,11 @@ export class NotificationJobs implements OnModuleInit {
     // do not need telling about something already decided.
     if (step.status !== 'ACTIVE' && step.status !== 'ESCALATED') return;
 
-    const subject = await this.subjectOf(payload.organizationId, step.instance.subjectId);
+    const subject = await this.subjectOf(
+      payload.organizationId,
+      step.instance.subjectType,
+      step.instance.subjectId,
+    );
 
     if (subject === null) return;
 
@@ -199,7 +215,7 @@ export class NotificationJobs implements OnModuleInit {
       amount: subject.amount,
       purpose: subject.purpose,
       reference: subject.reference,
-      spendRequestId: subject.id,
+      path: subject.path,
       dueAt: (step.dueAt ?? step.createdAt).toISOString(),
     });
 
@@ -209,7 +225,7 @@ export class NotificationJobs implements OnModuleInit {
       recipientMembershipIds: payload.addedMembershipIds,
       dedupeKey: `step:${step.id}:escalated`,
       ...rendered,
-      resourceType: 'spend_request',
+      resourceType: subject.resourceType,
       resourceId: subject.id,
       metadata: { reference: subject.reference, stepId: step.id },
     });
@@ -233,16 +249,59 @@ export class NotificationJobs implements OnModuleInit {
   }
 
   /**
-   * The request a chain is about, formatted for a sentence.
+   * What a chain is about, reduced to the four things a sentence needs.
    *
-   * `null` when the subject is not a spend request. Every subject type shares
-   * the approval machinery (docs/09), and expenses and bills arrive in later
-   * phases; a template guessing at their wording now would be written against
-   * a shape nobody has built.
+   * **Two subject types, one shape.** A spend request and an expense are
+   * different records with different words for their fields — `purpose`
+   * against a merchant and a memo — and the templates want neither: they want
+   * a reference, a line of text, a formatted amount, and whose it is. Mapping
+   * both onto that here means the wording is written once and the day a bill
+   * arrives it is a third case in one switch rather than a third template.
+   *
+   * `null` when the record has gone. The caller treats that as nothing to do,
+   * because a notification about a deleted record is not worth an alert.
    */
-  private async subjectOf(organizationId: string, spendRequestId: string) {
+  private async subjectOf(
+    organizationId: string,
+    subjectType: string,
+    subjectId: string,
+  ): Promise<Subject | null> {
+    if (subjectType === 'expense') {
+      const expense = await this.database.unscoped.expense.findFirst({
+        where: { id: subjectId, organizationId },
+        select: {
+          id: true,
+          reference: true,
+          merchantName: true,
+          memo: true,
+          amount: true,
+          currency: true,
+          submitterMembershipId: true,
+          submitter: { select: { user: { select: { fullName: true } } } },
+        },
+      });
+
+      if (expense === null) return null;
+
+      return {
+        id: expense.id,
+        resourceType: 'expense',
+        path: `/expenses/${expense.id}`,
+        reference: expense.reference,
+        // The merchant is what an approver recognises; the memo is why. A
+        // claim with no memo still reads as a sentence.
+        purpose:
+          expense.memo === null || expense.memo === ''
+            ? expense.merchantName
+            : `${expense.merchantName} — ${expense.memo}`,
+        amount: Money.of(expense.amount, expense.currency).format(),
+        requesterMembershipId: expense.submitterMembershipId,
+        requesterName: expense.submitter.user.fullName,
+      };
+    }
+
     const request = await this.database.unscoped.spendRequest.findFirst({
-      where: { id: spendRequestId, organizationId },
+      where: { id: subjectId, organizationId },
       select: {
         id: true,
         reference: true,
@@ -258,6 +317,8 @@ export class NotificationJobs implements OnModuleInit {
 
     return {
       id: request.id,
+      resourceType: 'spend_request',
+      path: `/spend/${request.id}`,
       reference: request.reference,
       purpose: request.purpose,
       // Formatted once, here, with the currency's own rules. A template
@@ -268,4 +329,18 @@ export class NotificationJobs implements OnModuleInit {
       requesterName: request.requester.user.fullName,
     };
   }
+}
+
+/** The shape every subject is reduced to before a template sees it. */
+interface Subject {
+  readonly id: string;
+  /** What the in-app row links to, which the screen resolves per type. */
+  readonly resourceType: string;
+  /** Where the notification points, which differs per subject type. */
+  readonly path: string;
+  readonly reference: string;
+  readonly purpose: string;
+  readonly amount: string;
+  readonly requesterMembershipId: string;
+  readonly requesterName: string;
 }

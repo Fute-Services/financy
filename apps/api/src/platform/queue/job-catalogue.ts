@@ -32,10 +32,17 @@ export const JOB_PAYLOADS = {
     approvalStepId: idSchema,
   }),
 
-  /** A chain settled. Goes to the requester (docs/14 §4.1). */
+  /**
+   * A chain settled. Goes to whoever raised the thing (docs/14 §4.1).
+   *
+   * The subject is named rather than assumed: expenses go through the same
+   * chain as spend requests, and a payload that could only mean one of them
+   * would have been a silent wrong-record lookup the day the second arrived.
+   */
   'notification.approval_decided': z.strictObject({
     organizationId: idSchema,
-    spendRequestId: idSchema,
+    subjectType: z.enum(['spend_request', 'expense']),
+    subjectId: idSchema,
     /** `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`, `OVERRIDDEN`. */
     outcome: z.enum(['APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'OVERRIDDEN']),
     actedByMembershipId: idSchema.nullable(),
