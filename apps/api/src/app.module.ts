@@ -17,6 +17,7 @@ import { DepartmentsModule } from './modules/departments/index.js';
 import { EntitiesModule } from './modules/entities/index.js';
 import { OrganizationModule } from './modules/organization/index.js';
 import { PeopleModule } from './modules/people/index.js';
+import { PoliciesModule } from './modules/policies/index.js';
 import { ProjectsModule } from './modules/projects/index.js';
 import { SpendModule } from './modules/spend/index.js';
 
@@ -46,6 +47,7 @@ import { SpendModule } from './modules/spend/index.js';
     EntitiesModule,
     DepartmentsModule,
     ProjectsModule,
+    PoliciesModule,
     SpendModule,
     AuditReadModule,
   ],

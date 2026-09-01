@@ -13,12 +13,16 @@ export function PageHeader({
   phase,
   action,
 }: {
+  // Written `?: T | undefined` rather than `?: T` because the repository runs
+  // with `exactOptionalPropertyTypes`. Without the explicit `undefined`, a
+  // caller cannot pass a value that may legitimately be absent — which is the
+  // common case when the text comes from a nullable API field.
   title: string;
-  description?: string;
-  count?: string;
+  description?: string | undefined;
+  count?: string | undefined;
   /** Roadmap phase that delivers this module, shown while it is unbuilt. */
-  phase?: number;
-  action?: React.ReactNode;
+  phase?: number | undefined;
+  action?: React.ReactNode | undefined;
 }): React.JSX.Element {
   return (
     <div className="mb-6 flex items-start justify-between gap-6">

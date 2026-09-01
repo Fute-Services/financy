@@ -750,6 +750,11 @@ model PolicyVersion {
 
   createdByMembershipId String?
 
+  /// Why these rules changed. Written at publication and read by whoever asks,
+  /// six months later, why a decision citing this version came out as it did —
+  /// the only free-text record of intent a rule set carries.
+  note String?
+
   /// Published, and therefore immutable. A draft version may still change.
   publishedAt DateTime?
 

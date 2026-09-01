@@ -37,6 +37,15 @@ export interface FormState {
    * closing like every other one.
    */
   link?: string;
+  /**
+   * The id of the record the write created.
+   *
+   * For the creates whose natural next step is the thing just created — a
+   * policy that needs rules, a spend request that needs submitting. The dialog
+   * navigates rather than closing back to a list where the person then has to
+   * find the row they made a second ago.
+   */
+  createdId?: string;
 }
 
 export const IDLE: FormState = { status: 'idle' };

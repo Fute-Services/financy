@@ -21,6 +21,7 @@ export * from './people.js';
 export * from './organization.js';
 export * from './projects.js';
 export * from './policy.js';
+export * from './policy-admin.js';
 export * from './spend.js';
 export * from './audit.js';
 export * from './errors.js';
