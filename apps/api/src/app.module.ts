@@ -18,6 +18,7 @@ import { EntitiesModule } from './modules/entities/index.js';
 import { OrganizationModule } from './modules/organization/index.js';
 import { PeopleModule } from './modules/people/index.js';
 import { ProjectsModule } from './modules/projects/index.js';
+import { SpendModule } from './modules/spend/index.js';
 
 /**
  * The application root.
@@ -45,6 +46,7 @@ import { ProjectsModule } from './modules/projects/index.js';
     EntitiesModule,
     DepartmentsModule,
     ProjectsModule,
+    SpendModule,
     AuditReadModule,
   ],
   providers: [

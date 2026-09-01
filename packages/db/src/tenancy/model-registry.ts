@@ -26,6 +26,17 @@ export const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set<string>([
   'Invitation',
   'AuditEvent',
   'SecurityEvent',
+  // Phase 2. Every one carries `organizationId`. The registry test reads the
+  // generated client and fails if a model appears in neither list, so adding
+  // a model to the schema without deciding its tenancy is a failing build
+  // rather than a query that silently runs with no organisation predicate.
+  'Policy',
+  'PolicyVersion',
+  'SpendRequest',
+  'ApprovalInstance',
+  'ApprovalStep',
+  'ApprovalAction',
+  'ApprovalDelegation',
 ]);
 
 /**

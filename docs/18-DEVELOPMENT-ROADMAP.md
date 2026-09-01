@@ -450,17 +450,17 @@ SEC-19, SEC-22) · E2E (`auth`, `permissions`).
 
 ### Epic 2.1 — Policy engine
 
-| ID    | Task                                                                         | FR             | Status    |
-| ----- | ---------------------------------------------------------------------------- | -------------- | --------- |
-| 2.1.1 | Rule schema in `packages/contracts` (conditions, outcomes, closed field set) | FR-POL-002/003 | ✅        |
-| 2.1.2 | Prisma: policies, policy_versions, policy_rules                              | FR-POL-001/007 |           |
-| 2.1.3 | `PolicyContext` builder                                                      | —              | type only |
-| 2.1.4 | Condition evaluator — full field × operator matrix, currency-safe            | FR-POL-003     | ✅        |
-| 2.1.5 | Outcome merger — all nine precedence rules                                   | FR-POL-006     | ✅        |
-| 2.1.6 | `PolicyEvaluator` (pure) + decision snapshot                                 | FR-POL-005     | ✅        |
-| 2.1.7 | Version cache with invalidation                                              | —              |           |
-| 2.1.8 | Simulation and backtest endpoints                                            | FR-POL-008     |           |
-| 2.1.9 | **Golden-file fixture suite**                                                | `11 §9`        |           |
+| ID    | Task                                                                         | FR             | Status                 |
+| ----- | ---------------------------------------------------------------------------- | -------------- | ---------------------- |
+| 2.1.1 | Rule schema in `packages/contracts` (conditions, outcomes, closed field set) | FR-POL-002/003 | ✅                     |
+| 2.1.2 | Prisma: policies, policy_versions, policy_rules                              | FR-POL-001/007 | ✅ rules as a snapshot |
+| 2.1.3 | `PolicyContext` builder                                                      | —              | ✅                     |
+| 2.1.4 | Condition evaluator — full field × operator matrix, currency-safe            | FR-POL-003     | ✅                     |
+| 2.1.5 | Outcome merger — all nine precedence rules                                   | FR-POL-006     | ✅                     |
+| 2.1.6 | `PolicyEvaluator` (pure) + decision snapshot                                 | FR-POL-005     | ✅                     |
+| 2.1.7 | Version cache with invalidation                                              | —              | ✅ in-process          |
+| 2.1.8 | Simulation and backtest endpoints                                            | FR-POL-008     |                        |
+| 2.1.9 | **Golden-file fixture suite**                                                | `11 §9`        |                        |
 
 **The engine lives in `core`, not in `contracts`, and that is forced rather than chosen.**
 `contracts` already imports `Money` from `core`, so the dependency runs contracts → core and an
@@ -504,17 +504,42 @@ explain the past using today's rules and quietly be wrong.
 
 ### Epic 2.2 — Approvals
 
-| ID    | Task                                                                                 | FR / INV       |
-| ----- | ------------------------------------------------------------------------------------ | -------------- |
-| 2.2.1 | Prisma: workflows, templates, instances, steps, step_approvers, actions, delegations | —              |
-| 2.2.2 | `ApprovalResolver` — every `ApproverSpec` kind + fallback ladder                     | FR-APR-003     |
-| 2.2.3 | Requester exclusion **before and after** delegation                                  | INV-02         |
-| 2.2.4 | State machine: instance and step, all four step types                                | FR-APR-001/002 |
-| 2.2.5 | Actions: approve, reject, return, delegate                                           | FR-APR-005     |
-| 2.2.6 | Row-locked step transition with status re-check inside the lock                      | FR-APR-011     |
-| 2.2.7 | Timeout, escalation, reminder jobs                                                   | FR-APR-008     |
-| 2.2.8 | Finance override with mandatory reason (step-up)                                     | FR-APR-010     |
-| 2.2.9 | Approval queue endpoint                                                              | FR-APR-012     |
+| ID    | Task                                                                                 | FR / INV       | Status                    |
+| ----- | ------------------------------------------------------------------------------------ | -------------- | ------------------------- |
+| 2.2.1 | Prisma: workflows, templates, instances, steps, step_approvers, actions, delegations | —              | ✅ no named workflows yet |
+| 2.2.2 | `ApprovalResolver` — every `ApproverSpec` kind + fallback ladder                     | FR-APR-003     | ✅ except `WORKFLOW`      |
+| 2.2.3 | Requester exclusion **before and after** delegation                                  | INV-02         | ✅                        |
+| 2.2.4 | State machine: instance and step, all four step types                                | FR-APR-001/002 | ✅                        |
+| 2.2.5 | Actions: approve, reject, return, delegate                                           | FR-APR-005     | ⚠️ approve and reject     |
+| 2.2.6 | Row-locked step transition with status re-check inside the lock                      | FR-APR-011     | ✅ version, not a lock    |
+| 2.2.7 | Timeout, escalation, reminder jobs                                                   | FR-APR-008     | ⚠️ `dueAt` set, no job    |
+| 2.2.8 | Finance override with mandatory reason (step-up)                                     | FR-APR-010     |                           |
+| 2.2.9 | Approval queue endpoint                                                              | FR-APR-012     | ✅                        |
+
+**Eligible means _able to act_, and finding that out cost a stuck chain.** A policy can name a
+role that does not hold `approval:act` — and two of the five do not, because `ORG_ADMIN`
+administers people and structure while approving spend belongs to finance and managers
+(separation of duties, docs/03). Naming `ORG_ADMIN` as the approver opened a chain, put the
+request in a queue, and then refused every attempt to act on it with a `403`: a request stuck
+forever with nothing saying why. The resolver now filters eligible approvers to those whose role
+can actually act, which turns that into the failure that already existed and was already legible
+— `UNRESOLVABLE_APPROVER`, naming the step, raised at submission while the policy author can still
+be told.
+
+**The requester is excluded before _and_ after delegation.** Both, because they catch different
+things: before, a rule that resolves to the requester themselves; after, a delegation that hands
+authority back to them. The second is the one that gets missed, and the one somebody could arrange
+deliberately.
+
+**A step's eligible approvers are frozen when the chain opens.** Re-resolving them on each action
+would let a reorganisation move a decision to somebody else halfway through, and would change a
+`PARALLEL_ALL` step's own completion condition every time somebody joined a team.
+
+**Concurrency is handled with the version column rather than a row lock.** MongoDB has no
+`SELECT … FOR UPDATE`; the step is re-read inside the transaction, its status re-checked, and the
+write carries `version` in its `where` — so two approvers pressing at the same instant produce one
+completion and one failure rather than two completions and a skipped step. That is the same
+guarantee `docs/16` asks for by a different mechanism, and the difference is worth knowing about.
 
 ### Epic 2.3 — Spend requests
 

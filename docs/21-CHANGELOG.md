@@ -13,6 +13,13 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **Spend requests and approvals, end to end** — `/v1/spend-requests` and `/v1/approvals`
+  (Epics 2.1–2.3). Creating produces a draft; **submitting** is what evaluates policy, records the
+  decision verbatim, and opens the approval chain. A create that could arrive already approved
+  would be a way around every control the product has, so `status` appears in no write schema.
+  The decision, the chain, the status change, and the audit event commit in one transaction — a
+  request marked pending with no chain is stuck forever, and a chain with no request is a queue
+  full of ghosts. Approving or rejecting settles the subject in the same transaction as the step.
 - **The policy engine — rule model, condition evaluator, and outcome merger** (tasks 2.1.1,
   2.1.4–2.1.6). Pure: no I/O, no clock, no database. `now` and the duration are injected and the
   caller supplies the active policy versions, because deciding which are active is a query and a
@@ -161,6 +168,13 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Fixed
 
+- **A policy naming a role that cannot approve opened a chain nobody could finish.** Two of the
+  five roles do not hold `approval:act` — `ORG_ADMIN` administers people and structure while
+  approving spend belongs to finance and managers — so a policy naming one put a request in a
+  queue and then refused every attempt to act on it with a `403`, forever, with nothing saying
+  why. Eligibility now means _able to act_: the resolver filters to approvers whose role can
+  actually approve, which turns a permanently stuck request into `UNRESOLVABLE_APPROVER` at
+  submission, naming the step, while the policy author can still be told.
 - **The audit filters silently stopped working**, and the cause was a timestamp. `toLocaleString`
   without an explicit zone uses the runtime's own, so the server rendered IST and the browser
   rendered UTC; React found the two markups disagreed and discarded the whole client subtree the

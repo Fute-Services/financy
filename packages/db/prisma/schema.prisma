@@ -156,6 +156,14 @@ model Organization {
   auditEvents    AuditEvent[]
   securityEvents SecurityEvent[]
 
+  policies            Policy[]
+  policyVersions      PolicyVersion[]
+  spendRequests       SpendRequest[]
+  approvalInstances   ApprovalInstance[]
+  approvalSteps       ApprovalStep[]
+  approvalActions     ApprovalAction[]
+  approvalDelegations ApprovalDelegation[]
+
   @@map("organizations")
 }
 
@@ -371,6 +379,13 @@ model Membership {
   auditEvents     AuditEvent[]
   securityEvents  SecurityEvent[]
 
+  policyVersionsAuthored PolicyVersion[]      @relation("PolicyAuthor")
+  spendRequests          SpendRequest[]       @relation("SpendRequester")
+  approvalActions        ApprovalAction[]     @relation("ApprovalActor")
+  approvalActionsOnBehalf ApprovalAction[]    @relation("ApprovalDelegator")
+  delegationsGiven       ApprovalDelegation[] @relation("DelegatedFrom")
+  delegationsReceived    ApprovalDelegation[] @relation("DelegatedTo")
+
   /// One membership per user per organisation.
   @@unique([organizationId, userId])
   @@index([organizationId, status])
@@ -398,8 +413,9 @@ model Entity {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  projects     Project[]
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  projects      Project[]
+  spendRequests SpendRequest[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -443,7 +459,8 @@ model Department {
   head    Membership?  @relation("DepartmentHead", fields: [headMembershipId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   members Membership[] @relation("DepartmentMembers")
 
-  projects Project[]
+  projects      Project[]
+  spendRequests SpendRequest[]
 
   /// **Not** unique on (organizationId, code), though PostgreSQL made it so.
   /// MongoDB treats every missing or null value in a unique index as the same
@@ -478,9 +495,10 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  entity       Entity?      @relation(fields: [entityId], references: [id])
-  department   Department?  @relation(fields: [departmentId], references: [id])
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  entity        Entity?        @relation(fields: [entityId], references: [id])
+  department    Department?    @relation(fields: [departmentId], references: [id])
+  spendRequests SpendRequest[]
 
   /// **Not** unique on (organizationId, code), though PostgreSQL made it so.
   /// MongoDB treats every missing or null value in a unique index as the same
@@ -518,6 +536,8 @@ model Category {
 
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   children Category[] @relation("CategoryTree")
+
+  spendRequests SpendRequest[]
 
   @@unique([organizationId, key])
   @@index([organizationId, parentId])
@@ -643,4 +663,344 @@ model SecurityEvent {
   @@index([organizationId, type, createdAt(sort: Desc)])
   @@index([organizationId, userId, createdAt(sort: Desc)])
   @@map("security_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Phase 2 — policy, approvals, spend requests
+//
+//  Two shapes here are unusual and both are deliberate.
+//
+//  **A policy version stores its rules as JSON, not as rows.** `policy_rules`
+//  exists in the PostgreSQL design as a child table; here the version carries
+//  a `snapshot` containing the whole rule set, validated by
+//  `policyVersionSchema` on the way in. The reason is immutability: a version
+//  is frozen the moment it is published, and a decision made under it must
+//  remain explicable years later. Rules as rows can be edited one at a time by
+//  anything holding a connection; a snapshot cannot be half-changed.
+//
+//  **Every spend record keeps its `policy_decision` verbatim.** It is never
+//  recomputed for display. The screen answering "why did this need three
+//  approvals?" reads the snapshot taken at submission, under the engine
+//  version recorded in it — recomputing would answer with today's policy and
+//  quietly be wrong about the past.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum PolicyStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum SpendType {
+  CARD
+  REIMBURSEMENT
+  BILL
+  PURCHASE_ORDER
+  SPEND_REQUEST
+}
+
+/// A named spending policy. Its rules live on its versions.
+model Policy {
+  id             String @id @map("_id")
+  organizationId String
+
+  name        String
+  description String?
+
+  /// Which spend types this policy applies to. An empty list means none, not
+  /// all — a policy that applied to everything by omission would be a policy
+  /// nobody meant to write.
+  spendTypes SpendType[]
+
+  /// Higher runs first. Ties are broken by policy id in the evaluator, never
+  /// by insertion order (docs/11 §5).
+  priority Int @default(100)
+
+  status PolicyStatus @default(DRAFT)
+
+  /// The published version. Null while the policy has only drafts.
+  currentVersionId String?
+
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  versions     PolicyVersion[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("policies")
+}
+
+/// One frozen revision of a policy's rules.
+model PolicyVersion {
+  id             String @id @map("_id")
+  organizationId String
+  policyId       String
+
+  version Int
+
+  /// The complete rule set, validated by `policyVersionSchema` before it is
+  /// written. Frozen on publication — see the note at the top of this block.
+  snapshot Json
+
+  createdByMembershipId String?
+
+  /// Published, and therefore immutable. A draft version may still change.
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  policy       Policy       @relation(fields: [policyId], references: [id])
+  createdBy    Membership?  @relation("PolicyAuthor", fields: [createdByMembershipId], references: [id])
+
+  @@unique([policyId, version])
+  @@index([organizationId, policyId])
+  @@map("policy_versions")
+}
+
+enum SpendRequestStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+/// A request to spend money, before any money moves.
+model SpendRequest {
+  id             String @id @map("_id")
+  organizationId String
+
+  /// Human-facing, unique per organisation — the thing people quote to each
+  /// other. Numbered within the organisation rather than globally, so one
+  /// customer's volume is not visible to another.
+  reference String
+
+  requesterMembershipId String
+
+  entityId     String
+  departmentId String?
+  projectId    String?
+  categoryId   String?
+  vendorId     String?
+
+  spendType SpendType @default(SPEND_REQUEST)
+
+  /// A decimal string. Prisma's MongoDB connector has no `Decimal`, and a
+  /// float amount is a rounding error waiting for a total (ADR-0017).
+  amount   String
+  currency String
+
+  /// The same amount in the organisation's base currency, converted at a
+  /// recorded rate. Policies are authored against this so that a rule never
+  /// has to compare across currencies.
+  amountInBaseCurrency String
+  exchangeRate         String?
+
+  purpose  String
+  memo     String?
+  neededBy DateTime?
+
+  status SpendRequestStatus @default(DRAFT)
+
+  /// The decision, verbatim, as it was made. Never recomputed.
+  policyDecision Json?
+
+  approvalInstanceId String?
+
+  validUntil  DateTime?
+  submittedAt DateTime?
+  decidedAt   DateTime?
+
+  version   Int       @default(1)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  requester    Membership   @relation("SpendRequester", fields: [requesterMembershipId], references: [id])
+  entity       Entity       @relation(fields: [entityId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+  category     Category?    @relation(fields: [categoryId], references: [id])
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+  @@index([organizationId, requesterMembershipId, status])
+  @@index([organizationId, departmentId, status])
+  @@index([requesterMembershipId])
+  @@index([entityId])
+  @@index([departmentId])
+  @@index([projectId])
+  @@index([categoryId])
+  @@map("spend_requests")
+}
+
+enum ApprovalInstanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum ApprovalStepStatus {
+  WAITING
+  ACTIVE
+  APPROVED
+  REJECTED
+  SKIPPED
+  EXPIRED
+}
+
+enum ApprovalStepType {
+  SINGLE
+  PARALLEL_ANY
+  PARALLEL_ALL
+  QUORUM
+}
+
+enum ApprovalActionType {
+  APPROVE
+  REJECT
+  RETURN
+  DELEGATE
+  OVERRIDE
+}
+
+/// One approval chain, for one subject.
+model ApprovalInstance {
+  id             String @id @map("_id")
+  organizationId String
+
+  /// `spend_request`, `expense`, `bill`, `purchase_order`. Polymorphic rather
+  /// than one instance table per subject, because the state machine, the
+  /// actions, and the queue endpoint are identical for all of them and three
+  /// copies would drift.
+  subjectType String
+  subjectId   String
+
+  status ApprovalInstanceStatus @default(PENDING)
+
+  currentStepSequence Int @default(1)
+
+  /// A copy of the decision the chain was built from. The instance outlives
+  /// the policy version that produced it, and "why was this the chain?" has
+  /// to stay answerable after the policy changes.
+  policyDecisionSnapshot Json
+
+  completedAt DateTime?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  steps        ApprovalStep[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, subjectType, subjectId])
+  @@map("approval_instances")
+}
+
+model ApprovalStep {
+  id                 String @id @map("_id")
+  organizationId     String
+  approvalInstanceId String
+
+  sequence Int
+  stepType ApprovalStepType
+
+  /// How many approvals a `QUORUM` step needs. Ignored by the other types.
+  quorum Int @default(1)
+
+  status ApprovalStepStatus @default(WAITING)
+
+  /// The memberships eligible to act, resolved from the approver specs when
+  /// the chain was built. Stored rather than re-resolved: somebody eligible
+  /// when the request was raised stays eligible, so a reorganisation midway
+  /// through does not silently move the decision to another person.
+  eligibleMembershipIds String[] @default([])
+
+  activatedAt DateTime?
+  dueAt       DateTime?
+  completedAt DateTime?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  instance     ApprovalInstance @relation(fields: [approvalInstanceId], references: [id])
+  actions      ApprovalAction[]
+
+  @@unique([approvalInstanceId, sequence])
+  @@index([organizationId, status])
+  @@index([approvalInstanceId])
+  @@map("approval_steps")
+}
+
+/// What somebody did to a step. Append-only, like the audit trail.
+model ApprovalAction {
+  id             String @id @map("_id")
+  organizationId String
+  approvalStepId String
+
+  actedByMembershipId String
+
+  /// Set when the actor was using delegated authority, so the record shows
+  /// both who pressed the button and whose authority they used.
+  onBehalfOfMembershipId String?
+
+  action  ApprovalActionType
+  comment String?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  step         ApprovalStep @relation(fields: [approvalStepId], references: [id])
+  actedBy      Membership   @relation("ApprovalActor", fields: [actedByMembershipId], references: [id])
+  onBehalfOf   Membership?  @relation("ApprovalDelegator", fields: [onBehalfOfMembershipId], references: [id])
+
+  @@index([organizationId, approvalStepId])
+  @@index([actedByMembershipId])
+  @@index([onBehalfOfMembershipId])
+  @@map("approval_actions")
+}
+
+/// One person's approval authority, lent to another for a period.
+model ApprovalDelegation {
+  id             String @id @map("_id")
+  organizationId String
+
+  fromMembershipId String
+  toMembershipId   String
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  reason String?
+
+  revokedAt DateTime?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  from         Membership   @relation("DelegatedFrom", fields: [fromMembershipId], references: [id])
+  to           Membership   @relation("DelegatedTo", fields: [toMembershipId], references: [id])
+
+  @@index([organizationId, fromMembershipId])
+  @@index([organizationId, toMembershipId])
+  @@index([toMembershipId])
+  @@map("approval_delegations")
 }
