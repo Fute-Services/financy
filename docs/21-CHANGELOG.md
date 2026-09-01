@@ -20,6 +20,13 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
   makes the same check atomically; the change and its audit event commit in one transaction or
   neither does. `organizationSummarySchema` now carries `version`, because a screen with no
   version to send has no precondition to make.
+- **The department tree** — `GET/POST /v1/departments`, `GET/PATCH /v1/departments/{id}`, and
+  `POST /v1/departments/{id}/archive`·`/restore` (task 1.5.3). Moving a node rewrites the `path`
+  of its whole subtree in the same transaction as the move; a cycle is refused by one path
+  comparison before anything is written; names are unique among siblings rather than across the
+  organisation, and codes across the organisation but only when set. `pathUnder()` and
+  `isWithinSubtree()` live in `@financy/contracts` so the server that writes a path and any client
+  that re-derives one after a local edit cannot disagree about its shape.
 - **`@IfMatch()`** (`platform/concurrency`) — the precondition is a header rather than a body
   field, and it is mandatory: an optional one is a client that forgets, and the lost edit it
   prevents is invisible when it happens.

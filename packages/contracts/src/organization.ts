@@ -231,3 +231,105 @@ export const entityRecordSchema = entitySummarySchema.extend({
 });
 
 export type EntityRecord = z.infer<typeof entityRecordSchema>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Departments (docs/10 §5.4, task 1.5.3)
+//
+//  A tree with a materialised `path`, so a subtree is one `startsWith` rather
+//  than a recursive query. Neither `path` nor `depth` appears in any write
+//  schema: both are derived from `parentId`, and a client that could send a
+//  path could send one that disagrees with the parent it also sent — leaving
+//  the server to pick a winner, with no correct choice available.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * A short human code — `ENG`, `FIN-EU`. Optional, and unique within the
+ * organisation *when set*.
+ *
+ * Uniqueness is enforced by the service rather than a unique index, because
+ * MongoDB treats every missing value in a unique index as the same value: an
+ * organisation could then have exactly one department without a code, which
+ * is not a rule anybody asked for (see the schema comment on `departments`).
+ */
+export const departmentCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .max(50)
+  .regex(/^[A-Z0-9][A-Z0-9-]*$/, {
+    message: 'A code may use letters, digits, and hyphens, and must not start with a hyphen.',
+  });
+
+export const createDepartmentSchema = z.strictObject({
+  name: nonEmptyString(200),
+  /** `null` or omitted makes it a root. */
+  parentId: idSchema.nullable().optional(),
+  code: departmentCodeSchema.nullable().optional(),
+  /**
+   * The membership that heads the department. Validated against the caller's
+   * own organisation by the service — an id from another tenant is a 404, not
+   * a 403, so a caller cannot use this field to probe for one.
+   */
+  headMembershipId: idSchema.nullable().optional(),
+});
+
+/**
+ * `PATCH /v1/departments/{id}`.
+ *
+ * `parentId` is here, so re-parenting is an edit rather than a delete and a
+ * re-create — the latter would break every membership pointing at the old row
+ * and lose the department's audit history. Moving a node rewrites the `path`
+ * of its whole subtree, which the service does in the same transaction.
+ */
+export const updateDepartmentSchema = z
+  .strictObject({
+    name: nonEmptyString(200).optional(),
+    parentId: idSchema.nullable().optional(),
+    code: departmentCodeSchema.nullable().optional(),
+    headMembershipId: idSchema.nullable().optional(),
+  })
+  .refine(atLeastOneField, AT_LEAST_ONE);
+
+/**
+ * A department as returned by `/v1/departments`: the node plus the head, the
+ * archive state, and the `If-Match` version.
+ *
+ * `memberCount` is deliberately **not** here. The settings payload carries it
+ * because that read is already loading every membership to tally roles and
+ * gets the count for nothing; this endpoint answers "what is the tree" and
+ * would have to issue a second query to invent it. A field that is present
+ * but always zero is worse than an absent one — a client cannot tell the
+ * placeholder from a department that genuinely has nobody in it.
+ */
+export const departmentRecordSchema = departmentNodeSchema.omit({ memberCount: true }).extend({
+  headMembershipId: idSchema.nullable(),
+  version: versionSchema,
+  archivedAt: timestampSchema.nullable(),
+});
+
+export type CreateDepartment = z.infer<typeof createDepartmentSchema>;
+export type UpdateDepartment = z.infer<typeof updateDepartmentSchema>;
+export type DepartmentRecord = z.infer<typeof departmentRecordSchema>;
+
+/**
+ * The path a department gets under a given parent.
+ *
+ * Shared by the service, which writes it, and any client that re-derives a
+ * subtree locally after a move rather than refetching. Both ends delimited:
+ * an undelimited path makes `/a/bc/` match a query for `/a/b/`, which
+ * silently widens a manager's scope to a department they do not manage.
+ */
+export function pathUnder(parentPath: string | null, id: string): string {
+  return `${parentPath ?? '/'}${id}/`;
+}
+
+/**
+ * Whether `candidate` lies inside the subtree rooted at `ancestorPath`.
+ *
+ * The cycle check: re-parenting a node beneath its own descendant would
+ * detach that subtree from the tree entirely, and — because the path rewrite
+ * walks downwards — loop while doing it.
+ */
+export function isWithinSubtree(candidatePath: string, ancestorPath: string): boolean {
+  return candidatePath.startsWith(ancestorPath);
+}

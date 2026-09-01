@@ -194,7 +194,7 @@ than null (ADR-0017). Both were plausible code that a reader would have approved
 | ----- | ------------------------------------------------------------------------------- | --------------------- |
 | 1.5.1 | Organisation CRUD + currency lock                                               | ✅ API; no screen yet |
 | 1.5.2 | Entities CRUD + archive                                                         | ✅ API; no screen yet |
-| 1.5.3 | Departments: tree, path maintenance, cycle rejection, head                      |                       |
+| 1.5.3 | Departments: tree, path maintenance, cycle rejection, head                      | ✅ API; no screen yet |
 | 1.5.4 | Projects and categories CRUD                                                    |                       |
 | 1.5.5 | Memberships: list, detail, update, role change (step-up), deactivate/reactivate |                       |
 | 1.5.6 | Invitations: create, accept, revoke, resend, expiry                             |                       |
@@ -211,6 +211,21 @@ read — which sets `baseCurrencyLocked` on the payload — and the write, so th
 disables and the change the endpoint refuses can never disagree. It answers `false` today because
 nothing financial exists before Phase 2; when transactions and bills arrive it becomes an
 existence check across them and every caller is already asking the right question.
+
+**The department `path` is the reason 1.5.3 is not a CRUD table.** It is `/root-id/child-id/`,
+delimited at both ends, and every scope check reads it — a manager sees their subtree because
+their department's path is a prefix of the rows they may see. PostgreSQL enforced the delimiters
+with a `CHECK`; on MongoDB nothing does, so `pathUnder()` in `@financy/contracts` is the only
+thing that builds one and is shared with the client. Moving a node rewrites the path of its whole
+subtree in the same transaction as the move: a partial rewrite leaves descendants claiming an
+ancestry that no longer exists, and every scope check beneath them then answers wrongly rather
+than failing. A cycle — re-parenting a node beneath its own descendant — is refused before
+anything is written, by one path comparison rather than by walking parents.
+
+**Archiving a department refuses rather than cascades.** A parent with live children or active
+members is a `409` naming what is in the way. Cascading would archive rows nobody asked about,
+and restoring the parent afterwards cannot know which children the cascade archived and which
+were already archived on their own.
 
 **Three error codes were added rather than reusing `INVALID_STATE_TRANSITION`** (docs/10 §6):
 `DUPLICATE_NAME`, `ARCHIVED_RECORD_IMMUTABLE`, `LAST_ACTIVE_ENTITY`. Nothing transitions when a

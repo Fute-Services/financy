@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
   countryCodeSchema,
+  createDepartmentSchema,
   createEntitySchema,
   depthOfPath,
   entitySummarySchema,
+  isWithinSubtree,
   organizationSettingsSchema,
   organizationSummarySchema,
+  pathUnder,
+  updateDepartmentSchema,
   updateEntitySchema,
   updateOrganizationSchema,
 } from './organization.js';
@@ -255,5 +259,102 @@ describe('updateEntitySchema', () => {
    */
   it('rejects status, which has its own endpoint and its own guard', () => {
     expect(updateEntitySchema.safeParse({ status: 'ARCHIVED' }).success).toBe(false);
+  });
+});
+
+describe('pathUnder', () => {
+  it('makes a root path from a null parent', () => {
+    expect(pathUnder(null, 'a')).toBe('/a/');
+  });
+
+  it('appends to a parent path', () => {
+    expect(pathUnder('/a/', 'b')).toBe('/a/b/');
+  });
+
+  /**
+   * Both ends delimited, always. PostgreSQL enforced this with a `CHECK`;
+   * MongoDB cannot, so it rests on this function being the only thing that
+   * builds a path. Without the trailing slash, `/a/bc/` matches a query for
+   * `/a/b/` and a manager's scope silently widens to a department they do not
+   * manage.
+   */
+  it('delimits both ends at every depth', () => {
+    const deep = pathUnder(pathUnder(pathUnder(null, 'a'), 'b'), 'c');
+
+    expect(deep).toBe('/a/b/c/');
+    expect(deep.startsWith('/')).toBe(true);
+    expect(deep.endsWith('/')).toBe(true);
+  });
+
+  it('agrees with depthOfPath, which the UI indents by', () => {
+    expect(depthOfPath(pathUnder(null, 'a'))).toBe(0);
+    expect(depthOfPath(pathUnder(pathUnder(null, 'a'), 'b'))).toBe(1);
+  });
+});
+
+describe('isWithinSubtree', () => {
+  it('counts a node as inside its own subtree, which is what blocks a self-parent', () => {
+    expect(isWithinSubtree('/a/', '/a/')).toBe(true);
+  });
+
+  it('recognises a descendant at any depth', () => {
+    expect(isWithinSubtree('/a/b/c/', '/a/')).toBe(true);
+  });
+
+  it('does not treat an ancestor as a descendant', () => {
+    expect(isWithinSubtree('/a/', '/a/b/')).toBe(false);
+  });
+
+  it('does not treat a sibling as a descendant', () => {
+    expect(isWithinSubtree('/b/', '/a/')).toBe(false);
+  });
+
+  /**
+   * The reason both ends are delimited, as an assertion rather than a comment.
+   * With undelimited paths `/a/bc/` would read as being inside `/a/b`.
+   */
+  it('is not fooled by an id that begins with another id', () => {
+    expect(isWithinSubtree(pathUnder(null, 'bc'), pathUnder(null, 'b'))).toBe(false);
+  });
+});
+
+describe('createDepartmentSchema', () => {
+  it('accepts a bare name, which makes a root', () => {
+    expect(createDepartmentSchema.safeParse({ name: 'Engineering' }).success).toBe(true);
+  });
+
+  /**
+   * `path` and `depth` are derived from `parentId`. A client that could send
+   * a path could send one that disagrees with the parent it also sent, and
+   * there is no correct way for the server to pick a winner.
+   */
+  it.each(['path', 'depth', 'memberCount', 'version'])('rejects the derived field %s', (field) => {
+    expect(createDepartmentSchema.safeParse({ name: 'Engineering', [field]: 1 }).success).toBe(
+      false,
+    );
+  });
+
+  it('upper-cases a code', () => {
+    const result = createDepartmentSchema.safeParse({ name: 'Engineering', code: ' eng-eu ' });
+    expect(result.success && result.data.code).toBe('ENG-EU');
+  });
+
+  it.each(['-ENG', 'ENG EU', 'ENG_EU', 'ENG/EU'])('rejects the code %s', (code) => {
+    expect(createDepartmentSchema.safeParse({ name: 'Engineering', code }).success).toBe(false);
+  });
+});
+
+describe('updateDepartmentSchema', () => {
+  it('rejects an empty body', () => {
+    expect(updateDepartmentSchema.safeParse({}).success).toBe(false);
+  });
+
+  /**
+   * `null` promotes the node to a root; omitting `parentId` leaves it where
+   * it is. Collapsing the two would make "move this to the top" unsayable.
+   */
+  it('distinguishes clearing the parent from leaving it alone', () => {
+    expect(updateDepartmentSchema.safeParse({ parentId: null }).success).toBe(true);
+    expect(updateDepartmentSchema.safeParse({ parentId: undefined }).success).toBe(false);
   });
 });

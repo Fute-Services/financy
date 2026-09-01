@@ -13,6 +13,7 @@ import {
 } from './platform/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { AuditReadModule } from './modules/audit/index.js';
+import { DepartmentsModule } from './modules/departments/index.js';
 import { EntitiesModule } from './modules/entities/index.js';
 import { OrganizationModule } from './modules/organization/index.js';
 import { PeopleModule } from './modules/people/index.js';
@@ -41,6 +42,7 @@ import { PeopleModule } from './modules/people/index.js';
     PeopleModule,
     OrganizationModule,
     EntitiesModule,
+    DepartmentsModule,
     AuditReadModule,
   ],
   providers: [
