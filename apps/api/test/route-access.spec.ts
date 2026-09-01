@@ -125,6 +125,23 @@ describe('every route declares its access', () => {
     expect(publicRoutes).toEqual([
       'AuthController.login',
       'AuthController.register',
+      /**
+       * The storage routes, where **the signature is the authorisation**.
+       *
+       * They carry no session and cannot: a signed URL is followed by an
+       * `<img>` tag, a PDF viewer, or a background fetch — contexts where the
+       * cookie may not travel and where a redirect to a login page produces a
+       * broken image rather than an error anybody sees. That is how S3
+       * presigned URLs work, and the local adapter emulates it deliberately
+       * (ADR-0008).
+       *
+       * What stands in for the session: an HMAC over the key, the operation,
+       * and an expiry, verified before anything is read or written; a
+       * fifteen-minute ceiling on that expiry; and a permission check on the
+       * owning receipt performed when the URL was minted, moments earlier.
+       */
+      'DocumentsController.download',
+      'DocumentsController.upload',
       'HealthController.live',
       'HealthController.ready',
       // The invitation token *is* the authorisation: it determines which

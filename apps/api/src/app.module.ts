@@ -7,6 +7,7 @@ import {
   AuthGuard,
   ConfigModule,
   DatabaseModule,
+  DocumentsModule,
   HealthModule,
   LoggingModule,
   QueueModule,
@@ -22,6 +23,7 @@ import { PoliciesModule } from './modules/policies/index.js';
 import { ProjectsModule } from './modules/projects/index.js';
 import { CardsModule } from './modules/cards/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
+import { ReceiptsModule } from './modules/receipts/index.js';
 import { TransactionsModule } from './modules/transactions/index.js';
 import { SpendModule } from './modules/spend/index.js';
 
@@ -45,6 +47,7 @@ import { SpendModule } from './modules/spend/index.js';
     DatabaseModule,
     AuditModule,
     QueueModule,
+    DocumentsModule,
     HealthModule,
     AuthModule,
     PeopleModule,
@@ -57,6 +60,7 @@ import { SpendModule } from './modules/spend/index.js';
     CardsModule,
     TransactionsModule,
     NotificationsModule,
+    ReceiptsModule,
     AuditReadModule,
   ],
   providers: [

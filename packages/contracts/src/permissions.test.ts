@@ -156,8 +156,13 @@ describe('the invariants docs/03 §4 states', () => {
    * not another sees the whole organisation's cards and only its own charges —
    * a split nobody designed and nobody would notice.
    */
-  it('gives the three organisation-wide reads together, or not at all', () => {
-    const companions = ['spend_request:read_all', 'transaction:read_all', 'card:read_all'] as const;
+  it('gives the organisation-wide reads together, or not at all', () => {
+    const companions = [
+      'spend_request:read_all',
+      'transaction:read_all',
+      'card:read_all',
+      'receipt:read_all',
+    ] as const;
 
     for (const role of ROLE_KEYS) {
       const granted = permissionsForRole(role);

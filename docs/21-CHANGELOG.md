@@ -13,6 +13,38 @@ Until `1.0.0`, the product is pre-release: the API surface may change between mi
 
 ### Added
 
+- **Receipts, and the private storage behind them** (Epic 3.1, FR-EXP-004…007). The upload is
+  three steps and the middle one never touches this API: an intent writes a `PENDING` row and
+  returns a short-lived signed URL, the browser PUTs the file straight to storage, and completion
+  reads the stored object back. A 20 MB body through the application would be 20 MB of memory per
+  concurrent upload, and an endpoint that accepts arbitrary files is the obvious thing to point a
+  fuzzer at.
+- **What a file claims to be is never believed.** Completion reads its first bytes and decides for
+  itself; an executable renamed `.pdf` and declared `application/pdf` is refused, the row is
+  quarantined, and the object is **deleted** — an unidentified binary kept "for inspection" under a
+  plausible name is worse than either accepting or refusing cleanly. The detector is a pure function
+  in `core` with thirteen tests, including the RIFF container that is a WAV and the ISO container
+  that is an MP4: a check that only recognised the formats it was shown would pass the requirement's
+  own test and still be wrong.
+- **A photograph loses its location before anybody can read it** (FR-EXP-006). A phone picture of a
+  restaurant bill carries GPS coordinates, a device serial, and an exact time, none of which anybody
+  agreed to give their finance team. EXIF is stripped by walking the JPEG marker structure and
+  dropping the metadata segments — nothing is decoded and nothing is re-encoded, so the picture is
+  bit-for-bit the picture that was uploaded and no image library gets to parse attacker-controlled
+  data.
+- **Links are signed, scoped, and short.** The signature covers the key, the operation, and the
+  expiry: the link that lets somebody read a receipt is not the string that lets them overwrite it,
+  and the read link is the one that gets pasted into a chat message. Download URLs are minted per
+  read after a permission check, capped at fifteen minutes, and always `Content-Disposition:
+attachment` — a stored file rendered inline would run in this application's origin.
+- **A receipt is attached to one thing at a time, and the history is kept** (FR-EXP-007). Moving one
+  closes the previous attachment rather than adding a second, because the same image on two claims
+  is how one lunch gets expensed twice; the closed row stays, because "it used to be on that one" is
+  the question an auditor asks.
+- The scan and OCR jobs say **`SKIPPED`, never `CLEAN`**. No malware scanner is configured and the
+  OCR adapter is a no-op, and a status claiming a file is clean when nothing examined it is the most
+  dangerous lie this system could tell — somebody would rely on it.
+
 - **The golden-file suite for the policy engine** (task 2.1.9, docs/11 §9). Eleven
   `(context, policies) → decision` fixtures as JSON, so a change to the evaluator that moves one
   fails the build and has to be re-approved deliberately — with the diff showing which decision

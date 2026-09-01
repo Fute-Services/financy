@@ -39,7 +39,19 @@ import {
 
 export const TRANSACTION_SOURCES = ['CARD', 'IMPORT', 'MANUAL', 'PROVIDER'] as const;
 export const TRANSACTION_STATUSES = ['PENDING', 'POSTED', 'DECLINED', 'REVERSED'] as const;
-export const RECEIPT_STATUSES = ['NOT_REQUIRED', 'MISSING', 'REQUESTED', 'ATTACHED'] as const;
+/**
+ * Whether a charge has its evidence yet.
+ *
+ * Named for the transaction rather than for the receipt, because a receipt has
+ * a lifecycle of its own — uploaded, stored, quarantined — and one name for
+ * both concepts was a collision waiting for the second one to be written.
+ */
+export const TRANSACTION_RECEIPT_STATUSES = [
+  'NOT_REQUIRED',
+  'MISSING',
+  'REQUESTED',
+  'ATTACHED',
+] as const;
 export const REVIEW_STATUSES = ['PENDING', 'IN_REVIEW', 'REVIEWED', 'DISPUTED'] as const;
 export const ACCOUNTING_STATUSES = ['UNMAPPED', 'MAPPED', 'EXPORTED'] as const;
 export const MATCH_STATUSES = [
@@ -51,7 +63,7 @@ export const MATCH_STATUSES = [
 
 export type TransactionSource = (typeof TRANSACTION_SOURCES)[number];
 export type TransactionStatus = (typeof TRANSACTION_STATUSES)[number];
-export type ReceiptStatus = (typeof RECEIPT_STATUSES)[number];
+export type TransactionReceiptStatus = (typeof TRANSACTION_RECEIPT_STATUSES)[number];
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 export type AccountingStatus = (typeof ACCOUNTING_STATUSES)[number];
 export type MatchStatus = (typeof MATCH_STATUSES)[number];
@@ -63,12 +75,13 @@ export const TRANSACTION_STATUS_LABELS: Readonly<Record<TransactionStatus, strin
   REVERSED: 'Reversed',
 };
 
-export const RECEIPT_STATUS_LABELS: Readonly<Record<ReceiptStatus, string>> = {
-  NOT_REQUIRED: 'Not required',
-  MISSING: 'Missing',
-  REQUESTED: 'Requested',
-  ATTACHED: 'Attached',
-};
+export const TRANSACTION_RECEIPT_STATUS_LABELS: Readonly<Record<TransactionReceiptStatus, string>> =
+  {
+    NOT_REQUIRED: 'Not required',
+    MISSING: 'Missing',
+    REQUESTED: 'Requested',
+    ATTACHED: 'Attached',
+  };
 
 export const REVIEW_STATUS_LABELS: Readonly<Record<ReviewStatus, string>> = {
   PENDING: 'Not reviewed',
@@ -106,7 +119,7 @@ export const transactionSchema = z.object({
   billingAmount: z.object({ amount: z.string(), currency: z.string() }).nullable(),
   source: z.enum(TRANSACTION_SOURCES),
   status: z.enum(TRANSACTION_STATUSES),
-  receiptStatus: z.enum(RECEIPT_STATUSES),
+  receiptStatus: z.enum(TRANSACTION_RECEIPT_STATUSES),
   reviewStatus: z.enum(REVIEW_STATUSES),
   accountingStatus: z.enum(ACCOUNTING_STATUSES),
   matchStatus: z.enum(MATCH_STATUSES),
@@ -251,7 +264,7 @@ export const listTransactionsQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).catch(25).default(25),
   status: z.enum(TRANSACTION_STATUSES).optional(),
   reviewStatus: z.enum(REVIEW_STATUSES).optional(),
-  receiptStatus: z.enum(RECEIPT_STATUSES).optional(),
+  receiptStatus: z.enum(TRANSACTION_RECEIPT_STATUSES).optional(),
   matchStatus: z.enum(MATCH_STATUSES).optional(),
   cardId: idSchema.optional(),
   categoryId: idSchema.optional(),

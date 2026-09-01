@@ -1,6 +1,5 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -39,7 +38,33 @@ import { hydrateContext, type ExpectedDecision, type GoldenFixture } from './fix
  * fixture whose `why` no longer describes what it asserts is a fixture that
  * should have been deleted rather than updated.
  */
-const CASES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'cases');
+/**
+ * Where the fixtures live, resolved from the working directory.
+ *
+ * Not `import.meta.url`: this package compiles to CommonJS, so that is a type
+ * error even though Vitest would run it happily — a divergence between `tsc`
+ * and the test runner is worth avoiding outright. The candidates cover being
+ * run from the package and from the repository root, and a directory that is
+ * missing says so rather than quietly reporting zero fixtures.
+ */
+const CASES_DIR = resolveCasesDir();
+
+function resolveCasesDir(): string {
+  const candidates = [
+    path.resolve('src/policy/golden/cases'),
+    path.resolve('packages/core/src/policy/golden/cases'),
+  ];
+
+  const found = candidates.find((candidate) => existsSync(candidate));
+
+  if (found === undefined) {
+    throw new Error(
+      `Golden fixtures not found. Looked in:\n  ${candidates.join('\n  ')}\nRun this suite from the package or from the repository root.`,
+    );
+  }
+
+  return found;
+}
 
 const UPDATE = process.env['UPDATE_GOLDEN'] === '1';
 

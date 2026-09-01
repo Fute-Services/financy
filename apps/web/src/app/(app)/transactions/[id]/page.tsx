@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import {
   ACCOUNTING_STATUS_LABELS,
   MATCH_STATUS_LABELS,
-  RECEIPT_STATUS_LABELS,
+  TRANSACTION_RECEIPT_STATUS_LABELS,
   REVIEW_STATUS_LABELS,
   TRANSACTION_STATUS_LABELS,
   type OffsetCollection,
@@ -128,7 +128,10 @@ export default async function TransactionPage({ params }: Props): Promise<React.
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Axis label="Settlement" value={TRANSACTION_STATUS_LABELS[transaction.status]} />
-        <Axis label="Evidence" value={RECEIPT_STATUS_LABELS[transaction.receiptStatus]} />
+        <Axis
+          label="Evidence"
+          value={TRANSACTION_RECEIPT_STATUS_LABELS[transaction.receiptStatus]}
+        />
         <Axis
           label="Review"
           value={REVIEW_STATUS_LABELS[transaction.reviewStatus]}

@@ -189,6 +189,7 @@ Legend: **✔** granted · **○** granted, scope-limited (see column note) · *
 | `expense:approve`         |     ✖     |       ✔       | ○ dept  |         ✖         |    ✖    |
 | `receipt:upload`          |     ✔     |       ✔       |    ✔    |         ✔         |    ✖    |
 | `receipt:read`            |     ✔     |       ✔       | ○ dept  |      ○ self       |    ✔    |
+| `receipt:read_all`        |     ✔     |       ✔       |    ✖    |         ✖         |    ✔    |
 | `receipt:delete`          |     ✖     |       ✔       |    ✖    | ○ own, unattached |    ✖    |
 | `reimbursement:create`    |     ✔     |       ✔       |    ✔    |         ✔         |    ✖    |
 | `reimbursement:read`      |     ✔     |       ✔       | ○ dept  |      ○ self       |    ✔    |

@@ -660,15 +660,34 @@ covered by a test; approval and verdict audited with the policy version applied.
 
 ## 5. Phase 3 — Receipts, expenses, reimbursements
 
-| Epic               | Contents                                                                                                                                            |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1 Receipts       | Upload intent → signed URL → complete with magic-byte validation; scan and OCR jobs; attach/detach with history; `OCRProvider` port + no-op adapter |
-| 3.2 Expenses       | Schema, items, state machine, policy evaluation, submit/approve/return                                                                              |
-| 3.3 Reimbursements | Batching by person/entity/currency/period; `UNIQUE(expense_id)`; approval; mark paid with reference                                                 |
-| 3.4 Finance review | Review queue (keyboard-driven), categorisation, exceptions, bulk actions                                                                            |
-| 3.5 Linkage        | request → approval → transaction → receipt → review → audit, end to end                                                                             |
-| 3.6 Frontend       | Expenses (tabs), receipt-first creation, receipt preview, reimbursement batches, review queue                                                       |
-| 3.7 Tests          | SEC-11..13 · FIN-06 · E2E `receipt-expense`, `transaction-review`, and **the full vertical slice**                                                  |
+| Epic               | Contents                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.1 Receipts       | ✅ Upload intent → signed URL → complete with magic-byte validation; scan and OCR jobs; attach/detach with history; `OCRProvider` port + no-op adapter |
+| 3.2 Expenses       | Schema, items, state machine, policy evaluation, submit/approve/return                                                                                 |
+| 3.3 Reimbursements | Batching by person/entity/currency/period; `UNIQUE(expense_id)`; approval; mark paid with reference                                                    |
+| 3.4 Finance review | Review queue (keyboard-driven), categorisation, exceptions, bulk actions                                                                               |
+| 3.5 Linkage        | request → approval → transaction → receipt → review → audit, end to end                                                                                |
+| 3.6 Frontend       | Expenses (tabs), receipt-first creation, receipt preview, reimbursement batches, review queue                                                          |
+| 3.7 Tests          | SEC-11..13 · FIN-06 · E2E `receipt-expense`, `transaction-review`, and **the full vertical slice**                                                     |
+
+**Epic 3.1 notes.**
+
+- **`DocumentProvider` and `LocalDocumentProvider` land here rather than in Phase 1** (task 1.2.6),
+  for the same reason the queue landed in Phase 2: storage with nothing stored in it is scaffolding.
+  The local adapter emulates the _security semantics_ — an HMAC over key, operation, and expiry;
+  verification before any read or write; a fifteen-minute ceiling — so the failure modes a developer
+  meets on a laptop are the failure modes production has (ADR-0008).
+- **`S3DocumentProvider` does not exist, and selecting it fails startup.** A factory that quietly
+  returned the filesystem adapter when S3 was configured would write receipts to a container's
+  ephemeral disk and lose them on the next deploy, with every log line saying the upload succeeded.
+- **EXIF is stripped for JPEG only.** That is the format where a phone writes GPS coordinates and a
+  device serial, and the scrubber is hand-written so that no image library parses
+  attacker-controlled bytes. HEIC and WebP can carry metadata too and are **not** scrubbed today — a
+  real gap, recorded here rather than implied away, and one that needs a parser this build does not
+  have.
+- **No malware scanner.** The scan job records `SKIPPED`, never `CLEAN`.
+- Receipts attach to transactions; `expense` joins `RECEIPT_TARGET_TYPES` with Epic 3.2, because a
+  contract naming a target the API would refuse is a contract that lies to whoever reads it first.
 
 **Exit:** the vertical slice from `05 §0` runs end to end; duplicate reimbursement provably
 rejected.

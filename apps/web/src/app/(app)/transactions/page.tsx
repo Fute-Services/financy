@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   MATCH_STATUS_LABELS,
-  RECEIPT_STATUS_LABELS,
+  TRANSACTION_RECEIPT_STATUS_LABELS,
   REVIEW_STATUS_LABELS,
   TRANSACTION_STATUS_LABELS,
   type CardRecord,
@@ -245,7 +245,7 @@ export default async function TransactionsPage({
       )}
 
       <p className="mt-4 text-[12px] text-ink-400">
-        Receipt states: {Object.values(RECEIPT_STATUS_LABELS).join(' · ')}. Matching:{' '}
+        Receipt states: {Object.values(TRANSACTION_RECEIPT_STATUS_LABELS).join(' · ')}. Matching:{' '}
         {Object.values(MATCH_STATUS_LABELS).join(' · ')}.
       </p>
     </>

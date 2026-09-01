@@ -16,6 +16,7 @@ export * from './database/index.js';
 export * from './errors/index.js';
 export * from './health/index.js';
 export * from './logging/index.js';
+export * from './documents/index.js';
 export * from './queue/index.js';
 export * from './request-context/index.js';
 export * from './validation/index.js';

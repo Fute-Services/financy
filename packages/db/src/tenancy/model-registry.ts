@@ -43,6 +43,8 @@ export const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set<string>([
   'TransactionAdjustment',
   'Notification',
   'NotificationPreference',
+  'Receipt',
+  'ReceiptAttachment',
 ]);
 
 /**

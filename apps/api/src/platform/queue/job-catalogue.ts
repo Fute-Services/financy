@@ -103,6 +103,30 @@ export const JOB_PAYLOADS = {
   }),
 
   /**
+   * A stored receipt, checked for malware (docs/14 §4.3).
+   *
+   * Enqueued after the file has landed and never before: a scan of an object
+   * that does not exist yet reports clean, which is the worst possible
+   * outcome.
+   */
+  'receipt.scan': z.strictObject({
+    organizationId: idSchema,
+    receiptId: idSchema,
+  }),
+
+  /**
+   * Reading fields off a receipt (FR-EXP-011).
+   *
+   * Separate from the scan because they fail independently and mean different
+   * things: a receipt that could not be scanned is a risk, and a receipt that
+   * could not be read is an inconvenience.
+   */
+  'receipt.ocr': z.strictObject({
+    organizationId: idSchema,
+    receiptId: idSchema,
+  }),
+
+  /**
    * The sweep that finds work for the three jobs above.
    *
    * **Cross-tenant by design**, which is why there is no `organizationId`: it
@@ -141,6 +165,8 @@ export const JOB_TIMEOUT_MS: Readonly<Record<JobName, number>> = {
   'approval.escalate': 30_000,
   'notification.approval_escalated': 30_000,
   'spend_request.expire': 30_000,
+  'receipt.scan': 60_000,
+  'receipt.ocr': 120_000,
   // Longer, because it reads across every organisation. Still bounded: a
   // sweep that can run indefinitely holds the only scheduled worker there is.
   'approvals.sweep': 120_000,
@@ -161,6 +187,10 @@ export const JOB_MAX_ATTEMPTS: Readonly<Record<JobName, number>> = {
   'approval.escalate': 3,
   'notification.approval_escalated': 5,
   'spend_request.expire': 3,
+  'receipt.scan': 3,
+  // Three, and then it dead-letters rather than failing the receipt: OCR
+  // produces suggestions, and a receipt with none is still a receipt.
+  'receipt.ocr': 3,
   // Two, because it runs again on its schedule anyway. A sweep piling up
   // retries behind a database problem fills the queue with work that has
   // already been superseded by the next sweep.

@@ -170,6 +170,8 @@ model Organization {
 
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  receipts                Receipt[]
+  receiptAttachments      ReceiptAttachment[]
 
   @@map("organizations")
 }
@@ -400,6 +402,9 @@ model Membership {
   adjustmentsAuthored    TransactionAdjustment[] @relation("AdjustmentAuthor")
 
   notifications          Notification[]           @relation("NotificationRecipient")
+  receiptsUploaded       Receipt[]                @relation("ReceiptUploader")
+  receiptsAttached       ReceiptAttachment[]      @relation("ReceiptAttacher")
+  receiptsDetached       ReceiptAttachment[]      @relation("ReceiptDetacher")
   notificationPreferences NotificationPreference[] @relation("NotificationPreferenceOwner")
 
   /// One membership per user per organisation.
@@ -1544,4 +1549,106 @@ model JobExecution {
   @@index([status, scheduledFor])
   @@index([organizationId, jobName, createdAt])
   @@map("job_executions")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Receipts (epic 3.1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A file somebody uploaded as evidence of spend.
+///
+/// **The row exists before the file does.** An upload intent writes it as
+/// `PENDING` and hands back a signed URL; the bytes arrive at storage without
+/// passing through this API. A row with no object is the ordinary outcome of
+/// somebody closing a tab, and it must be distinguishable from a receipt whose
+/// file has gone missing — which is why `PENDING` is a status rather than an
+/// absence.
+///
+/// **Nothing here is taken from the client.** `contentType` is what the file's
+/// own first bytes say it is, `byteSize` and `checksum` are read from the
+/// stored object, and `fileName` is the only field the uploader chooses — kept
+/// for display and never used to build a storage key.
+model Receipt {
+  id             String @id @map("_id")
+  organizationId String
+
+  uploaderMembershipId String
+
+  /// `{organizationId}/{receiptId}`. Generated, never derived from a file
+  /// name: a key built from user input is a path traversal waiting to happen,
+  /// and it leaks — `dana-therapy-invoice.pdf` says more than anybody meant.
+  storageKey String
+
+  /// What the person called it. Shown, never trusted, never a path.
+  fileName String
+
+  /// Decided by reading the file, not by believing the upload (FR-EXP-004).
+  contentType String
+
+  byteSize Int    @default(0)
+  checksum String?
+
+  status     String @default("PENDING")
+  scanStatus String @default("PENDING")
+  ocrStatus  String @default("PENDING")
+
+  /// What OCR extracted, if anything. Suggestions for a human, never the
+  /// source of truth for an amount (FR-EXP-011).
+  ocrFields Json?
+
+  /// Denormalised from the open attachment, so a list of forty receipts does
+  /// not need forty history queries. The history rows are the record; this is
+  /// a cache of the newest one, written in the same transaction.
+  attachedTargetType String?
+  attachedTargetId   String?
+
+  storedAt  DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  uploader     Membership          @relation("ReceiptUploader", fields: [uploaderMembershipId], references: [id])
+  attachments  ReceiptAttachment[]
+
+  /// One receipt, one object. A second row pointing at the same key would let
+  /// deleting one receipt take another one's file with it.
+  @@unique([storageKey])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, attachedTargetType, attachedTargetId])
+  @@index([uploaderMembershipId])
+  @@map("receipts")
+}
+
+/// Where a receipt has been attached, including where it no longer is.
+///
+/// Append-only. "This receipt used to be on another expense" is a question an
+/// auditor asks, and a system that only knows the current attachment cannot
+/// answer it (FR-EXP-007).
+model ReceiptAttachment {
+  id             String @id @map("_id")
+  organizationId String
+  receiptId      String
+
+  /// `expense` or `transaction`.
+  targetType String
+  targetId   String
+
+  attachedByMembershipId String
+  attachedAt             DateTime @default(now())
+
+  detachedByMembershipId String?
+  detachedAt             DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  receipt      Receipt      @relation(fields: [receiptId], references: [id])
+  attachedBy   Membership   @relation("ReceiptAttacher", fields: [attachedByMembershipId], references: [id])
+  detachedBy   Membership?  @relation("ReceiptDetacher", fields: [detachedByMembershipId], references: [id])
+
+  @@index([organizationId, receiptId])
+  @@index([organizationId, targetType, targetId])
+  @@index([receiptId])
+  @@index([attachedByMembershipId])
+  @@index([detachedByMembershipId])
+  @@map("receipt_attachments")
 }

@@ -3,8 +3,8 @@
 import {
   MATCH_STATUSES,
   MATCH_STATUS_LABELS,
-  RECEIPT_STATUSES,
-  RECEIPT_STATUS_LABELS,
+  TRANSACTION_RECEIPT_STATUSES,
+  TRANSACTION_RECEIPT_STATUS_LABELS,
   REVIEW_STATUSES,
   REVIEW_STATUS_LABELS,
   TRANSACTION_STATUSES,
@@ -128,9 +128,9 @@ export function TransactionFilters({ cards }: { cards: readonly CardRecord[] }):
         className={control}
       >
         <option value="">Any receipt state</option>
-        {RECEIPT_STATUSES.map((status) => (
+        {TRANSACTION_RECEIPT_STATUSES.map((status) => (
           <option key={status} value={status}>
-            {RECEIPT_STATUS_LABELS[status]}
+            {TRANSACTION_RECEIPT_STATUS_LABELS[status]}
           </option>
         ))}
       </select>
