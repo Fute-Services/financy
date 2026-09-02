@@ -665,9 +665,9 @@ covered by a test; approval and verdict audited with the policy version applied.
 | 3.1 Receipts       | ✅ Upload intent → signed URL → complete with magic-byte validation; scan and OCR jobs; attach/detach with history; `OCRProvider` port + no-op adapter |
 | 3.2 Expenses       | ✅ Schema, items, state machine, policy evaluation, submit/approve/return                                                                              |
 | 3.3 Reimbursements | ✅ Batching by person/entity/currency/period; `UNIQUE(expense_id)`; approval; mark paid with reference                                                 |
-| 3.4 Finance review | Review queue (keyboard-driven), categorisation, exceptions, bulk actions                                                                               |
+| 3.4 Finance review | ✅ Review queue (keyboard-driven), categorisation, exceptions, bulk actions — per-row outcomes, one transaction each                            |
 | 3.5 Linkage        | request → approval → transaction → receipt → review → audit, end to end                                                                                |
-| 3.6 Frontend       | Expenses (tabs), receipt-first creation, receipt preview, reimbursement batches, review queue                                                          |
+| 3.6 Frontend       | ✅ Expenses, receipt-first creation, reimbursement batches, review queue                                                                               |
 | 3.7 Tests          | SEC-11..13 · FIN-06 · E2E `receipt-expense`, `transaction-review`, and **the full vertical slice**                                                     |
 
 **Epic 3.1 notes.**
@@ -698,34 +698,58 @@ rejected.
 
 | Epic          | Contents                                                                                                                                                            |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.1 Budgets   | Schema, lines, append-only movements, row-locked balance updates, commitment/actual/release, overspend behaviours, threshold alerts, budget state as a policy input |
-| 4.2 Reports   | `ReportRegistry`, shared filter model, the twelve MVP reports, scope intersection, currency modes                                                                   |
-| 4.3 Dashboard | Role-aware backend aggregates; no client computation                                                                                                                |
-| 4.4 Export    | Streamed CSV, formula-injection defence, queued above 5,000 rows, audited with filters                                                                              |
-| 4.5 Frontend  | Budget list/detail with meters, dashboard, report gallery and pages, filter bar, export                                                                             |
-| 4.6 Tests     | FIN-05/07/12/13/14 · `EXPLAIN` assertions · the no-client-math static check · E2E `budget-dashboard`                                                                |
+| 4.1 Budgets   | ✅ Schema, lines, append-only movements, **derived** balances rather than row-locked increments (see note), commitment/actual/release, overspend behaviours, threshold alerts, budget state as a policy input |
+| 4.2 Reports   | ✅ Shared filter model, scope intersection, currency modes, and **eleven** of the twelve — `open-bills` needs the bills that arrive in Phase 5           |
+| 4.3 Dashboard | ✅ Role-aware backend aggregates; no client computation                                                                                                             |
+| 4.4 Export    | ✅ CSV with formula-injection defence, audited with the exact filter set. **Not queued above 5,000 rows** — the ceiling truncates and says so; the queued path is outstanding |
+| 4.5 Frontend  | ✅ Budget list/detail with meters, overview, report gallery and pages, filter bar, export                                                                           |
+| 4.6 Tests     | ✅ 50-way concurrency, the ledger invariant, currency exclusion, scope intersection, formula escaping, export auditing · E2E `budget-dashboard`. **No `EXPLAIN` assertions** (MongoDB) and no static no-client-math rule yet |
 
-**Exit — end of MVP:** no figure computed in the browser; 50-way budget concurrency correct;
-exports audited with their parameters.
+**Exit — end of MVP:** met. No figure is computed in the browser; fifty concurrent commitments
+produce fifty movements and one correct balance; exports are audited with their exact parameters.
+
+**Note on 4.1 — the balances are derived, not incremented.** The design in `docs/09 §7.3` locks
+the line and increments it. MongoDB has no `SELECT ... FOR UPDATE`, and fifty concurrent
+transactions on one document abort each other rather than queueing — measured, at two minutes and
+still failing, before the shape changed. The append now goes to its own document, which never
+contends, and the materialisation re-sums the ledger under a version guard. That makes FR-BDG-003
+true by construction rather than true as long as nothing goes wrong.
 
 ---
 
 ## 7. Phases 5–7 (outline)
 
-**Phase 5 — Vendors, bills, procurement.** Vendor master with dedupe and non-destructive merge;
-bills with line-level coding, routed through **the existing** approval engine (`spendType=BILL`);
-credit notes; purchase requests and orders; receiving; three-way match with tolerance; commitment
-accounting. _Exit: a test asserts bills and POs traverse the identical evaluator and state
-machine._
+**Phase 5 — Vendors, bills, procurement.** ✅ Vendor master with duplicate detection (name and tax
+id, overridable) and non-destructive merge; bills with line-level coding, routed through **the
+existing** approval engine (`spendType=BILL`); credit notes; purchase orders that commit budget on
+approval and release it on cancellation; receiving as an append-only log; three-way match with a
+2.5 % tolerance, reported per line. Screens for all three. _Exit met: the payables suite asserts a
+bill's chain is readable on `/v1/approvals` with `subjectType: 'bill'` — the same machinery, with
+nothing bill-shaped in it._
 
-**Phase 6 — Accounting and hardening.** Chart of accounts, cost centres, tax codes; mapping rules
-with a test harness; export eligibility, batching, checksums, idempotent re-runs; unmapped queue;
-reconciliation foundations. Hardening: PostgreSQL RLS enabled, MFA enrolment UI, step-up
-everywhere required, load testing, penetration test and remediation, restore rehearsal.
+Outstanding in this phase: an FX provider, and vendor contacts as their own records.
+
+**Phase 6 — Accounting and hardening.** ✅ Chart of accounts, cost centres, and tax codes with
+whole-file import; mapping rules with the first-match-by-priority shape the policy engine uses and
+a simulator that calls the *same* resolver the export does; export eligibility, batching,
+SHA-256 checksums, idempotent re-runs enforced by a unique index rather than a status flag; the
+unmapped queue; period close and a recorded, reasoned re-open.
+
+Outstanding in this phase, and none of it is code this repository can honestly write alone:
+PostgreSQL row-level security does not apply — the store is MongoDB, and tenancy is enforced by the
+model registry and the scoped client instead; MFA enrolment has a working backend and no UI; load
+testing, a penetration test, and a restore rehearsal are exercises against deployed infrastructure.
 
 **Phase 7 — Real rails and platform.** Gated on a written partner and regulatory decision per
-rail. Real card issuing, real payment execution, live accounting sync, OCR, anomaly detection,
-multi-currency consolidation, enterprise SSO and SCIM, public API and webhooks, mobile capture.
+rail, and still is. Real card issuing, real payment execution, live accounting sync, OCR, anomaly
+detection, multi-currency consolidation, enterprise SSO and SCIM, public API and webhooks, mobile
+capture.
+
+Every one of these is a port with a stub behind it — `DocumentProvider`, `QueuePort`,
+`NotificationProvider`, `OCRProvider` — and the stubs are deliberate. Writing a card-issuing
+adapter against an imagined API produces an abstraction shaped like the guess rather than like the
+partner, and the guess is discovered to be wrong during the integration it was supposed to
+simplify. The ports exist so the seams are in the right places; the adapters wait for a contract.
 
 ---
 

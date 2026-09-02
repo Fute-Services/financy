@@ -27,6 +27,8 @@ import { BudgetsModule } from './modules/budgets/index.js';
 import { ExpensesModule } from './modules/expenses/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
 import { ReceiptsModule } from './modules/receipts/index.js';
+import { AccountingModule } from './modules/accounting/index.js';
+import { PayablesModule } from './modules/payables/index.js';
 import { ReportsModule } from './modules/reports/index.js';
 import { TransactionsModule } from './modules/transactions/index.js';
 import { SpendModule } from './modules/spend/index.js';
@@ -69,6 +71,8 @@ import { SpendModule } from './modules/spend/index.js';
     ExpensesModule,
     BudgetsModule,
     ReportsModule,
+    PayablesModule,
+    AccountingModule,
     AuditReadModule,
   ],
   providers: [

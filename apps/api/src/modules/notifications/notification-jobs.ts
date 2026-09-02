@@ -363,6 +363,70 @@ export class NotificationJobs implements OnModuleInit {
       };
     }
 
+    if (subjectType === 'bill') {
+      const bill = await this.database.unscoped.bill.findFirst({
+        where: { id: subjectId, organizationId },
+        select: {
+          id: true,
+          reference: true,
+          billNumber: true,
+          memo: true,
+          totalAmount: true,
+          currency: true,
+          submittedByMembershipId: true,
+          submittedBy: { select: { user: { select: { fullName: true } } } },
+          vendor: { select: { name: true } },
+        },
+      });
+
+      if (bill === null || bill.submittedByMembershipId === null) return null;
+
+      return {
+        id: bill.id,
+        resourceType: 'bill',
+        path: `/bills/${bill.id}`,
+        reference: bill.reference,
+        // The supplier and their invoice number, which is what an approver
+        // recognises — our own reference means nothing to them.
+        purpose: `${bill.vendor.name} — invoice ${bill.billNumber}`,
+        amount: Money.of(bill.totalAmount, bill.currency).format(),
+        requesterMembershipId: bill.submittedByMembershipId,
+        requesterName: bill.submittedBy?.user.fullName ?? 'Somebody',
+      };
+    }
+
+    if (subjectType === 'purchase_order') {
+      const order = await this.database.unscoped.purchaseOrder.findFirst({
+        where: { id: subjectId, organizationId },
+        select: {
+          id: true,
+          poNumber: true,
+          memo: true,
+          totalAmount: true,
+          currency: true,
+          requesterMembershipId: true,
+          requester: { select: { user: { select: { fullName: true } } } },
+          vendor: { select: { name: true } },
+        },
+      });
+
+      if (order === null) return null;
+
+      return {
+        id: order.id,
+        resourceType: 'purchase_order',
+        path: `/procurement/${order.id}`,
+        reference: order.poNumber,
+        purpose:
+          order.memo === null || order.memo === ''
+            ? `Order from ${order.vendor.name}`
+            : `${order.vendor.name} — ${order.memo}`,
+        amount: Money.of(order.totalAmount, order.currency).format(),
+        requesterMembershipId: order.requesterMembershipId,
+        requesterName: order.requester.user.fullName,
+      };
+    }
+
     const request = await this.database.unscoped.spendRequest.findFirst({
       where: { id: subjectId, organizationId },
       select: {

@@ -101,49 +101,46 @@ export class VendorsService {
 
     const id = newId();
 
-    try {
-      await this.database.unscoped.$transaction(async (tx) => {
-        await tx.vendor.create({
-          data: {
-            id,
-            organizationId,
-            name: input.name,
-            normalizedName: normalized,
-            legalName: input.legalName ?? null,
-            taxId: input.taxId ?? null,
-            categoryId: input.categoryId ?? null,
-            email: input.email ?? null,
-            phone: input.phone ?? null,
-            website: input.website ?? null,
-            addressLine: input.addressLine ?? null,
-            city: input.city ?? null,
-            postalCode: input.postalCode ?? null,
-            countryCode: input.countryCode ?? null,
-            defaultCurrency: input.defaultCurrency?.toUpperCase() ?? null,
-            paymentTermsDays: input.paymentTermsDays,
-            ...this.bankColumns(input.bankDetails),
-            notes: input.notes ?? null,
-            status: 'ACTIVE',
-          },
-        });
-
-        await this.audit.record(tx, {
+    await this.database.unscoped.$transaction(async (tx) => {
+      await tx.vendor.create({
+        data: {
+          id,
           organizationId,
-          action: 'vendor.created',
-          resourceType: 'vendor',
-          resourceId: id,
-          // The bank details are deliberately absent from the audit payload.
-          // An audit trail that recorded them would be a second copy of the
-          // most sensitive field in the system, in a table built to be read.
-          after: { name: input.name, taxId: input.taxId ?? null },
-        });
+          name: input.name,
+          normalizedName: normalized,
+          legalName: input.legalName ?? null,
+          taxId: input.taxId ?? null,
+          categoryId: input.categoryId ?? null,
+          email: input.email ?? null,
+          phone: input.phone ?? null,
+          website: input.website ?? null,
+          addressLine: input.addressLine ?? null,
+          city: input.city ?? null,
+          postalCode: input.postalCode ?? null,
+          countryCode: input.countryCode ?? null,
+          defaultCurrency: input.defaultCurrency?.toUpperCase() ?? null,
+          paymentTermsDays: input.paymentTermsDays,
+          ...this.bankColumns(input.bankDetails),
+          notes: input.notes ?? null,
+          status: 'ACTIVE',
+        },
       });
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new ConflictError('A supplier with that name already exists.');
-      }
-      throw error;
-    }
+
+      await this.audit.record(tx, {
+        organizationId,
+        action: 'vendor.created',
+        resourceType: 'vendor',
+        resourceId: id,
+        // The bank details are deliberately absent from the audit payload. An
+        // audit trail that recorded them would be a second copy of the most
+        // sensitive field in the system, in a table built to be read.
+        after: {
+          name: input.name,
+          taxId: input.taxId ?? null,
+          ...(input.allowDuplicate ? { createdDespiteMatch: true } : {}),
+        },
+      });
+    });
 
     return this.get(id);
   }
@@ -435,8 +432,3 @@ function requireOrganization(): string {
   return organizationId;
 }
 
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
-  );
-}

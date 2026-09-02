@@ -32,6 +32,7 @@ export * from './ids.js';
 export * from './result.js';
 export * from './state-machine.js';
 export * from './period.js';
+export * from './quantity.js';
 export * from './file-type.js';
 
 export * from './policy/index.js';

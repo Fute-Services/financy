@@ -61,6 +61,12 @@ export const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set<string>([
   'PurchaseOrder',
   'PurchaseOrderLine',
   'PurchaseOrderReceipt',
+  // Phase 6.
+  'AccountingCode',
+  'AccountingMapping',
+  'ExportBatch',
+  'ExportBatchItem',
+  'AccountingPeriod',
 ]);
 
 /**

@@ -35,6 +35,31 @@ import { ApprovalSubjectRegistry } from './approval-subjects.js';
  * The alternative — the approvals module importing every subject — is the
  * arrangement that does not survive the third.
  */
+/**
+ * The subject types a settled chain can be about.
+ *
+ * Named once here because the notification payload's enum and this cast have to
+ * agree; a fifth subject added to one and not the other would enqueue a job the
+ * queue refuses, and the refusal would arrive as a settled record whose
+ * requester was never told.
+ */
+type ApprovalSubjectType = 'spend_request' | 'expense' | 'bill' | 'purchase_order';
+
+/** What a settled chain does to the budget, per subject type. */
+const BUDGET_MOVEMENT_FOR: Readonly<
+  Partial<
+    Record<
+      string,
+      { operation: 'COMMIT' | 'ACTUALIZE'; sourceType: 'SPEND_REQUEST' | 'EXPENSE' | 'BILL' | 'PURCHASE_ORDER' }
+    >
+  >
+> = {
+  spend_request: { operation: 'COMMIT', sourceType: 'SPEND_REQUEST' },
+  purchase_order: { operation: 'COMMIT', sourceType: 'PURCHASE_ORDER' },
+  bill: { operation: 'COMMIT', sourceType: 'BILL' },
+  expense: { operation: 'ACTUALIZE', sourceType: 'EXPENSE' },
+};
+
 @Controller('approvals')
 export class ApprovalController {
   constructor(
@@ -263,8 +288,17 @@ export class ApprovalController {
     if (settled === null) return;
     if (settled.outcome !== 'APPROVED' && settled.outcome !== 'OVERRIDDEN') return;
 
-    const operation = settled.subjectType === 'expense' ? 'ACTUALIZE' : 'COMMIT';
-    const sourceType = settled.subjectType === 'expense' ? 'EXPENSE' : 'SPEND_REQUEST';
+    // Four subjects, two verbs. A **promise** to spend reserves budget; a
+    // **report** that money already went records it. A spend request and a
+    // purchase order are promises; an expense is a report. A bill is the
+    // interesting one — the supplier has already delivered, but nothing has
+    // left the bank until it is paid, so approving it reserves and paying it
+    // spends.
+    const movement = BUDGET_MOVEMENT_FOR[settled.subjectType];
+
+    if (movement === undefined) return;
+
+    const { operation, sourceType } = movement;
 
     await this.jobs.enqueue(
       'budget.apply',
@@ -296,7 +330,7 @@ export class ApprovalController {
         'notification.approval_decided',
         {
           organizationId,
-          subjectType: result.settled.subjectType as 'spend_request' | 'expense',
+          subjectType: result.settled.subjectType as ApprovalSubjectType,
           subjectId: result.settled.subjectId,
           // `RETURNED` is the chain's word for it and `CHANGES_REQUESTED` is
           // the request's; the notification is about the request, so it uses

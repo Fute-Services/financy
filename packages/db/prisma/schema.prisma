@@ -189,6 +189,12 @@ model Organization {
   purchaseOrderLines    PurchaseOrderLine[]
   purchaseOrderReceipts PurchaseOrderReceipt[]
 
+  accountingCodes    AccountingCode[]
+  accountingMappings AccountingMapping[]
+  exportBatches      ExportBatch[]
+  exportBatchItems   ExportBatchItem[]
+  accountingPeriods  AccountingPeriod[]
+
   @@map("organizations")
 }
 
@@ -431,6 +437,9 @@ model Membership {
   billsSubmitted          Bill[]                   @relation("BillSubmitter")
   purchaseOrdersRequested PurchaseOrder[]          @relation("PurchaseOrderRequester")
   purchaseOrderReceipts   PurchaseOrderReceipt[]   @relation("PurchaseOrderReceiver")
+  exportBatchesCreated    ExportBatch[]            @relation("ExportBatchAuthor")
+  periodsClosed           AccountingPeriod[]       @relation("PeriodCloser")
+  periodsReopened         AccountingPeriod[]       @relation("PeriodReopener")
 
   /// One membership per user per organisation.
   @@unique([organizationId, userId])
@@ -2191,7 +2200,17 @@ model Vendor {
   bills          Bill[]
   purchaseOrders PurchaseOrder[]
 
-  @@unique([organizationId, normalizedName])
+  /// Deliberately **not** unique, unlike the invoice number on `bills`.
+  ///
+  /// Two suppliers really can normalise to the same name — a franchise and its
+  /// parent, the same trading name in two countries — and a hard constraint
+  /// would make the honest case impossible to record at all. Duplication here
+  /// is a data-quality problem with a remedy (merge); paying an invoice twice
+  /// is a correctness violation with none, which is why that one *is* an index.
+  ///
+  /// The check on create refuses a near-duplicate by default and names what it
+  /// matched; a person who knows better overrides it explicitly.
+  @@index([organizationId, normalizedName])
   @@index([organizationId, status, name])
   @@index([organizationId, taxId])
   @@index([categoryId])
@@ -2442,4 +2461,224 @@ model PurchaseOrderReceipt {
   @@index([purchaseOrderLineId])
   @@index([receivedByMembershipId])
   @@map("purchase_order_receipts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Accounting — chart of accounts, mapping, export (Phase 6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// What kind of code this is.
+///
+/// One table for three taxonomies, because they share every operation — import,
+/// activate, retire, map to — and differ only in what they name. Three tables
+/// would mean three of every endpoint and three chances to forget one.
+enum AccountingCodeType {
+  GL_ACCOUNT
+  COST_CENTER
+  TAX_CODE
+}
+
+model AccountingCode {
+  id             String @id @map("_id")
+  organizationId String
+
+  codeType AccountingCodeType
+
+  /// The code as the ledger knows it — `6200`, `CC-SALES`, `VAT-STD`.
+  code String
+  name String
+
+  /// For a chart of accounts that has a hierarchy. Flat charts leave it null.
+  parentId String?
+
+  /// Retired rather than deleted: a code that has ever been exported has to
+  /// keep resolving for anybody reading last year's batch.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  parent       AccountingCode?     @relation("AccountingCodeTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children     AccountingCode[]    @relation("AccountingCodeTree")
+
+  glMappings   AccountingMapping[] @relation("MappingGlAccount")
+  costMappings AccountingMapping[] @relation("MappingCostCenter")
+  taxMappings  AccountingMapping[] @relation("MappingTaxCode")
+
+  @@unique([organizationId, codeType, code])
+  @@index([organizationId, codeType, isActive])
+  @@index([parentId])
+  @@map("accounting_codes")
+}
+
+/// A rule that turns a record's dimensions into accounting codes.
+///
+/// **Ordered by priority, first match wins** — the same shape as the policy
+/// engine, and for the same reason: a set of rules that all apply is a set
+/// nobody can reason about, and "which one won" has to be answerable from the
+/// rules alone rather than from the order the database returned them in.
+model AccountingMapping {
+  id             String @id @map("_id")
+  organizationId String
+
+  name     String
+  /// Lower runs first. Ties break by creation order, which is stable.
+  priority Int    @default(100)
+
+  /// What has to match. Null means "any" for that dimension — a rule with
+  /// every condition null is the catch-all, which is how an organisation says
+  /// "everything else goes to 6000".
+  categoryId   String?
+  departmentId String?
+  entityId     String?
+  vendorId     String?
+  spendType    String?
+
+  glAccountId  String
+  costCenterId String?
+  taxCodeId    String?
+
+  isActive Boolean @default(true)
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  glAccount    AccountingCode  @relation("MappingGlAccount", fields: [glAccountId], references: [id])
+  costCenter   AccountingCode? @relation("MappingCostCenter", fields: [costCenterId], references: [id])
+  taxCode      AccountingCode? @relation("MappingTaxCode", fields: [taxCodeId], references: [id])
+
+  @@index([organizationId, isActive, priority])
+  @@index([glAccountId])
+  @@index([costCenterId])
+  @@index([taxCodeId])
+  @@map("accounting_mappings")
+}
+
+enum ExportBatchStatus {
+  /// Built, balanced, and checksummed. The records are marked exported.
+  COMPLETED
+  /// Refused because the journals did not balance (FR-ACC-006).
+  FAILED
+}
+
+/// One accounting export.
+///
+/// The batch is the evidence that a set of records left the system: its
+/// checksum, its row count, and the ids it contained. "What was in the March
+/// export?" is a question asked in an audit a year later, and re-running the
+/// query is not an answer because the data has moved since.
+model ExportBatch {
+  id             String @id @map("_id")
+  organizationId String
+
+  reference  String
+  exportType String
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  rowCount Int    @default(0)
+  /// Hex SHA-256 of the exact bytes handed out. Two people comparing what they
+  /// received against what was sent need one number, not a diff.
+  checksum String @default("")
+
+  /// Totals, kept so the batch proves it balanced without re-deriving it.
+  totalDebits  String @default("0.0000")
+  totalCredits String @default("0.0000")
+  currency     String
+
+  status ExportBatchStatus @default(COMPLETED)
+  /// Why it failed, when it did. Present so a refusal is diagnosable a week
+  /// later without re-running anything.
+  failureReason String?
+
+  createdByMembershipId String
+  createdAt             DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  createdBy    Membership        @relation("ExportBatchAuthor", fields: [createdByMembershipId], references: [id])
+  items        ExportBatchItem[]
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, createdAt])
+  @@index([createdByMembershipId])
+  @@map("export_batches")
+}
+
+/// One record inside one export.
+///
+/// **`(recordType, recordId)` is unique across every batch**, and that index is
+/// what makes re-running an export idempotent (FR-ACC-005): a record that has
+/// been exported once cannot be picked up by a second run, whatever the filters
+/// say. A status column on the record would be a second copy of the same fact,
+/// and the two would disagree the first time a batch was interrupted.
+model ExportBatchItem {
+  id             String @id @map("_id")
+  organizationId String
+  batchId        String
+
+  recordType String
+  recordId   String
+
+  glAccountCode  String
+  costCenterCode String?
+  taxCode        String?
+
+  debit    String @default("0.0000")
+  credit   String @default("0.0000")
+  currency String
+
+  memo String?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  batch        ExportBatch  @relation(fields: [batchId], references: [id])
+
+  /// The idempotency. One record, one export, ever.
+  @@unique([organizationId, recordType, recordId])
+  @@index([organizationId, batchId])
+  @@index([batchId])
+  @@map("export_batch_items")
+}
+
+/// A closed accounting period.
+///
+/// Closing is what makes a month's figures final. Nothing in a closed period
+/// can be edited or exported again; a correction is dated into the open period,
+/// which is what an accountant expects and what a re-opened month would break.
+model AccountingPeriod {
+  id             String @id @map("_id")
+  organizationId String
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  closedAt             DateTime  @default(now())
+  closedByMembershipId String
+  note                 String?
+
+  /// Re-opening is possible and is recorded, because pretending it never
+  /// happens is how a system ends up with two versions of a signed-off month
+  /// and no way to tell them apart.
+  reopenedAt             DateTime?
+  reopenedByMembershipId String?
+  reopenReason           String?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  closedBy     Membership   @relation("PeriodCloser", fields: [closedByMembershipId], references: [id])
+  reopenedBy   Membership?  @relation("PeriodReopener", fields: [reopenedByMembershipId], references: [id])
+
+  @@unique([organizationId, periodStart])
+  @@index([organizationId, periodEnd])
+  @@index([closedByMembershipId])
+  @@index([reopenedByMembershipId])
+  @@map("accounting_periods")
 }

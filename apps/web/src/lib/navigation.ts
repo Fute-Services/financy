@@ -217,6 +217,16 @@ export const NAV_ITEMS: NavItem[] = [
     keywords: ['supplier', 'merchant', 'payee'],
   },
 
+  {
+    label: 'Accounting',
+    href: '/accounting',
+    permission: 'accounting:export',
+    section: 'payables',
+    phase: 6,
+    icon: 'ledger',
+    keywords: ['export', 'general ledger', 'chart of accounts', 'close', 'period'],
+  },
+
   // ── Admin ────────────────────────────────────────────────────────────────
   {
     label: 'People',

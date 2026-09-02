@@ -28,14 +28,14 @@ import { can, getSession } from '@/lib/session';
  * Highest roadmap phase whose modules actually exist.
  *
  * Raised as each phase lands, and only once the *screens* are real — not once
- * the endpoints behind them are. Phase 4 now qualifies: the overview,
- * budgets, and the report gallery each read a live endpoint and enforce their
- * permission, alongside everything Phases 1 to 3 delivered.
+ * the endpoints behind them are. Phase 5 now qualifies: vendors,
+ * bills, and procurement each read a live endpoint and enforce their
+ * permission, alongside everything Phases 1 to 4 delivered.
  *
  * Raising this number ahead of the screens would silently turn every "not
  * built yet" marker into a promise the application does not keep.
  */
-const BUILT_PHASES = 4;
+const BUILT_PHASES = 5;
 
 export default async function AppLayout({
   children,

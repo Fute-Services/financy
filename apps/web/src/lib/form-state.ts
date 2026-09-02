@@ -46,6 +46,16 @@ export interface FormState {
    * find the row they made a second ago.
    */
   createdId?: string;
+  /**
+   * The API's own error code, for the few forms whose next step depends on
+   * *which* refusal this was.
+   *
+   * Most do not need it — the API writes a message for a person and the form
+   * shows it. The exception is a refusal a person can legitimately override:
+   * adding a supplier that looks like a duplicate is a decision only they can
+   * make, and the form can only offer it if it knows that is what happened.
+   */
+  code?: string;
 }
 
 export const IDLE: FormState = { status: 'idle' };

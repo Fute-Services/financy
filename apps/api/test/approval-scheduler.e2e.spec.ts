@@ -373,7 +373,20 @@ describeWithDatabase('the approval scheduler', () => {
         `step:${step.id}:reminder:1`,
         `step:${step.id}:reminder:2`,
       ]);
-    });
+    },
+    /**
+     * Two sweeps, and a sweep is **cross-tenant by design** — it asks "which
+     * steps anywhere are overdue?" in one query rather than once per
+     * organisation (docs/14). That is the right shape, and it means this test
+     * gets slower as the test database accumulates organisations from every
+     * run that has ever happened against it.
+     *
+     * The default 30 seconds was fitting on an empty database and stopped
+     * fitting somewhere around a thousand organisations. Raised rather than
+     * worked around, because the sweep's cost growing with the estate is a
+     * real property worth leaving visible.
+     */
+    120_000);
 
     it('chases the people who can act, not the person waiting', async () => {
       const { step } = await submitAndFindStep('Chasing the right person');

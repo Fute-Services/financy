@@ -81,8 +81,9 @@ export function toFormState(error: unknown): FormState {
   }
 
   // Every other code carries a message written for a person — the API's error
-  // taxonomy exists so this does not have to guess.
-  return { status: 'error', message: error.message };
+  // taxonomy exists so this does not have to guess. The code travels with it
+  // for the forms whose next step depends on which refusal this was.
+  return { status: 'error', message: error.message, ...(error.code === undefined ? {} : { code: error.code }) };
 }
 
 /** A `PATCH` or `POST` carrying the record version as `If-Match`. */

@@ -4,7 +4,6 @@ import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { DatabaseService } from '../../platform/database/index.js';
 import {
   JobRegistry,
-  PermanentJobError,
   QUEUE_PORT,
   type JobPayload,
   type QueuePort,
@@ -186,14 +185,68 @@ export class BudgetJobs implements OnModuleInit {
             };
       }
 
-      case 'BILL':
-      case 'PURCHASE_ORDER':
-        // Phase 5. Reaching here today means something enqueued a job for a
-        // record type that does not exist yet, which is a bug and not a
-        // transient failure.
-        throw new PermanentJobError(
-          `Budgets cannot yet be moved by a ${payload.sourceType.toLowerCase()}.`,
-        );
+      case 'BILL': {
+        const row = await this.database.unscoped.bill.findFirst({
+          where: { id: sourceId, organizationId },
+          select: {
+            entityId: true,
+            totalAmount: true,
+            currency: true,
+            issueDate: true,
+            lines: {
+              orderBy: { sequence: 'asc' },
+              take: 1,
+              select: { departmentId: true, projectId: true, categoryId: true },
+            },
+          },
+        });
+
+        if (row === null) return null;
+
+        const first = row.lines[0];
+
+        return {
+          entityId: row.entityId,
+          // A bill's dimensions are its lines', and a bill routinely spans
+          // several. The first line stands in for the whole, which is the
+          // answer a person would give if asked what the invoice was for. A
+          // bill split across two departments needs line-level budgeting,
+          // which is a larger change than pretending this is exact.
+          departmentId: first?.departmentId ?? null,
+          projectId: first?.projectId ?? null,
+          categoryId: first?.categoryId ?? null,
+          // The invoice's own date, not the day it was entered: an invoice
+          // keyed in three weeks late belongs to the period it was issued in.
+          occurredAt: row.issueDate,
+          amount: Money.of(row.totalAmount, row.currency),
+        };
+      }
+
+      case 'PURCHASE_ORDER': {
+        const row = await this.database.unscoped.purchaseOrder.findFirst({
+          where: { id: sourceId, organizationId },
+          select: {
+            entityId: true,
+            departmentId: true,
+            projectId: true,
+            categoryId: true,
+            totalAmount: true,
+            currency: true,
+            createdAt: true,
+          },
+        });
+
+        return row === null
+          ? null
+          : {
+              entityId: row.entityId,
+              departmentId: row.departmentId,
+              projectId: row.projectId,
+              categoryId: row.categoryId,
+              occurredAt: row.createdAt,
+              amount: Money.of(row.totalAmount, row.currency),
+            };
+      }
 
       default:
         return null;

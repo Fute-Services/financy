@@ -41,7 +41,7 @@ export const JOB_PAYLOADS = {
    */
   'notification.approval_decided': z.strictObject({
     organizationId: idSchema,
-    subjectType: z.enum(['spend_request', 'expense']),
+    subjectType: z.enum(['spend_request', 'expense', 'bill', 'purchase_order']),
     subjectId: idSchema,
     /** `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`, `OVERRIDDEN`. */
     outcome: z.enum(['APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'OVERRIDDEN']),

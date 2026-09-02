@@ -408,13 +408,19 @@ export class BillsService implements OnModuleInit {
         );
       }
 
-      const opened = await this.approvals.open(tx, {
-        organizationId,
-        subjectType: 'bill',
-        subjectId: id,
-        requesterMembershipId: submitter,
-        decision,
-      });
+      // No steps means nothing to approve, and opening an empty chain would
+      // leave an instance nobody can act on beside a bill that is already
+      // approved.
+      const opened =
+        decision.requirements.approvalSteps.length === 0
+          ? null
+          : await this.approvals.open(tx, organizationId, {
+              subjectType: 'bill',
+              subjectId: id,
+              context,
+              decision,
+              now,
+            });
 
       await tx.bill.update({
         where: { id, version: expectedVersion },
@@ -487,6 +493,16 @@ export class BillsService implements OnModuleInit {
       });
     });
 
+    // The money has left. `actualize` records the spend and releases the
+    // commitment approval made, in one movement pair — a bill that recorded its
+    // actual and kept its reservation reads as twice as spent for the rest of
+    // the period.
+    await this.queue.enqueue(
+      'budget.apply',
+      { organizationId, operation: 'ACTUALIZE', sourceType: 'BILL', sourceId: id },
+      { idempotencyKey: `budget:BILL:${id}:ACTUALIZE` },
+    );
+
     return this.get(id);
   }
 
@@ -519,10 +535,11 @@ export class BillsService implements OnModuleInit {
     }
 
     const currency = original.currency;
-    const full = input.amount === undefined;
+    const requested = input.amount;
+    const full = requested === undefined;
     const amount = full
       ? Money.of(original.totalAmount, currency)
-      : Money.of(input.amount.amount, currency);
+      : Money.of(requested.amount, currency);
 
     if (amount.greaterThan(Money.of(original.totalAmount, currency))) {
       throw new ValidationError({
@@ -604,6 +621,7 @@ export class BillsService implements OnModuleInit {
 
   async cancel(id: string, expectedVersion: number): Promise<BillDetail> {
     const organizationId = requireOrganization();
+    let released = false;
 
     await this.database.unscoped.$transaction(async (tx) => {
       const before = await tx.bill.findFirst({ where: { id, organizationId } });
@@ -629,7 +647,21 @@ export class BillsService implements OnModuleInit {
         before: { status: before.status },
         after: { status: 'CANCELLED' },
       });
+
+      if (before.status === 'APPROVED') {
+        released = true;
+      }
     });
+
+    // A cancelled bill that kept its reservation holds budget nobody can spend
+    // and nobody can find a reason for.
+    if (released) {
+      await this.queue.enqueue(
+        'budget.apply',
+        { organizationId, operation: 'RELEASE', sourceType: 'BILL', sourceId: id },
+        { idempotencyKey: `budget:BILL:${id}:RELEASE` },
+      );
+    }
 
     return this.get(id);
   }

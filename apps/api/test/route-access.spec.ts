@@ -104,6 +104,17 @@ describe('every route declares its access', () => {
       // themselves again, and gating it behind one borrowed from elsewhere
       // would teach the next reader that permissions here are decorative.
       'AuthController.stepUp',
+      /**
+       * The dashboard is every widget the caller can already see, and nothing
+       * else: an employee's endpoint returns the employee's own spend, and the
+       * counts they cannot act on are absent rather than zero.
+       *
+       * Requiring a permission would leave the first screen after signing in
+       * empty for exactly the people who use the product most — and the
+       * permission it would have to borrow (`report:read`, say) would be a
+       * lie about what the endpoint does.
+       */
+      'DashboardController.summary',
     ];
     const unexplained = undeclared.filter((label) => !sessionOnly.includes(label));
 
