@@ -309,7 +309,9 @@ export class ReportsService {
     const budgets = await this.database.unscoped.budget.findMany({
       where: {
         organizationId: context.organizationId,
-        archivedAt: null,
+        // The status filter already excludes archived budgets, and an
+        // `archivedAt: null` predicate would exclude every budget instead:
+        // absent is not null on MongoDB (ADR-0017).
         status: { in: ['ACTIVE', 'CLOSED'] },
         periodStart: { lte: context.period.to },
         periodEnd: { gte: context.period.from },

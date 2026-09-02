@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
-    "job": "tsx src/scripts/run-job.ts"
+    "job": "tsx src/scripts/run-job.ts",
+    "seed:demo:activity": "tsx src/scripts/seed-demo-activity.ts"
   },
   "dependencies": {
     "@financy/contracts": "workspace:*",

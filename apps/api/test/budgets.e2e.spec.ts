@@ -326,6 +326,27 @@ describeWithDatabase('budgets', () => {
   // ── creation and shape ───────────────────────────────────────────────────
 
   describe('creating one', () => {
+    /**
+     * The regression this exists for.
+     *
+     * The first version of the list filtered on `archivedAt: null`. On MongoDB
+     * an optional field that was never written is **absent**, and Prisma's
+     * `null` filter does not match absent (ADR-0017) — so the predicate matched
+     * nothing, every budget screen was empty, and the rows were perfectly fine
+     * the whole time. It was found by looking at a seeded demo, not by a test,
+     * which is why there is now a test.
+     */
+    it('lists a budget that has just been created', async () => {
+      const budget = await makeBudget('1000.00');
+
+      const listed = expectStatus(
+        await request(server).get('/v1/budgets').set('Cookie', owner.cookie),
+        200,
+      ).body as { data: { id: string }[] };
+
+      expect(listed.data.some((row) => row.id === budget.id)).toBe(true);
+    });
+
     it('cuts the range into periods and spreads the allocation across them', async () => {
       const response = expectStatus(
         await request(server)

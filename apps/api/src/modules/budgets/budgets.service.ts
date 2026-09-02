@@ -59,8 +59,13 @@ export class BudgetsService {
     const asOf = query.asOf === undefined ? undefined : new Date(`${query.asOf}T00:00:00.000Z`);
 
     const where: Prisma.BudgetWhereInput = {
-      archivedAt: null,
-      ...(query.status === undefined ? {} : { status: query.status }),
+      // No `archivedAt: null`. On MongoDB an optional field that was never
+      // written is absent, and Prisma's `null` filter does not match absent
+      // (ADR-0017) — so that predicate returned *nothing* for every budget
+      // ever created through this service, and the screen was empty while the
+      // rows were fine. `status` carries the same information and is always
+      // set, which is why every other module in this codebase filters on it.
+      ...(query.status === undefined ? { status: { not: 'ARCHIVED' } } : { status: query.status }),
       ...(query.scopeType === undefined ? {} : { scopeType: query.scopeType }),
       ...(query.entityId === undefined ? {} : { entityId: query.entityId }),
       ...(query.q === undefined ? {} : { name: { contains: query.q, mode: 'insensitive' } }),

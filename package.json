@@ -34,7 +34,8 @@
     "clean": "turbo run clean && node scripts/clean.mjs",
     "db:seed:demo:full": "pnpm --filter @financy/api seed:demo",
     "db:push": "pnpm --filter @financy/db push",
-    "db:push:reset": "pnpm --filter @financy/db push:reset"
+    "db:push:reset": "pnpm --filter @financy/db push:reset",
+    "db:seed:demo:activity": "pnpm --filter @financy/api seed:demo:activity"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

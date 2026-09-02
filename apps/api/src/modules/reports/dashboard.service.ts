@@ -106,8 +106,10 @@ export class DashboardService {
         ? this.database.unscoped.budget.findMany({
             where: {
               organizationId,
+              // `status` alone, never `archivedAt: null` — an absent field does
+              // not match a null filter on MongoDB (ADR-0017), and an ACTIVE
+              // budget is by definition not archived.
               status: 'ACTIVE',
-              archivedAt: null,
               periodStart: { lte: now },
               periodEnd: { gte: now },
             },
