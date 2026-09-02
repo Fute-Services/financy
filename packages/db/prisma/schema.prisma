@@ -182,6 +182,13 @@ model Organization {
   budgetMovements BudgetMovement[]
   budgetAlerts    BudgetAlert[]
 
+  vendors               Vendor[]
+  bills                 Bill[]
+  billLines             BillLine[]
+  purchaseOrders        PurchaseOrder[]
+  purchaseOrderLines    PurchaseOrderLine[]
+  purchaseOrderReceipts PurchaseOrderReceipt[]
+
   @@map("organizations")
 }
 
@@ -420,6 +427,10 @@ model Membership {
   receiptsDetached       ReceiptAttachment[]      @relation("ReceiptDetacher")
   notificationPreferences NotificationPreference[] @relation("NotificationPreferenceOwner")
   budgetMovements         BudgetMovement[]         @relation("BudgetMovementActor")
+  billsPaid               Bill[]                   @relation("BillPayer")
+  billsSubmitted          Bill[]                   @relation("BillSubmitter")
+  purchaseOrdersRequested PurchaseOrder[]          @relation("PurchaseOrderRequester")
+  purchaseOrderReceipts   PurchaseOrderReceipt[]   @relation("PurchaseOrderReceiver")
 
   /// One membership per user per organisation.
   @@unique([organizationId, userId])
@@ -456,6 +467,8 @@ model Entity {
   expenses      Expense[]
   reimbursementBatches ReimbursementBatch[]
   budgets              Budget[]
+  bills                Bill[]
+  purchaseOrders       PurchaseOrder[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -511,6 +524,9 @@ model Department {
   /// organisation could have exactly one uncoded department, which is not a
   /// rule anybody asked for. Uniqueness of a code that *is* set is enforced by
   /// the service instead.
+  billLines      BillLine[]
+  purchaseOrders PurchaseOrder[]
+
   @@index([organizationId, code])
   @@index([organizationId, parentId])
   @@index([organizationId, path])
@@ -551,6 +567,9 @@ model Project {
   /// organisation could have exactly one uncoded department, which is not a
   /// rule anybody asked for. Uniqueness of a code that *is* set is enforced by
   /// the service instead.
+  billLines      BillLine[]
+  purchaseOrders PurchaseOrder[]
+
   @@index([organizationId, code])
   @@index([organizationId, status])
   @@index([entityId])
@@ -586,6 +605,11 @@ model Category {
   transactions  Transaction[]
   expenses      Expense[]
   expenseItems  ExpenseItem[]
+
+  vendors            Vendor[]
+  billLines          BillLine[]
+  purchaseOrders     PurchaseOrder[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([organizationId, key])
   @@index([organizationId, parentId])
@@ -2096,4 +2120,326 @@ model BudgetAlert {
   @@unique([budgetLineId, threshold])
   @@index([organizationId, budgetId, firedAt])
   @@map("budget_alerts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payables — vendors, bills, procurement (Phase 5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  /// Kept, pointing at whoever absorbed it. Never deleted (FR-VND-002).
+  MERGED
+}
+
+/// A supplier.
+///
+/// **`normalizedName` exists so duplicates are found before they are created.**
+/// "Acme Ltd.", "ACME Limited", and "acme ltd" are one supplier that three
+/// people entered on three afternoons, and by the time anybody notices there
+/// are invoices against all three.
+model Vendor {
+  id             String @id @map("_id")
+  organizationId String
+
+  name String
+  /// Lower-cased, punctuation stripped, legal suffixes removed. Computed by
+  /// the service, because the rule has to match what the duplicate check uses.
+  normalizedName String
+  legalName      String?
+  taxId          String?
+
+  categoryId String?
+
+  email       String?
+  phone       String?
+  website     String?
+  addressLine String?
+  city        String?
+  postalCode  String?
+  countryCode String?
+
+  /// Payment details, encrypted at rest and redacted in every response
+  /// (FR-VND-001). Bank details are the single most attractive field in this
+  /// system to whoever gets a read-only foothold.
+  bankDetailsEncrypted String?
+  /// The last four digits, which is all a person needs to recognise an account
+  /// and all this system will ever show.
+  bankAccountLast4 String?
+
+  defaultCurrency  String?
+  paymentTermsDays Int     @default(30)
+
+  status VendorStatus @default(ACTIVE)
+
+  /// Set when this vendor was merged into another. The row stays, so every
+  /// bill that referenced it still resolves (FR-VND-002).
+  mergedIntoId String?
+
+  notes String?
+
+  version    Int       @default(1)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  category       Category?       @relation(fields: [categoryId], references: [id])
+  mergedInto     Vendor?         @relation("VendorMerge", fields: [mergedIntoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mergedFrom     Vendor[]        @relation("VendorMerge")
+  bills          Bill[]
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([organizationId, normalizedName])
+  @@index([organizationId, status, name])
+  @@index([organizationId, taxId])
+  @@index([categoryId])
+  @@index([mergedIntoId])
+  @@map("vendors")
+}
+
+enum BillStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+  /// A negative bill that offsets another. The correction path for a paid
+  /// bill, whose own amounts are immutable (FR-BIL-004).
+  CREDIT_NOTE
+}
+
+model Bill {
+  id             String @id @map("_id")
+  organizationId String
+
+  vendorId String
+  entityId String
+
+  /// The supplier's own number, not ours. Unique per vendor per organisation
+  /// (FR-BIL-002), which is what stops the same invoice being paid twice.
+  billNumber String
+  reference  String
+
+  issueDate DateTime
+  dueDate   DateTime
+
+  /// Summed from the lines, inside the transaction that writes them. A
+  /// client-supplied total is ignored (FR-BIL-001).
+  totalAmount String @default("0.0000")
+  currency    String
+
+  status BillStatus @default(DRAFT)
+
+  approvalInstanceId String?
+  policyDecision     Json?
+
+  paymentReference   String?
+  paidAt             DateTime?
+  paidByMembershipId String?
+
+  /// The bill this credit note offsets. Null on an ordinary bill.
+  creditsBillId String?
+
+  memo String?
+
+  submittedByMembershipId String?
+  submittedAt             DateTime?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vendor       Vendor       @relation(fields: [vendorId], references: [id])
+  entity       Entity       @relation(fields: [entityId], references: [id])
+  paidBy       Membership?  @relation("BillPayer", fields: [paidByMembershipId], references: [id])
+  submittedBy  Membership?  @relation("BillSubmitter", fields: [submittedByMembershipId], references: [id])
+  credits      Bill?        @relation("BillCredit", fields: [creditsBillId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creditedBy   Bill[]       @relation("BillCredit")
+  lines        BillLine[]
+
+  /// One invoice number per supplier. The index is the control against paying
+  /// the same invoice twice — a check would race two people entering it.
+  @@unique([organizationId, vendorId, billNumber])
+  @@unique([organizationId, reference])
+  @@index([organizationId, status, dueDate])
+  @@index([organizationId, vendorId, status])
+  @@index([vendorId])
+  @@index([entityId])
+  @@index([paidByMembershipId])
+  @@index([submittedByMembershipId])
+  @@index([creditsBillId])
+  @@map("bills")
+}
+
+model BillLine {
+  id             String @id @map("_id")
+  organizationId String
+  billId         String
+
+  sequence    Int
+  description String
+
+  quantity   String @default("1.0000")
+  unitAmount String
+  /// Quantity × unit, computed on the server so a line cannot disagree with
+  /// its own arithmetic.
+  lineAmount String
+  currency   String
+
+  categoryId   String?
+  departmentId String?
+  projectId    String?
+
+  /// The PO line this fulfils, for the three-way match (FR-PRC-003).
+  purchaseOrderLineId String?
+
+  createdAt DateTime @default(now())
+
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  bill              Bill               @relation(fields: [billId], references: [id])
+  category          Category?          @relation(fields: [categoryId], references: [id])
+  department        Department?        @relation(fields: [departmentId], references: [id])
+  project           Project?           @relation(fields: [projectId], references: [id])
+  purchaseOrderLine PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id])
+
+  @@unique([billId, sequence])
+  @@index([organizationId, billId])
+  @@index([categoryId])
+  @@index([departmentId])
+  @@index([projectId])
+  @@index([purchaseOrderLineId])
+  @@map("bill_lines")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  /// Some of it has arrived.
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+/// A commitment to buy, before anything is bought.
+///
+/// An approved PO commits budget (FR-PRC-001) — which is the whole point of
+/// having one: the money is spoken for from the moment somebody agrees to the
+/// purchase, not from the moment the invoice arrives six weeks later.
+model PurchaseOrder {
+  id             String @id @map("_id")
+  organizationId String
+
+  poNumber String
+  vendorId String
+  entityId String
+
+  requesterMembershipId String
+
+  totalAmount String @default("0.0000")
+  currency    String
+
+  status PurchaseOrderStatus @default(DRAFT)
+
+  approvalInstanceId String?
+  policyDecision     Json?
+
+  expectedDate DateTime?
+  memo         String?
+
+  departmentId String?
+  projectId    String?
+  categoryId   String?
+
+  submittedAt DateTime?
+  approvedAt  DateTime?
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  vendor       Vendor              @relation(fields: [vendorId], references: [id])
+  entity       Entity              @relation(fields: [entityId], references: [id])
+  requester    Membership          @relation("PurchaseOrderRequester", fields: [requesterMembershipId], references: [id])
+  department   Department?         @relation(fields: [departmentId], references: [id])
+  project      Project?            @relation(fields: [projectId], references: [id])
+  category     Category?           @relation(fields: [categoryId], references: [id])
+  lines        PurchaseOrderLine[]
+
+  @@unique([organizationId, poNumber])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, vendorId, status])
+  @@index([vendorId])
+  @@index([entityId])
+  @@index([requesterMembershipId])
+  @@index([departmentId])
+  @@index([projectId])
+  @@index([categoryId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id              String @id @map("_id")
+  organizationId  String
+  purchaseOrderId String
+
+  sequence    Int
+  description String
+
+  quantity   String
+  unitAmount String
+  lineAmount String
+  currency   String
+
+  /// How much has actually arrived. Materialised from the receipts, and the
+  /// number the three-way match reads.
+  receivedQuantity String @default("0.0000")
+
+  categoryId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization           @relation(fields: [organizationId], references: [id])
+  purchaseOrder PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id])
+  category      Category?              @relation(fields: [categoryId], references: [id])
+  receipts      PurchaseOrderReceipt[]
+  billLines     BillLine[]
+
+  @@unique([purchaseOrderId, sequence])
+  @@index([organizationId, purchaseOrderId])
+  @@index([categoryId])
+  @@map("purchase_order_lines")
+}
+
+/// Goods arriving against a PO line.
+///
+/// Append-only: a correction is a negative receipt, so what was recorded on the
+/// day the delivery arrived is still there when somebody disputes it.
+model PurchaseOrderReceipt {
+  id                  String @id @map("_id")
+  organizationId      String
+  purchaseOrderLineId String
+
+  quantity String
+  note     String?
+
+  receivedByMembershipId String
+  receivedAt             DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  line         PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id])
+  receivedBy   Membership        @relation("PurchaseOrderReceiver", fields: [receivedByMembershipId], references: [id])
+
+  @@index([organizationId, purchaseOrderLineId])
+  @@index([purchaseOrderLineId])
+  @@index([receivedByMembershipId])
+  @@map("purchase_order_receipts")
 }

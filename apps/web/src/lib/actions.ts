@@ -88,7 +88,7 @@ export function toFormState(error: unknown): FormState {
 /** A `PATCH` or `POST` carrying the record version as `If-Match`. */
 export async function writeWithVersion<T>(
   path: string,
-  method: 'PATCH' | 'POST' | 'DELETE',
+  method: 'PATCH' | 'POST' | 'PUT' | 'DELETE',
   version: number,
   body?: unknown,
 ): Promise<T> {

@@ -123,6 +123,7 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   define('purchase_order:create', 'Raise a purchase request or order.'),
   define('purchase_order:read', 'View purchase orders within scope.'),
   define('purchase_order:approve', 'Approve a purchase order.'),
+  define('purchase_order:receive', 'Record goods received against a purchase order.'),
 
   // §3.7 Audit and integrations
   //
@@ -239,6 +240,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
     'bill:read',
     'bill:create',
     'purchase_order:create',
+    'purchase_order:receive',
     'purchase_order:read',
     'audit_event:read',
     'audit_event:export',
@@ -298,6 +300,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
     'bill:approve',
     'bill:mark_paid',
     'purchase_order:create',
+    'purchase_order:receive',
     'purchase_order:read',
     'purchase_order:approve',
     'audit_event:read',
@@ -334,6 +337,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
     'bill:read',
     'bill:approve',
     'purchase_order:create',
+    'purchase_order:receive',
     'purchase_order:read',
     'purchase_order:approve',
   ],
@@ -359,6 +363,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
     'reimbursement:read',
     'vendor:read',
     'purchase_order:create',
+    'purchase_order:receive',
     'purchase_order:read',
   ],
 

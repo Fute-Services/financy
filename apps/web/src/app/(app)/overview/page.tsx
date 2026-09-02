@@ -1,228 +1,284 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import type { DashboardSummary, Resource } from '@financy/contracts';
 import {
-  Badge,
   BudgetMeter,
   Card,
   CardBody,
   CardHeader,
-  DataTable,
   KpiCard,
   Money,
-  StatusBadge,
-  type Column,
+  ErrorState,
 } from '@financy/ui';
+
 import { PageHeader } from '@/components/page-header';
-import { PreviewBanner } from '@/components/preview-banner';
-import {
-  PREVIEW_BUDGETS,
-  PREVIEW_CURRENCY,
-  PREVIEW_KPIS,
-  PREVIEW_REQUESTS,
-  type PreviewBudget,
-  type PreviewRequest,
-} from '@/lib/preview-data';
+import { apiFetch } from '@/lib/api';
+import { getSession } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Overview' };
 
 /**
- * Overview.
+ * The first screen after signing in (epic 4.3).
  *
- * In the finished product every value here comes from `GET /v1/dashboard/*`
- * and is scoped to the caller's role — an employee sees their own spend, a
- * manager their department, finance the organisation. No figure is ever
- * computed in the browser (docs/15-REPORTING-ANALYTICS.md §1).
+ * ## Every figure arrives finished
  *
- * Until that endpoint exists, the page renders preview data behind an
- * unmissable banner.
+ * Not one number on this page is computed here. The month-to-date total, the
+ * comparison, the trend points, the utilisation percentages — all of it comes
+ * from `/v1/dashboard`, and this file formats and lays out. That is the
+ * governing rule for anything financial (docs/15 §1), and it bites hardest on a
+ * dashboard, because a dashboard figure is the one people quote without opening
+ * anything to check it.
+ *
+ * ## It says whose numbers these are
+ *
+ * The same endpoint returns an employee their own spend and finance the whole
+ * organisation, so the heading has to say which — "€12,400 this month" means
+ * two very different things and the difference is invisible otherwise.
+ *
+ * ## Attention before totals
+ *
+ * The list of things to open comes first on narrow screens and sits beside the
+ * numbers on wide ones. Totals describe; the attention list is the only part
+ * anybody acts on, and a dashboard whose actionable half is below the fold is a
+ * dashboard people stop opening.
  */
-export default function OverviewPage(): React.JSX.Element {
+export default async function OverviewPage(): Promise<React.JSX.Element> {
+  const session = await getSession();
+
+  if (session === null) {
+    return (
+      <>
+        <PageHeader title="Overview" />
+        <Card>
+          <ErrorState message="Your session could not be read. Sign in again." />
+        </Card>
+      </>
+    );
+  }
+
+  let dashboard: DashboardSummary;
+
+  try {
+    dashboard = (await apiFetch<Resource<DashboardSummary>>('/dashboard')).data;
+  } catch {
+    return (
+      <>
+        <PageHeader title="Overview" />
+        <Card>
+          <ErrorState message="The overview could not be loaded. It will be here when the service is." />
+        </Card>
+      </>
+    );
+  }
+
+  const scopeWord =
+    dashboard.scope === 'ORGANIZATION'
+      ? 'across the organisation'
+      : dashboard.scope === 'DEPARTMENT'
+        ? 'across your department'
+        : 'on your own records';
+
+  const change = describeChange(
+    dashboard.spendMonthToDate.amount,
+    dashboard.spendPreviousMonthToDate.amount,
+  );
+
+  const peak = dashboard.trend.reduce(
+    (highest, point) => Math.max(highest, Number(point.amount.amount)),
+    0,
+  );
+
   return (
     <>
       <PageHeader
-        title="Overview"
-        description="Where the organisation stands right now — spend, approvals, evidence, and budget."
-        phase={4}
+        title={`Good to see you, ${session.user.fullName.split(' ')[0] ?? ''}`}
+        description={`Everything below is ${scopeWord}.`}
       />
 
-      <PreviewBanner endpoint="GET /v1/dashboard/summary" />
-
-      {/* KPI row */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {PREVIEW_KPIS.map((kpi) => (
-          <KpiCard
-            key={kpi.label}
-            label={kpi.label}
-            value={
-              kpi.amount ? (
-                <Money amount={kpi.amount} currency={PREVIEW_CURRENCY} compact />
-              ) : (
-                kpi.count
-              )
-            }
-            delta={kpi.delta}
-            deltaDirection={kpi.direction}
-            deltaIsGood={kpi.goodWhenUp}
-            hint={kpi.hint}
-          />
-        ))}
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        {/* Approval queue */}
-        <Card className="xl:col-span-2">
-          <CardHeader
-            title="Needs attention"
-            description="Requests awaiting a decision, and those the policy engine stopped."
-            action={<Badge tone="pending">{PREVIEW_REQUESTS.length} open</Badge>}
-          />
-          <DataTable<PreviewRequest>
-            rows={PREVIEW_REQUESTS}
-            rowKey={(row) => row.id}
-            columns={REQUEST_COLUMNS}
-            caption="Spend requests needing attention"
-          />
-        </Card>
-
-        {/* Budget health */}
-        <Card>
-          <CardHeader title="Budget health" description="Actual against plan, this quarter." />
-          <CardBody className="space-y-5">
-            {PREVIEW_BUDGETS.map((budget) => (
-              <BudgetRow key={budget.id} budget={budget} />
-            ))}
-          </CardBody>
-        </Card>
-      </div>
-
-      {/* What is actually built — the honest status panel */}
-      <Card className="mt-6">
-        <CardHeader
-          title="Build status"
-          description="What exists in this repository today, and what comes next."
-        />
-        <CardBody>
-          <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-            <StatusGroup
-              heading="Done — Phase 0"
-              tone="success"
-              items={[
-                'Documentation: 24 documents, 25 diagrams',
-                '@financy/core — Money, errors, ids, state machines',
-                '@financy/contracts — Zod schemas shared by API and web',
-                '@financy/db — Prisma init and the tenant client extension',
-                'apps/api — NestJS, config validation, health, error envelope',
-                'Design system, app shell, permission-aware navigation',
-                '546 tests, CI gate, and the Playwright harness',
-              ]}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              label="Spend this month"
+              value={
+                <Money
+                  amount={dashboard.spendMonthToDate.amount}
+                  currency={dashboard.currency}
+                />
+              }
+              {...(change === null
+                ? {}
+                : {
+                    delta: change.label,
+                    deltaDirection: change.direction,
+                    // Spending more is not automatically bad, but on a spend
+                    // tool it is the direction worth noticing.
+                    deltaIsGood: false,
+                  })}
+              hint=" vs the same point last month"
             />
-            <StatusGroup
-              heading="Next — Phase 1"
-              tone="pending"
-              items={[
-                'The Prisma schema and its first migration',
-                'Request context, audit service, queue and storage ports',
-                'Authentication, sessions, and the RBAC guards',
-                'Organisation, People, and the immutable audit log — the first real screens',
-                'Phase 2 — the policy engine and approvals',
-              ]}
+            <KpiCard
+              label="Waiting on a decision"
+              value={String(dashboard.pendingApprovals)}
+              hint={dashboard.pendingApprovals === 0 ? 'Nothing is stuck' : 'Approvals'}
+            />
+            <KpiCard
+              label="Charges with no receipt"
+              value={String(dashboard.missingReceipts)}
+              hint="Posted charges"
+            />
+            <KpiCard
+              label="Owed to people"
+              value={
+                <Money
+                  amount={dashboard.outstandingReimbursements.amount}
+                  currency={dashboard.currency}
+                />
+              }
+              hint="Unpaid batches"
             />
           </div>
-        </CardBody>
-      </Card>
+
+          <Card>
+            <CardHeader
+              title="Spend, month by month"
+              description="Six months, including the quiet ones."
+            />
+            <CardBody>
+              <ol className="flex items-end gap-2" aria-label="Monthly spend">
+                {dashboard.trend.map((point) => {
+                  const height = peak === 0 ? 0 : (Number(point.amount.amount) / peak) * 100;
+
+                  return (
+                    <li key={point.label} className="flex flex-1 flex-col items-center gap-2">
+                      {/* The figure is on the bar, not only in a tooltip: a
+                          chart whose numbers need a mouse is a chart nobody
+                          can read from a screen reader or a printout. */}
+                      <span className="tabular text-[11px] text-ink-500">
+                        <Money amount={point.amount.amount} currency={point.amount.currency} />
+                      </span>
+                      <div
+                        className="w-full rounded-t-[3px] bg-[var(--color-chart-1)]"
+                        style={{ height: `${String(Math.max(height, 2))}px`, minHeight: '2px' }}
+                        aria-hidden="true"
+                      />
+                      <span className="text-[11px] text-ink-400">{point.label}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </CardBody>
+          </Card>
+
+          {dashboard.budgets.length > 0 && (
+            <Card>
+              <CardHeader
+                title="Budgets"
+                description="Committed and spent, against what was allocated."
+                action={
+                  <Link
+                    href="/budgets"
+                    className="text-[13px] text-[var(--color-accent-text)] hover:underline"
+                  >
+                    All budgets
+                  </Link>
+                }
+              />
+              <CardBody className="flex flex-col gap-3">
+                {dashboard.budgets.map((budget) => (
+                  <div key={budget.id} className="flex flex-col gap-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <Link
+                        href={`/budgets/${budget.id}`}
+                        className="truncate text-[13px] text-ink-800 hover:text-cobalt-600"
+                      >
+                        {budget.name}
+                      </Link>
+                      <span className="tabular text-[12px] text-ink-500">
+                        <Money
+                          amount={budget.remaining.amount}
+                          currency={budget.remaining.currency}
+                        />{' '}
+                        left
+                      </span>
+                    </div>
+                    <BudgetMeter percent={budget.utilization ?? 0} />
+                  </div>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader
+              title="Needs you"
+              description="The part of this page that is actually a to-do list."
+            />
+            <CardBody className="p-0">
+              {dashboard.needsAttention.length === 0 ? (
+                <p className="px-5 py-4 text-[13px] text-ink-500">
+                  Nothing is waiting on you. That is worth knowing too.
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--border-subtle)]">
+                  {dashboard.needsAttention.map((item) => (
+                    <li key={item.kind}>
+                      <Link
+                        href={item.href}
+                        className="flex items-center justify-between px-5 py-3 text-[13px] text-ink-800 hover:bg-ink-50"
+                      >
+                        <span>{item.label}</span>
+                        <span className="tabular font-medium text-ink-900">{item.count}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+
+          {dashboard.uncategorisedTransactions > 0 && (
+            <Card>
+              <CardHeader title="Close readiness" />
+              <CardBody>
+                <p className="text-[13px] text-ink-600">
+                  {dashboard.uncategorisedTransactions} charge
+                  {dashboard.uncategorisedTransactions === 1 ? ' has' : 's have'} no category yet.
+                  Nothing closes until they do.
+                </p>
+              </CardBody>
+            </Card>
+          )}
+        </div>
+      </div>
     </>
   );
 }
 
-const REQUEST_COLUMNS: ReadonlyArray<Column<PreviewRequest>> = [
-  {
-    key: 'reference',
-    header: 'Reference',
-    width: '130px',
-    render: (row) => <span className="font-mono text-[13px] text-ink-600">{row.reference}</span>,
-  },
-  {
-    key: 'requester',
-    header: 'Requester',
-    render: (row) => (
-      <div className="min-w-0">
-        <p className="truncate font-medium text-ink-800">{row.requester}</p>
-        <p className="truncate text-xs text-ink-500">{row.department}</p>
-      </div>
-    ),
-  },
-  {
-    key: 'category',
-    header: 'Category',
-    render: (row) => <span className="text-ink-600">{row.category}</span>,
-  },
-  {
-    key: 'amount',
-    header: 'Amount',
-    align: 'right',
-    width: '120px',
-    render: (row) => (
-      <Money amount={row.amount} currency={PREVIEW_CURRENCY} className="font-medium" />
-    ),
-  },
-  {
-    key: 'status',
-    header: 'Status',
-    width: '160px',
-    render: (row) => <StatusBadge status={row.status} />,
-  },
-  {
-    key: 'age',
-    header: 'Age',
-    align: 'right',
-    width: '60px',
-    render: (row) => <span className="text-ink-500">{row.age}</span>,
-  },
-];
+/**
+ * The comparison sentence, or nothing.
+ *
+ * `null` when the earlier period was empty: "up from nothing" is not a
+ * percentage, and rendering ∞% or 100% would both be inventions.
+ *
+ * The arithmetic here is over two numbers the **server** produced and is a
+ * presentational ratio, not a financial figure — no money is being added.
+ */
+function describeChange(
+  current: string,
+  previous: string,
+): { label: string; direction: 'up' | 'down' | 'flat' } | null {
+  const now = Number(current);
+  const before = Number(previous);
 
-function BudgetRow({ budget }: { budget: PreviewBudget }): React.JSX.Element {
-  return (
-    <div>
-      <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <p className="truncate text-sm font-medium text-ink-800">{budget.name}</p>
-        <Money
-          amount={budget.remaining}
-          currency={PREVIEW_CURRENCY}
-          compact
-          colorNegative
-          className="text-xs"
-        />
-      </div>
-      <BudgetMeter percent={budget.utilization} />
-      <p className="mt-1 text-xs text-ink-500">
-        <Money amount={budget.spent} currency={PREVIEW_CURRENCY} compact /> of{' '}
-        <Money amount={budget.allocated} currency={PREVIEW_CURRENCY} compact /> spent
-      </p>
-    </div>
-  );
-}
+  if (!Number.isFinite(now) || !Number.isFinite(before) || before === 0) return null;
 
-function StatusGroup({
-  heading,
-  tone,
-  items,
-}: {
-  heading: string;
-  tone: 'success' | 'pending';
-  items: string[];
-}): React.JSX.Element {
-  return (
-    <div>
-      <Badge tone={tone} dot>
-        {heading}
-      </Badge>
-      <ul className="mt-3 space-y-1.5">
-        {items.map((item) => (
-          <li key={item} className="flex gap-2 text-sm text-ink-600">
-            <span className="mt-2 size-1 shrink-0 rounded-full bg-ink-300" aria-hidden="true" />
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+  const percent = Math.round(((now - before) / before) * 1000) / 10;
+
+  return {
+    label: `${percent > 0 ? '+' : ''}${String(percent)}%`,
+    direction: percent > 0 ? 'up' : percent < 0 ? 'down' : 'flat',
+  };
 }

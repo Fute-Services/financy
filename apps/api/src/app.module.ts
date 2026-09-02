@@ -6,6 +6,7 @@ import {
   AuditModule,
   AuthGuard,
   ConfigModule,
+  CryptoModule,
   DatabaseModule,
   DocumentsModule,
   HealthModule,
@@ -26,6 +27,7 @@ import { BudgetsModule } from './modules/budgets/index.js';
 import { ExpensesModule } from './modules/expenses/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
 import { ReceiptsModule } from './modules/receipts/index.js';
+import { ReportsModule } from './modules/reports/index.js';
 import { TransactionsModule } from './modules/transactions/index.js';
 import { SpendModule } from './modules/spend/index.js';
 
@@ -45,6 +47,7 @@ import { SpendModule } from './modules/spend/index.js';
 @Module({
   imports: [
     ConfigModule,
+    CryptoModule,
     LoggingModule,
     DatabaseModule,
     AuditModule,
@@ -65,6 +68,7 @@ import { SpendModule } from './modules/spend/index.js';
     ReceiptsModule,
     ExpensesModule,
     BudgetsModule,
+    ReportsModule,
     AuditReadModule,
   ],
   providers: [
