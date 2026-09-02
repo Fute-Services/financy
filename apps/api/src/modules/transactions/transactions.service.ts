@@ -4,6 +4,8 @@ import type {
   ImportResult,
   ImportTransactionRow,
   ImportTransactions,
+  BulkReview,
+  BulkReviewResult,
   ListTransactionsQuery,
   MatchTransaction,
   ReviewTransaction,
@@ -477,6 +479,64 @@ export class TransactionsService {
     });
 
     return { imported, skipped, failed, matched, rows };
+  }
+
+  /**
+   * Review many at once (task 3.4).
+   *
+   * **Per-row outcomes, not a count.** Twenty charges reviewed together and
+   * three refused because they have not settled is a thing finance can act on;
+   * "17 reviewed" is not. Each is applied in its own transaction so one
+   * refusal does not roll back the other nineteen — the same reasoning as the
+   * import, and the same reason the response names what it skipped.
+   */
+  async bulkReview(input: BulkReview): Promise<BulkReviewResult> {
+    const organizationId = requireOrganization();
+    const reviewer = getContext()?.membershipId ?? null;
+
+    const skipped: BulkReviewResult['skipped'] = [];
+    let reviewed = 0;
+
+    for (const transactionId of input.transactionIds) {
+      const outcome = await this.database.unscoped.$transaction(async (tx) => {
+        const before = await tx.transaction.findFirst({
+          where: { id: transactionId, organizationId, ...this.visibleToCaller() },
+          select: { id: true, status: true, version: true },
+        });
+
+        if (before === null) return 'That charge does not exist, or is not yours to review.';
+
+        if (before.status === 'PENDING') {
+          return 'It has not settled yet, so there is nothing final to review.';
+        }
+
+        await tx.transaction.update({
+          where: { id: transactionId, version: before.version },
+          data: {
+            reviewStatus: input.reviewStatus,
+            reviewNote: input.note ?? null,
+            ...(input.reviewStatus === 'IN_REVIEW'
+              ? {}
+              : { reviewedByMembershipId: reviewer, reviewedAt: new Date() }),
+            version: { increment: 1 },
+          },
+        });
+
+        await this.audit.record(tx, {
+          action: 'transaction.reviewed',
+          resourceType: 'transaction',
+          resourceId: transactionId,
+          after: { reviewStatus: input.reviewStatus, bulk: true },
+        });
+
+        return null;
+      });
+
+      if (outcome === null) reviewed += 1;
+      else skipped.push({ transactionId, reason: outcome });
+    }
+
+    return { reviewed, skipped };
   }
 
   // ── internals ────────────────────────────────────────────────────────────

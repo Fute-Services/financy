@@ -197,6 +197,26 @@ export const matchTransactionSchema = z.strictObject({
   notApplicable: z.boolean().default(false),
 });
 
+/**
+ * Reviewing many charges at once.
+ *
+ * The review queue is worked through in batches — twenty coffees from the same
+ * merchant get one decision, not twenty — and a screen that could only review
+ * one at a time is a screen finance stops using. Capped at 200: a request that
+ * can touch every transaction in an organisation is a request nobody can undo.
+ */
+export const bulkReviewSchema = z.strictObject({
+  transactionIds: z.array(idSchema).min(1).max(200),
+  reviewStatus: z.enum(['IN_REVIEW', 'REVIEWED', 'DISPUTED']),
+  note: z.string().trim().max(1000).nullable().optional(),
+});
+
+export const bulkReviewResultSchema = z.object({
+  reviewed: z.int().min(0),
+  /** Named, so "three of my twenty did not move" is answerable. */
+  skipped: z.array(z.object({ transactionId: idSchema, reason: z.string() })),
+});
+
 export const createAdjustmentSchema = z.strictObject({
   adjustmentType: z.enum(['REFUND', 'CHARGEBACK', 'FEE', 'CORRECTION']),
   amount: moneySchema,
@@ -284,6 +304,8 @@ export type TransactionAdjustmentRecord = z.infer<typeof transactionAdjustmentSc
 export type CategorizeTransaction = z.infer<typeof categorizeTransactionSchema>;
 export type ReviewTransaction = z.infer<typeof reviewTransactionSchema>;
 export type MatchTransaction = z.infer<typeof matchTransactionSchema>;
+export type BulkReview = z.infer<typeof bulkReviewSchema>;
+export type BulkReviewResult = z.infer<typeof bulkReviewResultSchema>;
 export type CreateAdjustment = z.infer<typeof createAdjustmentSchema>;
 export type ImportTransactions = z.infer<typeof importTransactionsSchema>;
 export type ImportTransactionRow = z.infer<typeof importTransactionRowSchema>;

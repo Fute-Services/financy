@@ -204,7 +204,9 @@ describeWithDatabase('expenses and reimbursements', () => {
         version: 1,
         publishedAt: new Date(),
         snapshot: {
-          rules: [
+          // A rule with no outcomes is not a rule the schema allows, so "nothing
+          // applies" is expressed as a version with no rules at all.
+          rules: outcomes.length === 0 ? [] : [
             {
               id: crypto.randomUUID(),
               name,

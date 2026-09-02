@@ -1,10 +1,13 @@
 import {
+  bulkReviewSchema,
   categorizeTransactionSchema,
   createAdjustmentSchema,
   importTransactionsSchema,
   listTransactionsQuerySchema,
   matchTransactionSchema,
   reviewTransactionSchema,
+  type BulkReview,
+  type BulkReviewResult,
   type CategorizeTransaction,
   type CreateAdjustment,
   type ImportResult,
@@ -81,6 +84,24 @@ export class TransactionsController {
   ): Promise<Resource<ImportResult>> {
     return {
       data: await this.transactions.import(body),
+      meta: { correlationId: getCorrelationId() },
+    };
+  }
+
+  /**
+   * Review a batch of them.
+   *
+   * Declared before `:id` for the same reason `import` is: otherwise
+   * `bulk-review` is read as a transaction id and answers 404 for every call.
+   */
+  @Post('bulk-review')
+  @HttpCode(200)
+  @RequirePermission('transaction:review')
+  async bulkReview(
+    @Body(new ZodValidationPipe(bulkReviewSchema)) body: BulkReview,
+  ): Promise<Resource<BulkReviewResult>> {
+    return {
+      data: await this.transactions.bulkReview(body),
       meta: { correlationId: getCorrelationId() },
     };
   }

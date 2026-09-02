@@ -139,8 +139,31 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'expense:read',
     section: 'record',
     phase: 3,
+    pinned: true,
     icon: 'receipt',
     keywords: ['claim', 'reimbursement', 'receipt'],
+  },
+  {
+    label: 'Reimbursements',
+    href: '/reimbursements',
+    permission: 'reimbursement:read',
+    section: 'record',
+    phase: 3,
+    icon: 'ledger',
+    keywords: ['pay back', 'batch', 'out of pocket'],
+  },
+  {
+    // Pinned for finance and invisible to everybody else, which is the whole
+    // point of filtering by permission: this is somebody's daily queue or it is
+    // nothing at all.
+    label: 'Review',
+    href: '/review',
+    permission: 'transaction:review',
+    section: 'record',
+    phase: 3,
+    icon: 'check',
+    pinned: true,
+    keywords: ['queue', 'unreviewed', 'finance review', 'coding'],
   },
 
   // ── Plan ─────────────────────────────────────────────────────────────────
