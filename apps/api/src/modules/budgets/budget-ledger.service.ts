@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 import type { BudgetPosition, BudgetSourceType } from '@financy/contracts';
-import { Money, newId } from '@financy/core';
+import { BudgetExceededError, Money, newId } from '@financy/core';
 import { Injectable } from '@nestjs/common';
 
 import { AuditService } from '../../platform/audit/index.js';
@@ -193,6 +193,42 @@ export class BudgetLedgerService {
         overspendBehavior: budget.overspendBehavior,
         wouldExceed: coordinates.amount.greaterThan(remaining),
       };
+    });
+  }
+
+  /**
+   * Refuse spend that a budget is configured to refuse (FR-BDG-005).
+   *
+   * **Only `BLOCK` refuses here.** `WARN` lets it through and the exception is
+   * recorded by the decision; `REQUIRE_APPROVAL` is the policy engine's job,
+   * because "who has to agree" is a question with one implementation in this
+   * system and a second one living in the budget module would drift from it
+   * within a quarter.
+   *
+   * The **tightest** blocking budget is the one named in the error. A person
+   * told "this exceeds a budget" and not which one has to open every budget
+   * they can see to find out what to do about it.
+   */
+  async assertWithinBudget(
+    organizationId: string,
+    coordinates: SpendCoordinates,
+  ): Promise<void> {
+    const positions = await this.positions(organizationId, coordinates);
+
+    const blocking = positions
+      .filter((position) => position.overspendBehavior === 'BLOCK' && position.wouldExceed)
+      .sort((left, right) => Number(left.remaining) - Number(right.remaining))[0];
+
+    if (blocking === undefined) return;
+
+    throw new BudgetExceededError({
+      details: {
+        budgetId: blocking.budgetId,
+        budgetName: blocking.name,
+        remaining: blocking.remaining,
+        currency: blocking.currency,
+        requested: coordinates.amount.toJSON().amount,
+      },
     });
   }
 

@@ -20,6 +20,7 @@ import type { Prisma } from '@financy/db';
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 
 import { AuditService } from '../../platform/audit/index.js';
+import { BudgetLedgerService } from '../budgets/index.js';
 import { guardVersion } from '../../platform/concurrency/index.js';
 import { DatabaseService } from '../../platform/database/index.js';
 import { QUEUE_PORT, type QueuePort } from '../../platform/queue/index.js';
@@ -81,6 +82,7 @@ export class SpendRequestService implements OnModuleInit {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
+    private readonly budgets: BudgetLedgerService,
     private readonly policyContext: PolicyContextService,
     private readonly policies: PolicyRepositoryService,
     private readonly approvals: ApprovalService,
@@ -319,6 +321,20 @@ export class SpendRequestService implements OnModuleInit {
         now,
       );
       const decision = evaluate(context, policies, { durationMs: Date.now() - started });
+
+      // A budget set to `BLOCK` refuses spend on its own authority, before any
+      // rule is consulted (FR-BDG-005). It is not a policy outcome and does not
+      // belong in the decision: the decision records what the *rules* said, and
+      // a budget that is simply out of money said nothing about this request in
+      // particular.
+      await this.budgets.assertWithinBudget(organizationId, {
+        entityId: before.entityId,
+        departmentId: before.departmentId,
+        projectId: before.projectId,
+        categoryId: before.categoryId,
+        occurredAt: before.createdAt,
+        amount: context.amountInBaseCurrency,
+      });
 
       // Stored before anything branches on it, so a blocked request still
       // carries the reasons that blocked it.

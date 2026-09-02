@@ -19,6 +19,7 @@ import type { Prisma } from '@financy/db';
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 
 import { AuditService } from '../../platform/audit/index.js';
+import { BudgetLedgerService } from '../budgets/index.js';
 import { guardVersion } from '../../platform/concurrency/index.js';
 import { DatabaseService } from '../../platform/database/index.js';
 import { QUEUE_PORT, type QueuePort } from '../../platform/queue/index.js';
@@ -64,6 +65,7 @@ export class ExpensesService implements OnModuleInit {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
+    private readonly budgets: BudgetLedgerService,
     private readonly policyContext: PolicyContextService,
     private readonly policies: PolicyRepositoryService,
     private readonly approvals: ApprovalService,
@@ -292,6 +294,22 @@ export class ExpensesService implements OnModuleInit {
         now,
       );
       const decision = evaluate(context, versions, { durationMs: Date.now() - started });
+
+      // Only for out-of-pocket claims. A card charge has already left the
+      // company's account, and refusing the *paperwork* for money that is
+      // already gone leaves an unrecorded charge and an employee with nothing
+      // to do about it — the budget is over either way, and the honest place to
+      // see that is the budget.
+      if (before.paymentMethod === 'OUT_OF_POCKET') {
+        await this.budgets.assertWithinBudget(organizationId, {
+          entityId: before.entityId,
+          departmentId: before.departmentId,
+          projectId: before.projectId,
+          categoryId: before.categoryId,
+          occurredAt: before.expenseDate,
+          amount: Money.of(before.amount, before.currency),
+        });
+      }
       const decisionJson = decision as unknown as Prisma.InputJsonValue;
 
       if (decision.verdict === 'BLOCKED') {

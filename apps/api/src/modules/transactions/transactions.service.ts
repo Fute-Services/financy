@@ -21,12 +21,13 @@ import {
   newId,
 } from '@financy/core';
 import type { Prisma } from '@financy/db';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 
 import { AuditService } from '../../platform/audit/index.js';
 import { guardVersion } from '../../platform/concurrency/index.js';
 import { DatabaseService } from '../../platform/database/index.js';
+import { QUEUE_PORT, type QueuePort } from '../../platform/queue/index.js';
 import { callerHas, getContext, getOrganizationId } from '../../platform/request-context/index.js';
 
 /**
@@ -64,6 +65,7 @@ export class TransactionsService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly logger: PinoLogger,
+    @Inject(QUEUE_PORT) private readonly queue: QueuePort,
   ) {}
 
   async list(query: ListTransactionsQuery): Promise<{ items: TransactionRecord[]; total: number }> {
@@ -429,6 +431,9 @@ export class TransactionsService {
     let failed = 0;
     let matched = 0;
 
+    /** Charges that moved money, collected for the budget jobs below. */
+    const posted: { transactionId: string; matchedSpendRequestId: string | null }[] = [];
+
     for (const [index, row] of input.rows.entries()) {
       try {
         const outcome = await this.importRow(organizationId, input.provider, row, input.autoMatch);
@@ -438,6 +443,16 @@ export class TransactionsService {
         if (outcome.outcome === 'IMPORTED') imported += 1;
         if (outcome.outcome === 'SKIPPED_DUPLICATE') skipped += 1;
         if (outcome.matchedSpendRequestId !== null) matched += 1;
+
+        // Only a posted charge is money that left. A pending authorisation may
+        // still be reversed, and recording it as an actual would make a budget
+        // read as spent for a charge that never settled.
+        if (outcome.outcome === 'IMPORTED' && row.status === 'POSTED' && outcome.transactionId !== null) {
+          posted.push({
+            transactionId: outcome.transactionId,
+            matchedSpendRequestId: outcome.matchedSpendRequestId,
+          });
+        }
       } catch (error) {
         failed += 1;
 
@@ -478,7 +493,53 @@ export class TransactionsService {
       });
     });
 
+    await this.moveBudgets(organizationId, posted);
+
     return { imported, skipped, failed, matched, rows };
+  }
+
+  /**
+   * Record what posted charges did to their budgets (FR-TXN-008).
+   *
+   * **Two movements per matched charge, not one.** The charge records an
+   * actual, and the request it fulfils gives back the commitment that was made
+   * when it was approved — otherwise the same money sits in `committed` and in
+   * `actual` at once, and the budget reads as twice as spent for the rest of
+   * the period.
+   *
+   * Enqueued after the import rather than inside it: the ledger is idempotent
+   * by source, so a redelivery is free, while a movement written inside a
+   * transaction that rolled back is a balance nobody can explain.
+   */
+  private async moveBudgets(
+    organizationId: string,
+    posted: readonly { transactionId: string; matchedSpendRequestId: string | null }[],
+  ): Promise<void> {
+    for (const charge of posted) {
+      await this.queue.enqueue(
+        'budget.apply',
+        {
+          organizationId,
+          operation: 'ACTUALIZE',
+          sourceType: 'TRANSACTION',
+          sourceId: charge.transactionId,
+        },
+        { idempotencyKey: `budget:TRANSACTION:${charge.transactionId}:ACTUALIZE` },
+      );
+
+      if (charge.matchedSpendRequestId === null) continue;
+
+      await this.queue.enqueue(
+        'budget.apply',
+        {
+          organizationId,
+          operation: 'RELEASE',
+          sourceType: 'SPEND_REQUEST',
+          sourceId: charge.matchedSpendRequestId,
+        },
+        { idempotencyKey: `budget:SPEND_REQUEST:${charge.matchedSpendRequestId}:RELEASE` },
+      );
+    }
   }
 
   /**

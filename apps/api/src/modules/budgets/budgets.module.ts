@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { BudgetJobs } from './budget-jobs.js';
 import { BudgetLedgerService } from './budget-ledger.service.js';
 import { BudgetsController } from './budgets.controller.js';
 import { BudgetsService } from './budgets.service.js';
@@ -15,7 +16,7 @@ import { BudgetsService } from './budgets.service.js';
  */
 @Module({
   controllers: [BudgetsController],
-  providers: [BudgetsService, BudgetLedgerService],
+  providers: [BudgetsService, BudgetLedgerService, BudgetJobs],
   exports: [BudgetsService, BudgetLedgerService],
 })
 export class BudgetsModule {}

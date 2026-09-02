@@ -161,6 +161,13 @@ export class ApprovalController {
     // an email, unlike a database row, does not roll back.
     await this.announce(organizationId, result, body.comment ?? null);
 
+    // Same reasoning, a different consequence: a budget committed inside the
+    // transaction would reserve money against a decision that could still roll
+    // back, and nothing would ever notice. The ledger is idempotent by source,
+    // so the retry costs nothing and a job that never ran leaves the budget
+    // reading low rather than wrong.
+    await this.moveBudget(organizationId, result);
+
     return {
       data: { settled: result.settled !== null, outcome: result.settled?.outcome ?? null },
       meta: { correlationId: getCorrelationId() },
@@ -234,6 +241,36 @@ export class ApprovalController {
 
       throw error;
     }
+  }
+
+  /**
+   * Move the budget the settled record draws on (FR-SPD-007).
+   *
+   * **A spend request commits; an expense actualises.** A request is a promise
+   * to spend and the money has not left, so approving it reserves budget. An
+   * expense is a report that the money already went, so approving it records a
+   * spend — there is nothing left to reserve. Treating both as commitments
+   * would leave every reimbursed claim sitting in `committed` forever, and a
+   * budget whose committed balance only grows is a number people learn to
+   * ignore.
+   *
+   * A rejection moves nothing, because nothing was committed: budget is
+   * reserved when a chain settles in favour, not when it opens.
+   */
+  private async moveBudget(organizationId: string, result: ActionResult): Promise<void> {
+    const settled = result.settled;
+
+    if (settled === null) return;
+    if (settled.outcome !== 'APPROVED' && settled.outcome !== 'OVERRIDDEN') return;
+
+    const operation = settled.subjectType === 'expense' ? 'ACTUALIZE' : 'COMMIT';
+    const sourceType = settled.subjectType === 'expense' ? 'EXPENSE' : 'SPEND_REQUEST';
+
+    await this.jobs.enqueue(
+      'budget.apply',
+      { organizationId, operation, sourceType, sourceId: settled.subjectId },
+      { idempotencyKey: `budget:${sourceType}:${settled.subjectId}:${operation}` },
+    );
   }
 
   /**

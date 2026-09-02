@@ -45,6 +45,9 @@ export class NotificationJobs implements OnModuleInit {
       this.approvalDecided(payload),
     );
     this.registry.register('approval.reminder', (payload) => this.approvalReminder(payload));
+    this.registry.register('notification.budget_threshold', (payload) =>
+      this.budgetThreshold(payload),
+    );
     this.registry.register('notification.approval_escalated', (payload) =>
       this.approvalEscalated(payload),
     );
@@ -231,6 +234,66 @@ export class NotificationJobs implements OnModuleInit {
     });
   }
 
+  /**
+   * A budget crossed a threshold (FR-BDG-006, FR-NOT-001).
+   *
+   * **Recipients are the people who can do something about it**, which is
+   * whoever holds `budget:manage` — not everyone who can see the budget.
+   * Telling twenty people a number went up produces twenty people who filter
+   * budget mail.
+   *
+   * The alert row already exists and is unique per threshold per period, so
+   * this job cannot be the thing that duplicates the message. The dedupe key
+   * is the second guard, for the case where the job itself is redelivered.
+   */
+  private async budgetThreshold(
+    payload: JobPayload<'notification.budget_threshold'>,
+  ): Promise<void> {
+    const line = await this.database.unscoped.budgetLine.findFirst({
+      where: { id: payload.budgetLineId, organizationId: payload.organizationId },
+      include: { budget: { select: { id: true, name: true, currency: true } } },
+    });
+
+    if (line === null) {
+      throw new PermanentJobError(`Budget line ${payload.budgetLineId} no longer exists.`);
+    }
+
+    const remaining = Money.of(line.allocatedAmount, line.currency)
+      .subtract(Money.of(line.committedAmount, line.currency))
+      .subtract(Money.of(line.actualAmount, line.currency));
+
+    const managers = await this.database.unscoped.membership.findMany({
+      where: {
+        organizationId: payload.organizationId,
+        status: 'ACTIVE',
+        role: { permissions: { some: { permission: { key: 'budget:manage' } } } },
+      },
+      select: { id: true },
+    });
+
+    if (managers.length === 0) return;
+
+    const rendered = templates.budgetThreshold({
+      budgetName: line.budget.name,
+      threshold: payload.threshold,
+      utilization: payload.utilization,
+      remaining: `${remaining.toJSON().amount} ${line.currency}`,
+      period: formatPeriod(line.periodStart, line.periodEnd),
+      path: `/budgets/${line.budget.id}`,
+    });
+
+    await this.notifications.deliver({
+      organizationId: payload.organizationId,
+      eventType: 'budget.threshold',
+      recipientMembershipIds: managers.map((manager) => manager.id),
+      dedupeKey: `budget-line:${line.id}:threshold:${String(payload.threshold)}`,
+      ...rendered,
+      resourceType: 'budget',
+      resourceId: line.budget.id,
+      metadata: { threshold: payload.threshold, utilization: payload.utilization },
+    });
+  }
+
   // ── internals ────────────────────────────────────────────────────────────
 
   private async step(organizationId: string, stepId: string) {
@@ -343,4 +406,21 @@ interface Subject {
   readonly amount: string;
   readonly requesterMembershipId: string;
   readonly requesterName: string;
+}
+
+/**
+ * "March 2026", or a range when the period is not one month.
+ *
+ * A notification that said `2026-03-01T00:00:00.000Z – 2026-03-31T00:00:00.000Z`
+ * would be accurate and unreadable, and the reader has to know which period
+ * overspent before anything else in the message means anything.
+ */
+function formatPeriod(start: Date, end: Date): string {
+  const month = (date: Date): string =>
+    date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+  const from = month(start);
+  const to = month(end);
+
+  return from === to ? from : `${from} – ${to}`;
 }

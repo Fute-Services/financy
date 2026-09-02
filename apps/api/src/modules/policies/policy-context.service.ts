@@ -5,6 +5,7 @@ import type { Prisma } from '@financy/db';
 import { Injectable } from '@nestjs/common';
 
 import { DatabaseService } from '../../platform/database/index.js';
+import { BudgetLedgerService } from '../budgets/index.js';
 
 /**
  * What a caller knows about the spend before the context is assembled.
@@ -48,7 +49,10 @@ export interface ContextRequest {
  */
 @Injectable()
 export class PolicyContextService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly budgets: BudgetLedgerService,
+  ) {}
 
   async build(
     tx: Prisma.TransactionClient,
@@ -68,7 +72,7 @@ export class PolicyContextService {
 
     if (membership === null) throw new NotFoundError('Membership');
 
-    const [organization, category, managerChain, spentThisMonth] = await Promise.all([
+    const [organization, category, managerChain, spentThisMonth, budget] = await Promise.all([
       tx.organization.findUnique({
         where: { id: organizationId },
         select: { baseCurrency: true, fiscalYearStartMonth: true },
@@ -81,6 +85,9 @@ export class PolicyContextService {
           }),
       this.managerChain(tx, organizationId, membership.managerMembershipId),
       this.spendThisMonth(tx, organizationId, request.requesterMembershipId, request.now),
+      this.budgetPosition(organizationId, request, {
+        departmentId: membership.department?.id ?? null,
+      }),
     ]);
 
     if (organization === null) throw new NotFoundError('Organization');
@@ -132,11 +139,7 @@ export class PolicyContextService {
         vendorId: request.vendorId ?? null,
         merchantName: request.merchantName ?? null,
       },
-      // Budgets arrive in Phase 4. `null` is the honest answer until then,
-      // and the evaluator already treats "no budget" as a first-class case:
-      // `budget.exists` is false and `budget.wouldExceed` is false, because
-      // spend cannot exceed a budget that does not exist.
-      budget: null,
+      budget,
       evidence: {
         hasReceipt: request.hasReceipt ?? false,
         hasMemo: memo !== null && memo.trim() !== '',
@@ -155,6 +158,70 @@ export class PolicyContextService {
         requesterSpendThisMonthInCategory: Money.zero(organization.baseCurrency),
         similarRequestsLast30Days: 0,
       },
+    };
+  }
+
+  /**
+   * The budget this spend draws on, as the evaluator sees it (FR-BDG-007).
+   *
+   * **The tightest match wins.** A charge can legitimately fall inside a
+   * departmental budget and an organisation-wide one at the same time, and a
+   * rule that says "block when this would exceed the budget" means the budget
+   * that runs out first. Picking the largest, or the first the database
+   * happened to return, would make the same rule behave differently depending
+   * on which budgets somebody set up.
+   *
+   * `null` when nothing matches, which the evaluator already treats as a
+   * first-class case: `budget.exists` is false, and `budget.wouldExceed` is
+   * false because spend cannot exceed a budget that does not exist.
+   */
+  private async budgetPosition(
+    organizationId: string,
+    request: ContextRequest,
+    resolved: { departmentId: string | null },
+  ): Promise<PolicyContext['budget']> {
+    const amount = Money.of(request.amount, request.currency);
+
+    const positions = await this.budgets.positions(organizationId, {
+      entityId: request.entityId,
+      departmentId: resolved.departmentId,
+      projectId: request.projectId ?? null,
+      categoryId: request.categoryId ?? null,
+      occurredAt: request.now,
+      amount,
+    });
+
+    const tightest = positions.reduce<(typeof positions)[number] | null>(
+      (best, position) =>
+        best === null ||
+        Money.of(position.remaining, position.currency).lessThan(
+          Money.of(best.remaining, best.currency),
+        )
+          ? position
+          : best,
+      null,
+    );
+
+    if (tightest === null) return null;
+
+    const allocated = Money.of(tightest.allocated, tightest.currency);
+    const committed = Money.of(tightest.committed, tightest.currency);
+    const actual = Money.of(tightest.actual, tightest.currency);
+    const usedAfter = committed.add(actual).add(amount);
+
+    return {
+      budgetLineId: tightest.budgetLineId,
+      allocated,
+      committed,
+      actual,
+      remaining: Money.of(tightest.remaining, tightest.currency),
+      // A ratio, not a percentage: `1.0` is fully consumed. Zero allocation
+      // has no ratio, and reporting one would make every rule about
+      // utilisation fire on an empty budget.
+      utilizationAfterThisSpend: allocated.isZero()
+        ? 0
+        : Number(usedAfter.toJSON().amount) / Number(allocated.toJSON().amount),
+      wouldExceed: tightest.wouldExceed,
     };
   }
 

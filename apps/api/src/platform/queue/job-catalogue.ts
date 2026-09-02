@@ -146,6 +146,41 @@ export const JOB_PAYLOADS = {
    * idempotency key, so a sweep running twice in one minute — two instances, a
    * manual trigger during a scheduled run — produces no duplicated work.
    */
+  /**
+   * Move a budget for something that just settled (FR-SPD-007, FR-TXN-008).
+   *
+   * **After the transaction, never inside it.** A commitment written inside
+   * the approval's own transaction is a reservation against a decision that
+   * may still roll back, and the budget would read as spent for a request
+   * nobody approved. The ledger is idempotent by source, so a redelivery is a
+   * no-op and a job that never ran is repaired by the next one on that line.
+   *
+   * One job for all three operations, because they differ only in a verb and
+   * the handler resolves the same record either way.
+   */
+  'budget.apply': z.strictObject({
+    organizationId: idSchema,
+    operation: z.enum(['COMMIT', 'ACTUALIZE', 'RELEASE']),
+    sourceType: z.enum(['SPEND_REQUEST', 'TRANSACTION', 'EXPENSE', 'BILL', 'PURCHASE_ORDER']),
+    sourceId: idSchema,
+  }),
+
+  /**
+   * A budget crossed a threshold and its owners should hear about it once
+   * (FR-BDG-006, FR-NOT-001).
+   *
+   * The threshold is in the payload *and* in the idempotency key: 90 % and
+   * 100 % on the same line are two different pieces of news, and a key
+   * without it would deliver the first and swallow the second.
+   */
+  'notification.budget_threshold': z.strictObject({
+    organizationId: idSchema,
+    budgetId: idSchema,
+    budgetLineId: idSchema,
+    threshold: z.int().min(1).max(500),
+    utilization: z.int().min(0),
+  }),
+
   'approvals.sweep': z.strictObject({
     /** Present only in tests, which need a fixed clock to assert against. */
     asOf: z.iso.datetime({ offset: true }).optional(),
@@ -174,6 +209,8 @@ export const JOB_TIMEOUT_MS: Readonly<Record<JobName, number>> = {
   'spend_request.expire': 30_000,
   'receipt.scan': 60_000,
   'receipt.ocr': 120_000,
+  'budget.apply': 60_000,
+  'notification.budget_threshold': 30_000,
   // Longer, because it reads across every organisation. Still bounded: a
   // sweep that can run indefinitely holds the only scheduled worker there is.
   'approvals.sweep': 120_000,
@@ -198,6 +235,10 @@ export const JOB_MAX_ATTEMPTS: Readonly<Record<JobName, number>> = {
   // Three, and then it dead-letters rather than failing the receipt: OCR
   // produces suggestions, and a receipt with none is still a receipt.
   'receipt.ocr': 3,
+  // Five, because a budget that failed to move is a control that is silently
+  // not applying, and the ledger's idempotency makes every retry free.
+  'budget.apply': 5,
+  'notification.budget_threshold': 5,
   // Two, because it runs again on its schedule anyway. A sweep piling up
   // retries behind a database problem fills the queue with work that has
   // already been superseded by the next sweep.

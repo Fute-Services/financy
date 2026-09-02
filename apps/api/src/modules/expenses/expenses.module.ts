@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { ApprovalsModule } from '../approvals/index.js';
+import { BudgetsModule } from '../budgets/index.js';
 import { PoliciesModule } from '../policies/index.js';
 import { ExpensesController } from './expenses.controller.js';
 import { ExpensesService } from './expenses.service.js';
@@ -15,7 +16,7 @@ import { ReimbursementsService } from './reimbursements.service.js';
  * boundary and the status it protects on the other.
  */
 @Module({
-  imports: [ApprovalsModule, PoliciesModule],
+  imports: [ApprovalsModule, BudgetsModule, PoliciesModule],
   controllers: [ExpensesController, ReimbursementsController],
   providers: [ExpensesService, ReimbursementsService],
   exports: [ExpensesService, ReimbursementsService],

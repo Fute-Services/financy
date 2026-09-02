@@ -67,6 +67,17 @@ export interface ApprovalEscalatedVariables {
   dueAt: string;
 }
 
+export interface BudgetThresholdVariables {
+  budgetName: string;
+  /** Whole percent, as the alert defines it — 75, 90, 100. */
+  threshold: number;
+  /** What the utilisation actually reached, which can exceed the threshold. */
+  utilization: number;
+  remaining: string;
+  period: string;
+  path: string;
+}
+
 export const templates = {
   approvalRequested(variables: ApprovalRequestedVariables): RenderedNotification {
     const due = variables.dueAt === null ? '' : ` It is due by ${formatDay(variables.dueAt)}.`;
@@ -124,6 +135,25 @@ export const templates = {
       title: `Escalated to you: ${variables.amount} for ${variables.requesterName}`,
       body: `${variables.reference} — ${variables.purpose} — passed its deadline of ${formatDay(variables.dueAt)} without a decision, so it has come to you as well.`,
       actionLabel: 'Review this request',
+      path: variables.path,
+    };
+  },
+
+  budgetThreshold(variables: BudgetThresholdVariables): RenderedNotification {
+    // Over and approaching are different pieces of news and get different
+    // sentences. "Design is at 100% of its budget" reads as a milestone; a
+    // budget that is 14% overspent is a problem, and the title should say so
+    // before anybody opens anything.
+    const over = variables.utilization > 100;
+
+    return {
+      title: over
+        ? `${variables.budgetName} is ${String(variables.utilization - 100)}% over budget`
+        : `${variables.budgetName} has reached ${String(variables.threshold)}% of its budget`,
+      body: over
+        ? `${variables.period}: ${variables.remaining} remaining, against an allocation already committed and spent past its limit.`
+        : `${variables.period}: ${variables.remaining} is left of the allocation.`,
+      actionLabel: 'Open the budget',
       path: variables.path,
     };
   },
