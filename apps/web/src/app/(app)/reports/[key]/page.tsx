@@ -236,6 +236,37 @@ function toCell(value: unknown): ReportCell {
 }
 
 /**
+ * A share of the whole, as a number and a bar.
+ *
+ * The number alone is accurate and unscannable: finding the three departments
+ * that account for most of the spend means reading twenty figures and holding
+ * them in your head. The bar does that comparison for the eye, and the number
+ * stays because a bar cannot be read from a printout, in greyscale, or by a
+ * screen reader.
+ *
+ * The width is a ratio of a value the **server** computed. No money is being
+ * divided here.
+ */
+function Share({ percent }: { percent: number }): React.JSX.Element {
+  const clamped = Math.min(Math.max(percent, 0), 100);
+
+  return (
+    <span className="flex items-center justify-end gap-2">
+      <span
+        className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-ink-100"
+        aria-hidden="true"
+      >
+        <span
+          className="block h-full rounded-full bg-[var(--color-chart-1)]"
+          style={{ width: `${String(clamped)}%` }}
+        />
+      </span>
+      <span className="tabular w-11 text-right">{percent}%</span>
+    </span>
+  );
+}
+
+/**
  * A stable key for a row whose shape the server decided.
  *
  * Report rows have no id — they are aggregates, and two of them can legitimately
@@ -265,7 +296,7 @@ function renderCell(value: ReportCell, kind: string): React.ReactNode {
 
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
 
-  if (kind === 'percent') return <span className="tabular">{value}%</span>;
+  if (kind === 'percent') return <Share percent={Number(value)} />;
   if (kind === 'number') return <span className="tabular">{value}</span>;
   if (kind === 'date') return <span>{formatDay(String(value))}</span>;
 

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { DashboardSummary, Resource } from '@financy/contracts';
 import {
+  BarChart,
   BudgetMeter,
   Card,
   CardBody,
@@ -9,6 +10,7 @@ import {
   KpiCard,
   Money,
   ErrorState,
+  type BarChartPoint,
 } from '@financy/ui';
 
 import { PageHeader } from '@/components/page-header';
@@ -83,10 +85,22 @@ export default async function OverviewPage(): Promise<React.JSX.Element> {
     dashboard.spendPreviousMonthToDate.amount,
   );
 
-  const peak = dashboard.trend.reduce(
-    (highest, point) => Math.max(highest, Number(point.amount.amount)),
-    0,
-  );
+  /**
+   * The trend, formatted once here and handed to the chart as strings.
+   *
+   * The chart is given a magnitude for geometry and a rendered string for
+   * display, so there is no path by which it could show a number the server
+   * did not produce.
+   */
+  const trend: BarChartPoint[] = dashboard.trend.map((point, index) => ({
+    label: monthLabel(point.label),
+    formatted: formatMoney(point.amount.amount, point.amount.currency),
+    value: Number(point.amount.amount),
+    // The last bucket is the month we are standing in. Drawn faint and
+    // labelled "so far", because a partial month next to five whole ones
+    // otherwise reads as a collapse in spending.
+    partial: index === dashboard.trend.length - 1,
+  }));
 
   return (
     <>
@@ -118,17 +132,17 @@ export default async function OverviewPage(): Promise<React.JSX.Element> {
               hint=" vs the same point last month"
             />
             <KpiCard
-              label="Waiting on a decision"
+              label="Awaiting approval"
               value={String(dashboard.pendingApprovals)}
               hint={dashboard.pendingApprovals === 0 ? 'Nothing is stuck' : 'Approvals'}
             />
             <KpiCard
-              label="Charges with no receipt"
+              label="Receipts missing"
               value={String(dashboard.missingReceipts)}
               hint="Posted charges"
             />
             <KpiCard
-              label="Owed to people"
+              label="Owed to staff"
               value={
                 <Money
                   amount={dashboard.outstandingReimbursements.amount}
@@ -145,28 +159,7 @@ export default async function OverviewPage(): Promise<React.JSX.Element> {
               description="Six months, including the quiet ones."
             />
             <CardBody>
-              <ol className="flex items-end gap-2" aria-label="Monthly spend">
-                {dashboard.trend.map((point) => {
-                  const height = peak === 0 ? 0 : (Number(point.amount.amount) / peak) * 100;
-
-                  return (
-                    <li key={point.label} className="flex flex-1 flex-col items-center gap-2">
-                      {/* The figure is on the bar, not only in a tooltip: a
-                          chart whose numbers need a mouse is a chart nobody
-                          can read from a screen reader or a printout. */}
-                      <span className="tabular text-[11px] text-ink-500">
-                        <Money amount={point.amount.amount} currency={point.amount.currency} />
-                      </span>
-                      <div
-                        className="w-full rounded-t-[3px] bg-[var(--color-chart-1)]"
-                        style={{ height: `${String(Math.max(height, 2))}px`, minHeight: '2px' }}
-                        aria-hidden="true"
-                      />
-                      <span className="text-[11px] text-ink-400">{point.label}</span>
-                    </li>
-                  );
-                })}
-              </ol>
+              <BarChart points={trend} caption="Spend by month, across the last six months" />
             </CardBody>
           </Card>
 
@@ -281,4 +274,39 @@ function describeChange(
     label: `${percent > 0 ? '+' : ''}${String(percent)}%`,
     direction: percent > 0 ? 'up' : percent < 0 ? 'down' : 'flat',
   };
+}
+
+/**
+ * `2026-04` → `Apr`.
+ *
+ * The server's bucket key is stable and sortable, which is what it is for. It
+ * is not what somebody reads along an axis.
+ */
+function monthLabel(key: string): string {
+  const [year, month] = key.split('-');
+
+  if (year === undefined || month === undefined) return key;
+
+  return new Date(Date.UTC(Number(year), Number(month) - 1, 1)).toLocaleDateString('en-GB', {
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * Money for the chart, formatted here rather than inside it.
+ *
+ * Compact, because six full currency strings along an axis collide at any
+ * width worth having. The exact figures are in the accessible table the chart
+ * renders beneath itself, and on every screen that lists the underlying rows.
+ */
+function formatMoney(amount: string, currency: string): string {
+  const value = Number(amount);
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    notation: Math.abs(value) >= 10_000 ? 'compact' : 'standard',
+    maximumFractionDigits: Math.abs(value) >= 10_000 ? 1 : 0,
+  }).format(value);
 }
