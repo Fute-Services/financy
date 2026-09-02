@@ -49,6 +49,11 @@ export const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set<string>([
   'ExpenseItem',
   'ReimbursementBatch',
   'ReimbursementLine',
+  // Phase 4.
+  'Budget',
+  'BudgetLine',
+  'BudgetMovement',
+  'BudgetAlert',
 ]);
 
 /**

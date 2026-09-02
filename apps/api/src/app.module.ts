@@ -22,6 +22,7 @@ import { PeopleModule } from './modules/people/index.js';
 import { PoliciesModule } from './modules/policies/index.js';
 import { ProjectsModule } from './modules/projects/index.js';
 import { CardsModule } from './modules/cards/index.js';
+import { BudgetsModule } from './modules/budgets/index.js';
 import { ExpensesModule } from './modules/expenses/index.js';
 import { NotificationsModule } from './modules/notifications/index.js';
 import { ReceiptsModule } from './modules/receipts/index.js';
@@ -63,6 +64,7 @@ import { SpendModule } from './modules/spend/index.js';
     NotificationsModule,
     ReceiptsModule,
     ExpensesModule,
+    BudgetsModule,
     AuditReadModule,
   ],
   providers: [

@@ -177,6 +177,11 @@ model Organization {
   reimbursementBatches    ReimbursementBatch[]
   reimbursementLines      ReimbursementLine[]
 
+  budgets         Budget[]
+  budgetLines     BudgetLine[]
+  budgetMovements BudgetMovement[]
+  budgetAlerts    BudgetAlert[]
+
   @@map("organizations")
 }
 
@@ -414,6 +419,7 @@ model Membership {
   receiptsAttached       ReceiptAttachment[]      @relation("ReceiptAttacher")
   receiptsDetached       ReceiptAttachment[]      @relation("ReceiptDetacher")
   notificationPreferences NotificationPreference[] @relation("NotificationPreferenceOwner")
+  budgetMovements         BudgetMovement[]         @relation("BudgetMovementActor")
 
   /// One membership per user per organisation.
   @@unique([organizationId, userId])
@@ -449,6 +455,7 @@ model Entity {
   transactions  Transaction[]
   expenses      Expense[]
   reimbursementBatches ReimbursementBatch[]
+  budgets              Budget[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
@@ -1883,4 +1890,210 @@ model ReimbursementLine {
   @@index([organizationId, batchId])
   @@index([batchId])
   @@map("reimbursement_lines")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Budgets (Phase 4, epic 4.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// What a budget is drawn around.
+///
+/// One dimension, not several. A budget scoped to "the design department *and*
+/// the travel category" is two budgets in a trench coat: when spend arrives
+/// that matches one and not the other, nobody can say whether it counts, and
+/// every answer the product gives is defensible and wrong.
+enum BudgetScopeType {
+  DEPARTMENT
+  ENTITY
+  PROJECT
+  CATEGORY
+  ORGANIZATION
+}
+
+enum BudgetPeriodGranularity {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+/// What happens when spend would take a line past its allocation (FR-BDG-005).
+///
+/// `WARN` records the exception and lets it through; `REQUIRE_APPROVAL` hands
+/// the decision to the approval engine; `BLOCK` refuses. All three are real
+/// choices real finance teams make, and the difference between them is a
+/// policy question, not an engineering one.
+enum BudgetOverspendBehavior {
+  WARN
+  REQUIRE_APPROVAL
+  BLOCK
+}
+
+enum BudgetStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+/// `COMMITMENT` reserves, `ACTUAL` spends, `RELEASE` gives a reservation back,
+/// `ADJUSTMENT` corrects. Nothing is ever deleted (FR-BDG-008).
+enum BudgetMovementType {
+  COMMITMENT
+  ACTUAL
+  RELEASE
+  ADJUSTMENT
+}
+
+enum BudgetMovementDirection {
+  INCREASE
+  DECREASE
+}
+
+/// What caused a movement. Together with `sourceId` and the type it forms the
+/// idempotency key, so a retried approval cannot commit twice.
+enum BudgetSourceType {
+  SPEND_REQUEST
+  TRANSACTION
+  EXPENSE
+  BILL
+  PURCHASE_ORDER
+  MANUAL
+}
+
+model Budget {
+  id             String @id @map("_id")
+  organizationId String
+
+  name String
+
+  scopeType BudgetScopeType
+  /// The department, entity, project, or category this is drawn around. Null
+  /// only when `scopeType` is `ORGANIZATION`.
+  scopeId   String?
+
+  /// Which entity's money this is. Always present, because a budget that does
+  /// not belong to a legal entity cannot be reported against one.
+  entityId String
+  currency String
+
+  periodStart        DateTime
+  periodEnd          DateTime
+  periodGranularity  BudgetPeriodGranularity @default(MONTHLY)
+
+  overspendBehavior BudgetOverspendBehavior @default(WARN)
+
+  /// Percentages, ascending. Default 75 / 90 / 100 (FR-BDG-006).
+  alertThresholds Int[] @default([75, 90, 100])
+
+  status BudgetStatus @default(DRAFT)
+
+  version   Int      @default(1)
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  entity       Entity        @relation(fields: [entityId], references: [id])
+  lines        BudgetLine[]
+  alerts       BudgetAlert[]
+
+  @@unique([organizationId, name, periodStart])
+  @@index([organizationId, status, periodStart])
+  @@index([organizationId, scopeType, scopeId])
+  @@index([entityId])
+  @@map("budgets")
+}
+
+/// One period of one budget, with its materialised balances.
+///
+/// The balances are a cache of `budget_movements` and the invariant test says
+/// so: any drift between the two is a failing build. They exist because
+/// "what is left in this budget" is asked on every policy evaluation, and
+/// summing a ledger per evaluation is a design that works until it doesn't.
+model BudgetLine {
+  id             String @id @map("_id")
+  organizationId String
+  budgetId       String
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  /// Decimal strings, like every other money column here (ADR-0017).
+  allocatedAmount String @default("0.0000")
+  committedAmount String @default("0.0000")
+  actualAmount    String @default("0.0000")
+  currency        String
+
+  /// Bumped on every balance write, and the `where` clause that makes the
+  /// concurrent case correct without a row lock MongoDB does not have.
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  budget       Budget           @relation(fields: [budgetId], references: [id])
+  movements    BudgetMovement[]
+
+  @@unique([budgetId, periodStart])
+  @@index([organizationId, budgetId, periodStart])
+  @@map("budget_lines")
+}
+
+/// The ledger. Append-only, never updated, never deleted (FR-BDG-003).
+model BudgetMovement {
+  id             String @id @map("_id")
+  organizationId String
+  budgetLineId   String
+
+  movementType BudgetMovementType
+  direction    BudgetMovementDirection
+
+  /// Always positive; `direction` carries the sign, so a sign bug is a
+  /// rejected write rather than a quietly wrong balance.
+  amount   String
+  currency String
+
+  sourceType BudgetSourceType
+  sourceId   String
+
+  actorMembershipId String?
+  memo              String?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  line         BudgetLine   @relation(fields: [budgetLineId], references: [id])
+  actor        Membership?  @relation("BudgetMovementActor", fields: [actorMembershipId], references: [id])
+
+  /// One commitment per source, one actual per source, one release per source.
+  /// This index is what makes a retried job safe (docs/09 §7.3).
+  @@unique([budgetLineId, sourceType, sourceId, movementType])
+  @@index([organizationId, budgetLineId, createdAt])
+  @@index([organizationId, sourceType, sourceId])
+  @@index([actorMembershipId])
+  @@map("budget_movements")
+}
+
+/// A threshold crossing, recorded so it can only be announced once.
+model BudgetAlert {
+  id             String @id @map("_id")
+  organizationId String
+  budgetId       String
+  budgetLineId   String
+
+  threshold  Int
+  /// The utilisation that tripped it, kept so the notification can say what
+  /// was true at the moment rather than what is true when it is read.
+  utilization Int
+
+  firedAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  budget       Budget       @relation(fields: [budgetId], references: [id])
+
+  /// Once per threshold per period. The index is the idempotency (FR-BDG-006).
+  @@unique([budgetLineId, threshold])
+  @@index([organizationId, budgetId, firedAt])
+  @@map("budget_alerts")
 }
