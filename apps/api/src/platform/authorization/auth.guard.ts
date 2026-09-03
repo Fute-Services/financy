@@ -31,12 +31,67 @@ import { PERMISSION_KEY, PUBLIC_KEY, STEP_UP_KEY } from './decorators.js';
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
+  /**
+   * Role grants, kept in memory for a minute at a time.
+   *
+   * ## Why this is cached at all
+   *
+   * Walking `role → role_permissions → permission` is a two-level relation
+   * load that MongoDB cannot join, so Prisma issues it as a burst of round
+   * trips — and this guard runs on **every authenticated request**. Against a
+   * hosted database that burst was the single largest cost in the application,
+   * paid before any handler had done a thing.
+   *
+   * ## Why caching it is safe
+   *
+   * `role_permissions` has no runtime write path. The only thing that changes
+   * a role's grants is the system seed (`packages/db/src/seed/roles.ts`), which
+   * an operator runs deliberately. There is no API by which a role can gain or
+   * lose a permission mid-request, so there is no revocation this could delay.
+   *
+   * ## Why it still expires
+   *
+   * A minute, so that a seed run against a live database takes effect without
+   * a restart. Bounded rather than permanent: "it needs a redeploy to pick up"
+   * is the kind of operational surprise that gets discovered at the worst
+   * moment.
+   *
+   * **This is not a session cache.** The session, the membership, and its
+   * status are read from the database on every single request exactly as
+   * before — a revoked session or a deactivated membership still dies
+   * immediately, which is the property server-side sessions exist for.
+   */
+  private readonly rolePermissions = new Map<string, { granted: Set<string>; readAt: number }>();
+
+  private static readonly ROLE_CACHE_TTL_MS = 60_000;
+
   constructor(
     private readonly reflector: Reflector,
     private readonly database: DatabaseService,
     private readonly config: ConfigService,
     private readonly logger: PinoLogger,
   ) {}
+
+  private async permissionsForRole(roleId: string): Promise<Set<string>> {
+    const cached = this.rolePermissions.get(roleId);
+
+    if (cached !== undefined && Date.now() - cached.readAt < AuthGuard.ROLE_CACHE_TTL_MS) {
+      // Copied, so a handler that mutates what it was given cannot poison the
+      // grants every later request is checked against.
+      return new Set(cached.granted);
+    }
+
+    const rows = await this.database.unscoped.rolePermission.findMany({
+      where: { roleId },
+      select: { permission: { select: { key: true } } },
+    });
+
+    const granted = new Set(rows.map((row) => row.permission.key));
+
+    this.rolePermissions.set(roleId, { granted, readAt: Date.now() });
+
+    return new Set(granted);
+  }
 
   /**
    * Why a request was rejected.
@@ -79,12 +134,8 @@ export class AuthGuard implements CanActivate {
             id: true,
             organizationId: true,
             status: true,
-            role: {
-              select: {
-                key: true,
-                permissions: { select: { permission: { select: { key: true } } } },
-              },
-            },
+            roleId: true,
+            role: { select: { key: true } },
           },
         },
       },
@@ -109,7 +160,7 @@ export class AuthGuard implements CanActivate {
     // Layer 1 of tenant isolation: the organisation comes from the membership
     // on the session and from nowhere else. Nothing the client sent is
     // consulted, so there is nothing for it to influence.
-    const granted = new Set(membership.role.permissions.map((row) => row.permission.key));
+    const granted = await this.permissionsForRole(membership.roleId);
 
     enterContext({
       organizationId: membership.organizationId,

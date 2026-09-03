@@ -133,6 +133,9 @@ export class AuthController {
       Date.now() + this.config.get('SESSION_ABSOLUTE_TIMEOUT_HOURS') * 3_600_000,
     );
 
-    return this.auth.describeSession(context.membershipId, expiresAt);
+    // The guard resolved this caller's permissions a moment ago. Handing them
+    // over saves re-walking the role's ninety-odd grants on the one route the
+    // web app calls for every page it renders.
+    return this.auth.describeSession(context.membershipId, expiresAt, context.permissions);
   }
 }

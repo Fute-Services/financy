@@ -20,7 +20,16 @@ import { cookies } from 'next/headers';
  * `UNAUTHENTICATED` rather than on a status it inferred.
  */
 
-const API_BASE_URL = process.env['API_BASE_URL'] ?? 'http://localhost:4100';
+/**
+ * The API's address, by address rather than by name.
+ *
+ * `127.0.0.1` and not `localhost`: on Windows the name resolves to `::1`
+ * first, and the IPv6 attempt costs roughly 210 ms per connection before
+ * falling back to IPv4. This server makes several API calls to render a single
+ * page, so that default was adding most of a second to every page load — and
+ * it looked like slow queries rather than like slow name resolution.
+ */
+const API_BASE_URL = process.env['API_BASE_URL'] ?? 'http://127.0.0.1:4100';
 
 export class ApiError extends Error {
   constructor(

@@ -336,24 +336,48 @@ export class AuthService {
   }
 
   /** The payload behind `GET /v1/auth/session`. */
-  async describeSession(membershipId: string, expiresAt: Date): Promise<SessionResponse> {
+  /**
+   * @param granted The permission set the guard already resolved for this
+   *   request, when there is one.
+   *
+   *   Walking `role → role_permissions → permission` is by far the most
+   *   expensive part of describing a session — around ninety rows across a
+   *   relation Prisma cannot join on MongoDB, so it becomes a burst of round
+   *   trips to the database. The guard has already paid for exactly that set
+   *   before this method runs, and paying twice made `/auth/session` the
+   *   slowest endpoint in the application at roughly a second, on a route the
+   *   web app calls on **every** page render.
+   *
+   *   Absent for the public callers — login, register, invitation acceptance —
+   *   which run before any guard and so have nothing to reuse.
+   */
+  async describeSession(
+    membershipId: string,
+    expiresAt: Date,
+    granted?: ReadonlySet<string>,
+  ): Promise<SessionResponse> {
     const membership = await this.database.unscoped.membership.findUniqueOrThrow({
       where: { id: membershipId },
       select: {
         id: true,
         scope: true,
         departmentId: true,
+        roleId: true,
         user: { select: { id: true, email: true, fullName: true } },
         organization: { select: { id: true, slug: true, name: true, baseCurrency: true } },
-        role: {
-          select: {
-            key: true,
-            name: true,
-            permissions: { select: { permission: { select: { key: true } } } },
-          },
-        },
+        role: { select: { key: true, name: true } },
       },
     });
+
+    const permissions =
+      granted === undefined
+        ? (
+            await this.database.unscoped.rolePermission.findMany({
+              where: { roleId: membership.roleId },
+              select: { permission: { select: { key: true } } },
+            })
+          ).map((row) => row.permission.key)
+        : [...granted];
 
     const organizations = await this.database.unscoped.membership.findMany({
       where: { userId: membership.user.id, status: 'ACTIVE' },
@@ -377,7 +401,7 @@ export class AuthService {
       // Resolved from what was actually seeded, never from the constant in
       // `@financy/contracts` — the database is the runtime authority, and a
       // drift between the two must show up rather than be papered over.
-      permissions: membership.role.permissions.map((row) => row.permission.key).sort(),
+      permissions: [...permissions].sort(),
       organizations: organizations.map((row) => ({
         ...row.organization,
         roleKey: asRoleKey(row.role.key),

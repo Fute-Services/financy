@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import type { SessionResponse } from '@financy/contracts';
 
 import { ApiError, apiFetch } from './api';
@@ -61,7 +63,18 @@ export function can(
  * a client component, and a Set does not survive serialisation — returning one
  * here produced an empty permission set in the browser with no error anywhere.
  */
-export async function getSession(): Promise<SessionResponse | null> {
+/**
+ * Wrapped in `cache`, which dedupes it **within a single render pass**.
+ *
+ * The layout asks for the session, and then every page under it asks again to
+ * check a permission — so each render was making the same request two or three
+ * times over. `cache` collapses those into one call and shares the result.
+ *
+ * It is not a cross-request cache and deliberately so: the memo lasts exactly
+ * as long as the render, so a signed-out or role-changed user is never served
+ * a stale session. Nothing about revocation changes.
+ */
+export const getSession = cache(async (): Promise<SessionResponse | null> => {
   try {
     return await apiFetch<SessionResponse>('/auth/session');
   } catch (error) {
@@ -74,4 +87,4 @@ export async function getSession(): Promise<SessionResponse | null> {
     // user to the login screen and make an outage look like a session bug.
     throw error;
   }
-}
+});

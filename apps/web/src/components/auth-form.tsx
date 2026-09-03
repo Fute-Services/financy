@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 /**
  * The shared machinery behind the login and register forms.
@@ -18,7 +17,6 @@ export interface AuthFieldErrors {
 }
 
 export function useAuthSubmit(action: 'login' | 'register') {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<AuthFieldErrors>({});
@@ -36,10 +34,22 @@ export function useAuthSubmit(action: 'login' | 'register') {
       });
 
       if (response.ok) {
-        // `refresh()` before `push()`: the shell reads the session on the
-        // server, and without it Next serves the cached logged-out render.
-        router.refresh();
-        router.push('/overview');
+        /**
+         * A full navigation, not `router.push`.
+         *
+         * `refresh()` and `push()` race: the refresh invalidates the router
+         * cache while the push is already fetching the next route, so the
+         * navigation could resolve against the *logged-out* cache, bounce off
+         * the layout's redirect, and land back here. That is why signing in
+         * used to take two clicks — the second one worked because the first
+         * had warmed the cache.
+         *
+         * The session cookie has just been set by the response above, and a
+         * document navigation is the one thing guaranteed to read it. It costs
+         * a page load, once, on a transition that re-renders the entire shell
+         * with a new identity anyway.
+         */
+        window.location.assign('/overview');
         return;
       }
 
