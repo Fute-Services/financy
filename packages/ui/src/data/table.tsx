@@ -61,14 +61,14 @@ export function DataTable<T>({
       <table className="w-full border-collapse text-sm">
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead>
-          <tr className="border-b border-[var(--border-default)] bg-ink-50">
+          <tr className="border-b border-[var(--border-default)] bg-[var(--surface-sunken)]">
             {columns.map((column) => (
               <th
                 key={column.key}
                 scope="col"
                 style={column.width ? { width: column.width } : undefined}
                 className={cn(
-                  'h-10 text-xs font-semibold whitespace-nowrap text-ink-600',
+                  'h-9 text-[11px] font-semibold tracking-[0.05em] whitespace-nowrap text-ink-500 uppercase',
                   cellPadding,
                   column.align === 'right' ? 'text-right' : 'text-left',
                 )}
@@ -95,9 +95,9 @@ export function DataTable<T>({
               tabIndex={onRowClick ? 0 : undefined}
               className={cn(
                 rowHeight,
-                'transition-colors duration-100',
+                'transition-colors duration-100 hover:bg-[var(--surface-sunken)]',
                 onRowClick &&
-                  'cursor-pointer hover:bg-ink-50 focus-visible:bg-ink-50 focus-visible:outline-none',
+                  'cursor-pointer focus-visible:bg-[var(--surface-sunken)] focus-visible:outline-none',
               )}
             >
               {columns.map((column) => (

@@ -38,7 +38,7 @@ export { Dialog, type DialogProps } from './primitives/dialog';
 
 export { Money, NoValue, type MoneyProps } from './finance/money';
 
-export { Card, CardHeader, CardBody, KpiCard, BudgetMeter, type KpiCardProps } from './data/card';
+export { Card, CardHeader, CardBody, KpiCard, BudgetMeter, type KpiCardProps, type KpiTone } from './data/card';
 export { DataTable, type Column, type DataTableProps } from './data/table';
 export { BarChart, type BarChartPoint, type BarChartProps } from './data/bar-chart';
 export {

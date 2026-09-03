@@ -18,7 +18,7 @@ export function Card({
     <div
       className={cn(
         'rounded-[var(--radius-md)] border border-[var(--border-default)]',
-        'bg-[var(--surface-raised)]',
+        'bg-[var(--surface-raised)] shadow-[var(--shadow-elev-1)]',
         className,
       )}
       {...rest}
@@ -47,7 +47,9 @@ export function CardHeader({
       )}
     >
       <div className="min-w-0">
-        <h2 className="text-base font-semibold text-ink-800">{title}</h2>
+        <h2 className="text-[15px] leading-6 font-semibold tracking-[-0.01em] text-ink-900">
+          {title}
+        </h2>
         {description && <p className="mt-0.5 text-sm text-ink-500">{description}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
@@ -75,6 +77,8 @@ export function CardBody({
  * `undefined`, a caller cannot spread a value that may legitimately be absent —
  * which is the common case when the figure comes from an API response.
  */
+export type KpiTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
+
 export interface KpiCardProps {
   label: string;
   /** Pre-formatted by the caller — usually a <Money> element. Never computed here. */
@@ -85,7 +89,26 @@ export interface KpiCardProps {
   /** Whether an increase is good. Spend going up is not. */
   deltaIsGood?: boolean | undefined;
   hint?: string | undefined;
+  /**
+   * What kind of number this is.
+   *
+   * Drives a single rule of colour along the top edge — and it is **not**
+   * decoration, which the design system forbids. A tile whose count is
+   * something somebody has to clear reads differently from one that is simply
+   * a total, and at a glance across four tiles that difference is the only
+   * thing the eye needs. `neutral` draws no rule at all, so a dashboard of
+   * plain totals stays plain.
+   */
+  tone?: KpiTone | undefined;
 }
+
+const TONE_RULE: Readonly<Record<KpiTone, string>> = {
+  neutral: 'bg-ink-200',
+  accent: 'bg-[var(--color-cobalt-500)]',
+  success: 'bg-[var(--color-success-text)]',
+  warning: 'bg-[var(--color-warning-text)]',
+  danger: 'bg-[var(--color-danger-text)]',
+};
 
 export function KpiCard({
   label,
@@ -94,30 +117,53 @@ export function KpiCard({
   deltaDirection = 'flat',
   deltaIsGood = true,
   hint,
+  tone = 'neutral',
 }: KpiCardProps): React.JSX.Element {
   const positive = deltaDirection === 'up' ? deltaIsGood : !deltaIsGood;
-  const deltaColor =
+
+  const deltaTone =
     deltaDirection === 'flat'
-      ? 'text-ink-500'
+      ? 'bg-ink-100 text-ink-600'
       : positive
-        ? 'text-[var(--color-success-text)]'
-        : 'text-[var(--color-danger-text)]';
+        ? 'bg-[var(--color-success-fill)] text-[var(--color-success-text)]'
+        : 'bg-[var(--color-danger-fill)] text-[var(--color-danger-text)]';
 
   return (
-    <Card className="p-4">
-      <p className="text-xs font-medium tracking-wide text-ink-500 uppercase">{label}</p>
-      <p className="tabular mt-2 text-xl font-semibold text-ink-900">{value}</p>
-      {delta && (
-        <p className={cn('mt-1.5 flex items-center gap-1 text-xs font-medium', deltaColor)}>
-          {/* Arrow AND sign — direction is never carried by colour alone. */}
-          <span aria-hidden="true">
-            {deltaDirection === 'up' ? '↑' : deltaDirection === 'down' ? '↓' : '→'}
+    <Card className="relative overflow-hidden p-4">
+      {/* One hairline of colour, and only when the tone says the number is a
+          kind of thing rather than just a total. */}
+      <span
+        aria-hidden="true"
+        className={cn('absolute inset-x-0 top-0 h-[3px]', TONE_RULE[tone])}
+      />
+
+      <p className="text-[11px] font-semibold tracking-[0.06em] text-ink-500 uppercase">
+        {label}
+      </p>
+
+      {/* Bigger, and tabular so a column of tiles does not jitter as figures
+          change. This is the number people came to read. */}
+      <p className="tabular mt-2.5 text-[26px] leading-8 font-semibold tracking-[-0.02em] text-ink-900">
+        {value}
+      </p>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+        {delta && (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+              deltaTone,
+            )}
+          >
+            {/* Arrow AND sign — direction is never carried by colour alone. */}
+            <span aria-hidden="true">
+              {deltaDirection === 'up' ? '↑' : deltaDirection === 'down' ? '↓' : '→'}
+            </span>
+            {delta}
           </span>
-          {delta}
-          {hint && <span className="font-normal text-ink-400">{hint}</span>}
-        </p>
-      )}
-      {!delta && hint && <p className="mt-1.5 text-xs text-ink-400">{hint}</p>}
+        )}
+        {hint && <span className="text-[12px] text-ink-400">{hint}</span>}
+      </div>
     </Card>
   );
 }

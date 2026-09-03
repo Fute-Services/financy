@@ -129,17 +129,22 @@ export default async function OverviewPage(): Promise<React.JSX.Element> {
                     // tool it is the direction worth noticing.
                     deltaIsGood: false,
                   })}
-              hint=" vs the same point last month"
+              hint="vs the same point last month"
+              tone="accent"
             />
             <KpiCard
               label="Awaiting approval"
               value={String(dashboard.pendingApprovals)}
-              hint={dashboard.pendingApprovals === 0 ? 'Nothing is stuck' : 'Approvals'}
+              hint={dashboard.pendingApprovals === 0 ? 'Nothing is stuck' : 'Waiting on a person'}
+              // A queue of nothing is not a warning. The rule disappears when
+              // there is no work, which is the only time this tile is good news.
+              tone={dashboard.pendingApprovals === 0 ? 'success' : 'warning'}
             />
             <KpiCard
               label="Receipts missing"
               value={String(dashboard.missingReceipts)}
               hint="Posted charges"
+              tone={dashboard.missingReceipts === 0 ? 'success' : 'danger'}
             />
             <KpiCard
               label="Owed to staff"

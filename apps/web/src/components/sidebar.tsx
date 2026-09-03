@@ -106,13 +106,24 @@ function NavLink({
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group flex h-[30px] items-center gap-2.5 rounded-[var(--radius-sm)] px-2 text-[13px]',
+        'group relative flex h-[32px] items-center gap-2.5 rounded-[var(--radius-sm)] px-2 text-[13px]',
         'transition-colors duration-100',
         active
           ? 'bg-white/10 font-medium text-white'
           : 'text-ink-300 hover:bg-white/6 hover:text-white',
       )}
     >
+      {/* A rail on the active item.
+          The tint alone was doing the whole job, and a 10%-white fill on a
+          navy panel is close to invisible on a dimmed laptop screen — which is
+          where most of this application is read. The rail survives that, and
+          it survives greyscale. */}
+      {active && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-1 -left-2 w-[3px] rounded-r-full bg-cobalt-400"
+        />
+      )}
       <span className={active ? 'text-cobalt-400' : 'text-ink-500 group-hover:text-ink-300'}>
         <Icon name={item.icon} />
       </span>
