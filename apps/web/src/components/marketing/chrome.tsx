@@ -1,151 +1,135 @@
 import Link from 'next/link';
 
-import { Logo } from '@/components/icons';
+import { FOOTER_COLUMNS, NAV } from './content';
+import { Container } from './primitives';
+import { EYEBROW, LINE } from './theme';
 
 /**
- * Navigation and footer for the public site.
+ * The mark: a filled cobalt square.
  *
- * Sharp corners, flat surfaces, no shadows. The visual register is deliberate:
- * a fintech buyer reads rounded and soft as consumer, and this product is sold
- * to a finance team that wants it to look like infrastructure.
+ * No icon, no wordmark lockup. The square is the only decorative element on the
+ * entire site, and it is decorative precisely because everything else is a
+ * hairline — one solid shape reads as a logo where a second would read as
+ * ornament.
  */
+function Mark({ size = 16 }: { size?: number }): React.JSX.Element {
+  return (
+    <span
+      aria-hidden="true"
+      className="block shrink-0 bg-[#2B39C4]"
+      style={{ width: size, height: size }}
+    />
+  );
+}
 
-const PRODUCT_LINKS = [
-  { label: 'Spend control', href: '/#control' },
-  { label: 'The record', href: '/#record' },
-  { label: 'How it works', href: '/#how' },
-  { label: 'Engineering', href: '/#engineering' },
-];
-
+/**
+ * The public header.
+ *
+ * Sticky, 64px, translucent over a blur — so the ruled sections below scroll
+ * under it and stay legible rather than colliding with it. `Book a demo` is
+ * near-black rather than cobalt: the cobalt button belongs to the hero, and two
+ * saturated buttons in one viewport means neither is the primary action.
+ */
 export function MarketingNav(): React.JSX.Element {
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b1120]/85 backdrop-blur">
-      <nav
-        aria-label="Primary"
-        className="mx-auto flex h-16 max-w-[1200px] items-center gap-8 px-6"
-      >
-        <Link href="/" className="flex shrink-0 items-center gap-2">
-          {/* Cobalt, not white: the mark is a filled square with white strokes
-              on top, so a white fill renders it as a blank square. */}
-          <span className="text-cobalt-500">
-            <Logo />
-          </span>
-          <span className="text-[15px] font-semibold tracking-tight">Financy</span>
+    <header
+      className="sticky top-0 z-[60] bg-[rgba(246,245,242,0.92)] backdrop-blur-[10px]"
+      style={{ borderBottom: `1px solid ${LINE}` }}
+    >
+      <Container className="flex h-16 items-center gap-6 lg:gap-11">
+        <Link
+          href="/"
+          className="flex items-center gap-[9px] text-[16px] font-semibold tracking-[-0.02em] text-[#14161A]"
+        >
+          <Mark />
+          Financy
         </Link>
 
-        <ul className="hidden flex-1 items-center gap-7 md:flex">
-          {PRODUCT_LINKS.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                className="text-[13.5px] text-white/65 transition-colors hover:text-white"
-              >
-                {link.label}
-              </Link>
-            </li>
+        <nav aria-label="Primary" className="hidden items-center gap-7 md:flex">
+          {NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="text-[14px] font-medium text-[#565A63] transition-colors hover:text-[#14161A]"
+            >
+              {item.label}
+            </Link>
           ))}
-        </ul>
+        </nav>
 
-        <div className="ml-auto flex items-center gap-2 md:ml-0">
+        <div className="ml-auto flex items-center gap-4 sm:gap-5">
           <Link
             href="/login"
-            className="px-3 py-2 text-[13.5px] text-white/70 transition-colors hover:text-white"
+            className="hidden text-[14px] font-medium text-[#565A63] transition-colors hover:text-[#14161A] sm:block"
           >
-            Sign in
+            Log in
           </Link>
           <Link
-            href="/register"
-            className="bg-white px-4 py-2.5 text-[13.5px] font-medium text-[#0b1120] transition-colors hover:bg-white/90"
+            href="/contact"
+            className="rounded-md bg-[#14161A] px-4 py-[9px] text-[14px] font-semibold text-[#F6F5F2] transition-colors hover:bg-[#2B39C4] hover:text-white"
           >
-            Get started
+            Book a demo
           </Link>
         </div>
-      </nav>
+      </Container>
     </header>
   );
 }
 
-const FOOTER_COLUMNS: Array<{ heading: string; links: Array<{ label: string; href: string }> }> = [
-  {
-    heading: 'Product',
-    links: [
-      { label: 'Spend control', href: '/#control' },
-      { label: 'The record', href: '/#record' },
-      { label: 'How it works', href: '/#how' },
-    ],
-  },
-  {
-    heading: 'Engineering',
-    links: [
-      { label: 'Architecture', href: '/#engineering' },
-      { label: 'Security model', href: '/#engineering' },
-      { label: 'Roadmap', href: '/#roadmap' },
-    ],
-  },
-  {
-    heading: 'Account',
-    links: [
-      { label: 'Sign in', href: '/login' },
-      { label: 'Create an organisation', href: '/register' },
-    ],
-  },
-];
-
 export function MarketingFooter(): React.JSX.Element {
   return (
-    <footer className="border-t border-white/10">
-      <div className="mx-auto max-w-[1200px] px-6 py-14">
-        <div className="grid gap-10 md:grid-cols-[2fr_1fr_1fr_1fr]">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-cobalt-500">
-                <Logo />
-              </span>
-              <span className="text-[15px] font-semibold tracking-tight">Financy</span>
-            </div>
-            <p className="mt-3 max-w-xs text-[13.5px] leading-relaxed text-white/55">
-              The control and orchestration layer for company spending.
-            </p>
+    <footer className="bg-[#F6F5F2]" style={{ borderTop: `1px solid ${LINE}` }}>
+      <Container className="grid gap-10 pt-14 pb-8 sm:grid-cols-2 lg:grid-cols-[1.5fr_repeat(4,1fr)]">
+        <div>
+          <div className="mb-3 flex items-center gap-[9px] text-[16px] font-semibold tracking-[-0.02em]">
+            <Mark />
+            Financy
           </div>
+          <p className="m-0 max-w-[250px] text-[13.5px] leading-[1.55] text-[#7A7E88]">
+            Cards, expenses and approvals on one ledger.
+          </p>
+        </div>
 
-          {FOOTER_COLUMNS.map((column) => (
-            <div key={column.heading}>
-              <p className="text-[11px] font-semibold tracking-wider text-white/40 uppercase">
-                {column.heading}
-              </p>
-              <ul className="mt-4 space-y-2.5">
-                {column.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-[13.5px] text-white/65 transition-colors hover:text-white"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+        {FOOTER_COLUMNS.map((column) => (
+          <div key={column.head}>
+            <div className={`${EYEBROW} mb-4`}>{column.head}</div>
+            <div className="flex flex-col gap-[9px] text-[14px] text-[#4B4F58]">
+              {column.items.map((item) => (
+                <Link
+                  key={`${column.head}-${item.label}`}
+                  href={item.href}
+                  className="transition-colors hover:text-[#2B39C4]"
+                >
+                  {item.label}
+                </Link>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
+      </Container>
 
-        {/*
-          The disclaimer is not boilerplate and is not buried. A spend product
-          that let a reader assume it was a bank, or that it held a compliance
-          certification, would be trading on an impression it has not earned.
-        */}
-        <div className="mt-14 border-t border-white/10 pt-8">
-          <p className="max-w-3xl text-[12.5px] leading-relaxed text-white/40">
-            Financy is not a bank, a card network, or a general ledger. It governs, records, and
-            explains spend, and integrates with the institutions and accounting systems that move
-            and book money. It holds no compliance certification — not SOC&nbsp;2, not PCI&nbsp;DSS,
-            not ISO&nbsp;27001 — and is not a regulated financial institution.
-          </p>
-          <p className="mt-5 text-[12.5px] text-white/40">
-            © {new Date().getFullYear()} Financy. Pre-release.
-          </p>
+      <Container className="pb-9">
+        <div
+          className="flex flex-wrap justify-between gap-5 pt-[22px] text-[13px] text-[#7A7E88]"
+          style={{ borderTop: `1px solid ${LINE}` }}
+        >
+          <span>© {new Date().getFullYear()} Financy</span>
+          <span className="flex gap-6">
+            <Link href="/privacy" className="transition-colors hover:text-[#2B39C4]">
+              Privacy
+            </Link>
+            <Link href="/terms" className="transition-colors hover:text-[#2B39C4]">
+              Terms
+            </Link>
+            <Link href="/security" className="transition-colors hover:text-[#2B39C4]">
+              Security
+            </Link>
+            <Link href="/status" className="transition-colors hover:text-[#2B39C4]">
+              Status
+            </Link>
+          </span>
         </div>
-      </div>
+      </Container>
     </footer>
   );
 }

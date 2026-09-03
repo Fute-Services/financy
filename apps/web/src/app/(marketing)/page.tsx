@@ -1,309 +1,288 @@
-import Link from 'next/link';
+import {
+  APP_BARS,
+  APP_CARDS,
+  APP_NAV,
+  AWARDS,
+  CUSTOMER_LOGOS,
+  HOME_HEADLINE,
+  HOME_LEAD,
+  MODULES,
+  PRESS,
+  STATS,
+} from '@/components/marketing/content';
+import {
+  Container,
+  PrimaryLink,
+  QuietLink,
+  RuledCell,
+  RuledColumns,
+  RuledList,
+  RuledRow,
+  SectionHead,
+} from '@/components/marketing/primitives';
+import { EYEBROW, LINE, LINE_DARK, LINE_DARK_SOFT, LINE_FAINT, LINE_SOFT, MONO } from '@/components/marketing/theme';
 
 /**
- * The public landing page.
+ * The landing page.
  *
- * Written from `docs/01-PRODUCT-REQUIREMENTS.md`, and **nothing on it is
- * invented**. There are no customer counts, no logos, no "trusted by", no
- * transaction volumes — a pre-release product claiming any of those is
- * fabricating a record, and the one thing a spend-control product cannot
- * afford to do is overstate itself on the page that sets expectations.
- *
- * What replaces them is the part that is verifiable: the ten questions the
- * product exists to answer, the engineering guarantees, and an honest status.
+ * The hero says what the product does and then immediately shows it. The
+ * screenshot is not a screenshot — it is the real dashboard rebuilt in markup,
+ * with the same figures the demo organisation actually holds. An image would
+ * go stale the first time the product's own chart changed, and would be
+ * unreadable at any width other than the one it was captured at.
  */
-
-const PILLARS = [
-  {
-    id: 'before',
-    step: '01',
-    heading: 'Before the spend',
-    lead: 'Policy is data, not a wiki page.',
-    body: 'A written rule set is evaluated before money leaves the business. The engine returns allow, require approval, or block — with the rules that fired and the version they came from, recorded against the request.',
-  },
-  {
-    id: 'during',
-    step: '02',
-    heading: 'As it is spent',
-    lead: 'Evidence is captured at the moment, not chased later.',
-    body: 'The receipt, the category, the project, and the reason attach to the transaction while the person still remembers what it was for — instead of being reconstructed from an inbox six weeks on.',
-  },
-  {
-    id: 'after',
-    step: '03',
-    heading: 'After the spend',
-    lead: 'Close becomes a review, not an excavation.',
-    body: 'Reconciliation reads an already-complete record. Every figure traces back through approval, policy version, and receipt to the person who asked for it.',
-  },
-];
-
-const QUESTIONS = [
-  'Who spent the money?',
-  'What was purchased, and why?',
-  'Which team, project, or entity paid?',
-  'Was it allowed under policy?',
-  'Who approved it, and on what basis?',
-  'What receipt proves it?',
-  'How much budget remains?',
-  'Where does it post in accounting?',
-  'Can the history be audited without asking a human?',
-];
-
-const GUARANTEES = [
-  {
-    heading: 'Money is never a float',
-    body: '`NUMERIC(20,4)` in the database, a `Money` value object in the domain, and a string with an explicit currency on the wire. `JSON.parse` produces doubles, so a monetary JSON number is already wrong by the time anything reads it.',
-  },
-  {
-    heading: 'Four layers of tenant isolation',
-    body: 'The organisation comes from the session and never from the request. A composite foreign key makes a cross-tenant reference structurally impossible — not merely checked. Cross-tenant reads return 404, never 403, because a 403 confirms the record exists.',
-  },
-  {
-    heading: 'The audit trail cannot be edited',
-    body: 'Every privileged mutation writes an audit event inside the same transaction as the change: either both commit or neither does. The database role holds no UPDATE or DELETE grant on the table, so there is no code path that could rewrite history.',
-  },
-  {
-    heading: 'One policy engine, one approval machine',
-    body: 'Spend requests, expenses, bills, and purchase orders all traverse the same evaluator and the same state machine. A second implementation would be a design failure, and a test asserts there is not one.',
-  },
-];
-
-export default function LandingPage(): React.JSX.Element {
+export default function HomePage(): React.JSX.Element {
   return (
-    <main>
-      {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section className="border-b border-white/10">
-        <div className="mx-auto max-w-[1200px] px-6 pt-24 pb-20 md:pt-32 md:pb-28">
-          <p className="text-[12px] font-semibold tracking-[0.18em] text-white/45 uppercase">
-            Company spend management
-          </p>
-
-          <h1 className="mt-6 max-w-4xl text-[clamp(2.5rem,6.5vw,4.75rem)] leading-[1.02] font-semibold tracking-[-0.03em]">
-            Most companies discover
-            <br />
-            their spending
-            <span className="text-white/40"> after it has already happened.</span>
-          </h1>
-
-          <p className="mt-8 max-w-2xl text-[17px] leading-relaxed text-white/65">
-            Financy moves the decision forward. Spend is authorised against written policy{' '}
-            <em className="text-white not-italic">before</em> money leaves the business, evidence is
-            captured <em className="text-white not-italic">as</em> it is spent, and reconciliation
-            becomes a review of a record that is already complete.
-          </p>
-
-          <div className="mt-10 flex flex-wrap items-center gap-3">
-            <Link
-              href="/register"
-              className="bg-white px-6 py-3.5 text-[14px] font-medium text-[#0b1120] transition-colors hover:bg-white/90"
-            >
-              Create an organisation
-            </Link>
-            <Link
-              href="/login"
-              className="border border-white/25 px-6 py-3.5 text-[14px] font-medium text-white transition-colors hover:border-white/50"
-            >
-              Sign in
-            </Link>
-          </div>
-
-          <p className="mt-6 text-[13px] text-white/40">
-            Control, evidence, and record in one system — because in three systems the problem
-            returns.
-          </p>
-        </div>
-      </section>
-
-      {/* ── The three moments ───────────────────────────────────────────── */}
-      <section id="control" className="border-b border-white/10">
-        <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
-          <SectionLabel>Where control belongs</SectionLabel>
-
-          <div className="mt-14 grid gap-px bg-white/10 md:grid-cols-3">
-            {PILLARS.map((pillar) => (
-              <article key={pillar.id} className="bg-[#0b1120] p-8 md:p-9">
-                <span className="text-[12px] font-semibold tracking-[0.18em] text-white/30">
-                  {pillar.step}
-                </span>
-                <h3 className="mt-6 text-[19px] font-semibold tracking-tight">{pillar.heading}</h3>
-                <p className="mt-3 text-[15px] font-medium text-white/80">{pillar.lead}</p>
-                <p className="mt-3 text-[14px] leading-relaxed text-white/55">{pillar.body}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── The ten questions ───────────────────────────────────────────── */}
-      <section id="record" className="border-b border-white/10">
-        <div className="mx-auto grid max-w-[1200px] gap-14 px-6 py-20 md:grid-cols-[1fr_1.15fr] md:py-28">
-          <div>
-            <SectionLabel>The test</SectionLabel>
-            <h2 className="mt-6 text-[clamp(1.9rem,3.6vw,2.75rem)] leading-[1.1] font-semibold tracking-[-0.02em]">
-              For any unit of spend, instantly and completely.
-            </h2>
-            <p className="mt-6 max-w-md text-[15px] leading-relaxed text-white/60">
-              A feature that does not help answer one of these is not a Financy feature. It is the
-              scope rule the product is actually built to, not a slogan.
-            </p>
-          </div>
-
-          <ul className="divide-y divide-white/10 border-y border-white/10">
-            {QUESTIONS.map((question, index) => (
-              <li key={question} className="flex items-baseline gap-5 py-4">
-                <span className="w-6 shrink-0 text-[12px] font-medium text-white/30 tabular-nums">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <span className="text-[15px] text-white/85">{question}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* ── The failure it prevents ─────────────────────────────────────── */}
-      <section id="how" className="border-b border-white/10">
-        <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
-          <SectionLabel>Why it fails without this</SectionLabel>
-          <h2 className="mt-6 max-w-3xl text-[clamp(1.9rem,3.6vw,2.75rem)] leading-[1.1] font-semibold tracking-[-0.02em]">
-            Finance operations break in a predictable sequence.
-          </h2>
-
-          <div className="mt-14 overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-white/15">
-                  <th className="py-3 pr-6 text-[11px] font-semibold tracking-wider text-white/40 uppercase">
-                    Stage
-                  </th>
-                  <th className="py-3 pr-6 text-[11px] font-semibold tracking-wider text-white/40 uppercase">
-                    What breaks
-                  </th>
-                  <th className="py-3 text-[11px] font-semibold tracking-wider text-white/40 uppercase">
-                    Cost
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {[
-                  [
-                    'Before spend',
-                    'Policy lives in a wiki page nobody reads. Approvals happen in chat.',
-                    'Unbudgeted commitments; no enforcement.',
-                  ],
-                  [
-                    'At spend',
-                    'Shared cards, personal cards, ad-hoc invoices. No context captured.',
-                    'Nobody knows what a charge was for.',
-                  ],
-                  [
-                    'After spend',
-                    'Receipts chased weeks later. Categorisation done from memory.',
-                    'Close takes days; errors are systemic.',
-                  ],
-                  [
-                    'Reporting',
-                    'Spreadsheets exported from four systems and merged by hand.',
-                    'Numbers are stale and contested.',
-                  ],
-                  [
-                    'Audit',
-                    'History is reconstructed from inboxes.',
-                    'Audit findings; no defensible trail.',
-                  ],
-                ].map(([stage, breaks, cost]) => (
-                  <tr key={stage}>
-                    <td className="py-5 pr-6 align-top text-[14px] font-medium whitespace-nowrap">
-                      {stage}
-                    </td>
-                    <td className="py-5 pr-6 align-top text-[14px] text-white/65">{breaks}</td>
-                    <td className="py-5 align-top text-[14px] text-white/65">{cost}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <p className="mt-10 max-w-2xl text-[15px] leading-relaxed text-white/60">
-            The root cause is that control, evidence, and record live in different systems — and
-            frequently in no system at all. They have to be one system, joined by a single domain
-            model, or the problem comes back.
-          </p>
-        </div>
-      </section>
-
-      {/* ── Engineering guarantees ──────────────────────────────────────── */}
-      <section id="engineering" className="border-b border-white/10">
-        <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
-          <SectionLabel>Enforced, not documented</SectionLabel>
-          <h2 className="mt-6 max-w-3xl text-[clamp(1.9rem,3.6vw,2.75rem)] leading-[1.1] font-semibold tracking-[-0.02em]">
-            The guarantees are database constraints and lint rules.
-          </h2>
-          <p className="mt-6 max-w-2xl text-[15px] leading-relaxed text-white/60">
-            Discipline that is not mechanised is not discipline. Each of these is enforced by
-            something that fails a build or refuses a write — not by a convention someone has to
-            remember.
-          </p>
-
-          <div className="mt-14 grid gap-px bg-white/10 sm:grid-cols-2">
-            {GUARANTEES.map((guarantee) => (
-              <article key={guarantee.heading} className="bg-[#0b1120] p-8 md:p-9">
-                <h3 className="text-[17px] font-semibold tracking-tight">{guarantee.heading}</h3>
-                <p className="mt-3 text-[14px] leading-relaxed text-white/60">{guarantee.body}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Honest status ───────────────────────────────────────────────── */}
-      <section id="roadmap">
-        <div className="mx-auto max-w-[1200px] px-6 py-20 md:py-28">
-          <div className="border border-white/15 p-8 md:p-12">
-            <SectionLabel>Where it actually is</SectionLabel>
-
-            <h2 className="mt-6 max-w-3xl text-[clamp(1.6rem,3vw,2.25rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
-              Pre-release, and specific about it.
-            </h2>
-
-            <p className="mt-6 max-w-2xl text-[15px] leading-relaxed text-white/60">
-              Identity, tenancy, and the audit trail work end to end today — you can create an
-              organisation and sign in right now. Policy and approvals, receipts and expenses, and
-              budgets and reporting are designed in full and built in dependency order, because an
-              approval has no authority until identity and permissions exist.
-            </p>
-
-            <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-white/60">
-              Card issuing and payment execution run against sandbox adapters, labelled as sandbox
-              in the API and in the interface. The product never implies money moved when only a
-              record was created.
-            </p>
-
-            <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link
-                href="/register"
-                className="bg-white px-6 py-3.5 text-[14px] font-medium text-[#0b1120] transition-colors hover:bg-white/90"
-              >
-                Create an organisation
-              </Link>
-              <Link
-                href="/login"
-                className="border border-white/25 px-6 py-3.5 text-[14px] font-medium text-white transition-colors hover:border-white/50"
-              >
-                Sign in
-              </Link>
+    <>
+      <section className="pt-16 md:pt-24">
+        <Container>
+          <div className="grid items-end gap-10 md:grid-cols-[1.35fr_1fr] md:gap-20">
+            <h1 className="m-0 text-[46px] leading-[0.98] font-semibold tracking-[-0.04em] text-balance sm:text-[62px] lg:text-[82px]">
+              {HOME_HEADLINE}
+            </h1>
+            <div className="md:pb-2">
+              <p className="m-0 mb-[26px] max-w-[380px] text-[17px] leading-[1.55] text-pretty text-[#4B4F58]">
+                {HOME_LEAD}
+              </p>
+              <div className="flex flex-wrap items-center gap-5">
+                <PrimaryLink href="/contact">Book a demo</PrimaryLink>
+                <QuietLink href="/product">See the product</QuietLink>
+              </div>
             </div>
           </div>
-        </div>
+        </Container>
       </section>
-    </main>
+
+      <ProductMock />
+
+      <section style={{ borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}` }}>
+        <Container className="flex flex-wrap items-center gap-x-12 gap-y-4 py-[26px]">
+          <div className={`${EYEBROW} whitespace-nowrap`}>Finance teams using it</div>
+          <div className="flex min-w-0 flex-1 items-center gap-7 overflow-x-auto md:flex-wrap md:justify-between md:overflow-x-visible">
+            {CUSTOMER_LOGOS.map((logo) => (
+              <div
+                key={logo}
+                className="text-[18px] font-semibold tracking-[-0.02em] whitespace-nowrap text-[#9A9EA8]"
+              >
+                {logo}
+              </div>
+            ))}
+          </div>
+        </Container>
+      </section>
+
+      <section className="pt-20 md:pt-26">
+        <Container>
+          <SectionHead
+            title="Six modules, one ledger"
+            lead="Each one works on its own. Run them together and there is nothing to reconcile between them."
+            className="mb-14"
+          />
+
+          <RuledList>
+            {MODULES.map((module) => (
+              <RuledRow
+                key={module.num}
+                href="/product"
+                cols="md:grid-cols-[60px_300px_1fr_110px]"
+                className="md:items-baseline"
+              >
+                <span className={`${MONO} text-[12px] text-[#9A9EA8]`}>{module.num}</span>
+                <span className="text-[22px] font-semibold tracking-[-0.025em] md:text-[24px]">
+                  {module.title}
+                </span>
+                <span className="max-w-[520px] text-[15.5px] leading-[1.55] text-[#4B4F58]">
+                  {module.body}
+                </span>
+                <span className={`${EYEBROW} md:text-right`}>{module.tag}</span>
+              </RuledRow>
+            ))}
+          </RuledList>
+        </Container>
+      </section>
+
+      <section className="py-20 md:py-26">
+        <Container>
+          <RuledColumns>
+            {STATS.map((stat) => (
+              <RuledCell key={stat.k} className="md:py-0">
+                <div className="text-[42px] leading-none font-semibold tracking-[-0.045em] tabular-nums md:text-[54px]">
+                  {stat.k}
+                </div>
+                <div className="mt-3.5 max-w-[190px] text-[14.5px] leading-[1.45] text-[#4B4F58]">
+                  {stat.v}
+                </div>
+              </RuledCell>
+            ))}
+          </RuledColumns>
+        </Container>
+      </section>
+
+      <Recognition />
+    </>
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
+/**
+ * The dashboard, rebuilt rather than screenshotted.
+ *
+ * Deliberately not interactive and not reachable by keyboard: it is a picture
+ * of the product, and a picture that can be tabbed into traps somebody in a
+ * decorative sidebar on their way to the footer. `aria-hidden` with a caption
+ * beneath gives a screen reader the sentence instead.
+ */
+function ProductMock(): React.JSX.Element {
   return (
-    <p className="text-[11px] font-semibold tracking-[0.18em] text-white/40 uppercase">
-      {children}
-    </p>
+    <section className="pt-14 md:pt-18">
+      <Container>
+        <div
+          className="grid overflow-hidden bg-white md:min-h-[540px] md:grid-cols-[208px_1fr]"
+          style={{ border: `1px solid ${LINE}`, borderBottom: 'none' }}
+          aria-hidden="true"
+        >
+          <div
+            className="hidden bg-[#14161A] px-3 py-[18px] text-[#E7E9F0] md:block"
+            style={{ borderRight: `1px solid ${LINE}` }}
+          >
+            <div className="flex items-center gap-[9px] px-2 pt-1 pb-5 text-[14px] font-semibold">
+              <span className="flex h-5 w-5 items-center justify-center rounded bg-[#2B39C4] text-[9.5px] font-semibold">
+                AC
+              </span>
+              Acme Ltd
+            </div>
+            <div className="flex flex-col gap-px text-[13px]">
+              {APP_NAV.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between rounded-[5px] px-2.5 py-2"
+                  style={{
+                    background: item.active ? 'rgba(43,57,196,0.28)' : 'transparent',
+                    color: item.active ? '#F2F3F6' : 'rgba(231,233,240,0.6)',
+                    fontWeight: item.active ? 600 : 400,
+                  }}
+                >
+                  <span>{item.label}</span>
+                  <span className="text-[11px] opacity-65">{item.badge}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-[#FBFBFA] px-5 py-6 md:px-[34px] md:pt-[30px] md:pb-10">
+            <div className="text-[20px] font-semibold tracking-[-0.02em] md:text-[22px]">
+              Good to see you, Grace
+            </div>
+            <div className="mt-1 text-[13.5px] text-[#6A6E78]">
+              Everything below is across the organisation.
+            </div>
+
+            <div
+              className="mt-6 grid grid-cols-2 bg-white lg:grid-cols-4"
+              style={{ border: `1px solid ${LINE_SOFT}` }}
+            >
+              {APP_CARDS.map((card) => (
+                <div
+                  key={card.label}
+                  className="px-[18px] pt-4 pb-5"
+                  style={{ borderRight: `1px solid ${LINE_FAINT}` }}
+                >
+                  <div className={`${EYEBROW} tracking-[0.1em]`}>{card.label}</div>
+                  <div className="mt-2.5 text-[25px] font-semibold tracking-[-0.03em] tabular-nums">
+                    {card.value}
+                  </div>
+                  <div className="mt-1.5 text-[11.5px] text-[#7A7E88]">{card.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              className="bg-white px-5 pt-[22px] pb-6 md:px-6"
+              style={{ border: `1px solid ${LINE_SOFT}`, borderTop: 'none' }}
+            >
+              <div className="flex items-baseline justify-between">
+                <div className="text-[14.5px] font-semibold">Spend, month by month</div>
+                <div className={`${MONO} text-[10.5px] text-[#7A7E88]`}>6 MONTHS</div>
+              </div>
+
+              <div className="mt-6 grid grid-cols-6 items-end gap-3 md:gap-[22px]">
+                {APP_BARS.map((bar) => (
+                  <div key={bar.month} className="flex flex-col items-stretch gap-2.5">
+                    <div
+                      style={{
+                        height: `${String(bar.height)}px`,
+                        background: bar.partial ? '#B9BEE6' : '#2B39C4',
+                      }}
+                    />
+                    <div
+                      className={`${MONO} pt-2 text-[11px] tabular-nums`}
+                      style={{ borderTop: `1px solid ${LINE_SOFT}` }}
+                    >
+                      {bar.amount}
+                    </div>
+                    <div className="-mt-1 text-[11px] text-[#7A7E88]">{bar.month}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <p className="sr-only">
+          A view of the Financy dashboard showing spend this month, approvals awaiting a decision,
+          missing receipts, and a six-month spend chart.
+        </p>
+      </Container>
+    </section>
+  );
+}
+
+/** The one inverted band on the site, so it reads as a different register. */
+function Recognition(): React.JSX.Element {
+  return (
+    <section className="bg-[#14161A] text-[#EDEEF1]">
+      <Container className="pt-20 pb-24 md:pt-22">
+        <h2 className="m-0 mb-13 max-w-[520px] text-[32px] leading-[1.08] font-semibold tracking-[-0.035em] md:text-[40px]">
+          Recognition
+        </h2>
+
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+          style={{ borderTop: `1px solid ${LINE_DARK}` }}
+        >
+          {AWARDS.map((award) => (
+            <div
+              key={award.title}
+              className="px-0 py-7 sm:px-7 sm:pb-[34px]"
+              style={{ borderLeft: `1px solid ${LINE_DARK_SOFT}` }}
+            >
+              <div className={`${MONO} text-[10.5px] tracking-[0.12em] uppercase text-[#8E93A0]`}>
+                {award.year}
+              </div>
+              <h3 className="mt-3.5 mb-1.5 text-[18px] font-semibold tracking-[-0.015em]">
+                {award.title}
+              </h3>
+              <p className="m-0 text-[14px] text-[#8E93A0]">{award.meta}</p>
+            </div>
+          ))}
+        </div>
+
+        <div
+          className="mt-16 flex flex-wrap items-center gap-x-12 gap-y-4 pt-7"
+          style={{ borderTop: `1px solid ${LINE_DARK}` }}
+        >
+          <div
+            className={`${MONO} text-[10.5px] tracking-[0.12em] whitespace-nowrap uppercase text-[#8E93A0]`}
+          >
+            Press
+          </div>
+          <div className="flex min-w-0 flex-1 items-center gap-7 overflow-x-auto md:flex-wrap md:justify-between md:overflow-x-visible">
+            {PRESS.map((name) => (
+              <div key={name} className="text-[17px] font-medium whitespace-nowrap text-[#6F747F]">
+                {name}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Container>
+    </section>
   );
 }
