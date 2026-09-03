@@ -1,7 +1,7 @@
 # 04 — Information Architecture
 
 **Status:** Baseline v1.0 — 2026-08-29
-**Governs:** `apps/web/src/app` route structure and `packages/ui` component contracts.
+**Governs:** `frontend/src/app` route structure and `packages/ui` component contracts.
 
 ---
 

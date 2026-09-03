@@ -240,7 +240,7 @@ Discipline that is not mechanised is not discipline. Enforced in CI:
 | Domain layer imports no infrastructure                                | `eslint-plugin-boundaries`                    |
 | `PrismaClient` imported only in `packages/db` and `platform/database` | `no-restricted-imports`                       |
 | BullMQ imported only in the queue adapter                             | `no-restricted-imports`                       |
-| No money arithmetic in `apps/web`                                     | Custom lint rule over `Decimal`/`Money` usage |
+| No money arithmetic in `frontend`                                     | Custom lint rule over `Decimal`/`Money` usage |
 | Every controller route has a permission decorator                     | Custom test enumerating the Nest route table  |
 | No `UPDATE`/`DELETE` against `audit_events`                           | Grant assertion + source scan                 |
 
@@ -310,7 +310,7 @@ mode. Layer 3 is the only one that still holds if the application is wrong.
 ## 5. Frontend architecture
 
 ```text
-apps/web/src/
+frontend/src/
 ├── app/
 │   ├── (auth)/…                    centred layout, no shell
 │   └── (app)/

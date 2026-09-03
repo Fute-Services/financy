@@ -180,8 +180,8 @@ graph LR
   GEN --> LINT[lint · typecheck]
   LINT --> TEST[unit · integration · api · security]
   TEST --> BUILD[turbo build]
-  BUILD --> A1[apps/api → dist + node_modules]
-  BUILD --> A2[apps/web → .next standalone]
+  BUILD --> A1[backend → dist + node_modules]
+  BUILD --> A2[frontend → .next standalone]
   A1 --> IMG1[Container image: financy-api]
   A2 --> IMG2[Container image: financy-web]
   IMG1 --> REG[(Registry, tagged with the commit SHA)]
@@ -274,7 +274,7 @@ requirement in `14 §3`.
 
 Hosting is intentionally not prescribed — the architecture is standard containers plus managed
 PostgreSQL, Redis, and object storage, available from every major provider. The Vercel CLI present
-on the development host makes Vercel a natural fit for `apps/web`; the API and workers need a
+on the development host makes Vercel a natural fit for `frontend`; the API and workers need a
 container platform, since they are long-running and stateful in the queue sense.
 
 ### 7.2 Network and hardening

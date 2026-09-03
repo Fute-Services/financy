@@ -6,8 +6,8 @@ graph TB
   end
 
   subgraph Application
-    WEB["apps/web — Next.js 15<br/>App Router · RSC + client islands<br/>adds NO authority"]
-    API["apps/api — NestJS 11<br/>modular monolith<br/>ALL authorisation decisions"]
+    WEB["frontend — Next.js 15<br/>App Router · RSC + client islands<br/>adds NO authority"]
+    API["backend — NestJS 11<br/>modular monolith<br/>ALL authorisation decisions"]
     WRK["Workers — same artefact,<br/>worker entrypoint"]
   end
 

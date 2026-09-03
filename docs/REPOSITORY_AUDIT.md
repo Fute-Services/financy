@@ -164,8 +164,8 @@ checks are unknown from here.
 | Monorepo tooling   | pnpm workspaces + Turborepo                    | No                     | Phase 0                                               |
 | TypeScript config  | Shared strict base + per-package extends       | No                     | `packages/config`                                     |
 | Lint / format      | ESLint 9 flat config, Prettier                 | No                     | `packages/config`                                     |
-| Backend framework  | NestJS 11                                      | No                     | `apps/api`                                            |
-| Frontend framework | Next.js 15 App Router                          | No                     | `apps/web`                                            |
+| Backend framework  | NestJS 11                                      | No                     | `backend`                                            |
+| Frontend framework | Next.js 15 App Router                          | No                     | `frontend`                                            |
 | ORM + migrations   | Prisma 6                                       | No                     | `packages/db`                                         |
 | Database           | PostgreSQL 16+                                 | **Yes — 18.1 running** | Create app role + `financy_dev` / `financy_test`      |
 | Cache / queue      | Redis + BullMQ                                 | No                     | Port + inline adapter locally; Redis in staging/prod  |
@@ -183,18 +183,17 @@ checks are unknown from here.
 
 ```text
 financy/
-├── apps/
-│   ├── api/                  # NestJS 11 modular monolith (HTTP + worker entrypoints)
-│   │   └── src/
-│   │       ├── modules/      # one folder per business domain
-│   │       ├── platform/     # cross-cutting: config, db, auth guards, request context,
-│   │       │                 #   audit interceptor, error filter, telemetry, queue, storage
-│   │       └── main.ts
-│   └── web/                  # Next.js 15 App Router
-│       └── src/
-│           ├── app/          # route groups: (auth), (app)/<module>
-│           ├── features/     # domain-facing composed UI + data hooks
-│           └── lib/          # api client, session, formatting
+├── backend/                  # NestJS 11 modular monolith (HTTP + worker entrypoints)
+│   └── src/
+│       ├── modules/          # one folder per business domain
+│       ├── platform/         # cross-cutting: config, db, auth guards, request context,
+│       │                     #   audit interceptor, error filter, telemetry, queue, storage
+│       └── main.ts
+├── frontend/                 # Next.js 15 App Router
+│   └── src/
+│       ├── app/              # route groups: (marketing), (auth), (app)/<module>
+│       ├── features/         # domain-facing composed UI + data hooks
+│       └── lib/              # api client, session, formatting
 ├── packages/
 │   ├── core/                 # Money, Result, domain errors, ID + enum primitives (no I/O)
 │   ├── contracts/            # Zod schemas + inferred types — the shared API contract
@@ -210,8 +209,9 @@ financy/
 
 **Why this shape**
 
-- `apps/` vs `packages/` is the least surprising monorepo convention and maps cleanly to
-  Turborepo pipelines.
+- `frontend/` and `backend/` sit at the root under the names people actually call them, so a
+  path in a stack trace or a CI log says which half of the system it came from. They are still
+  ordinary workspace packages, so Turborepo pipelines are unaffected by where they sit.
 - `packages/contracts` is the mechanism that stops frontend and backend from drifting: one Zod
   schema, validated on the server, inferred as types on the client. It is also how "never trust
   frontend-calculated totals" is enforced _structurally_ — request DTOs simply do not carry

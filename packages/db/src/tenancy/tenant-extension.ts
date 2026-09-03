@@ -6,7 +6,7 @@ import { applyTenantScope } from './tenant-scope.js';
  * How the extension learns which organisation the current request belongs to.
  *
  * A function rather than a value, because the client is a long-lived singleton
- * and the organisation changes per request. In `apps/api` this reads the
+ * and the organisation changes per request. In `backend` this reads the
  * `AsyncLocalStorage` request context; in a test it can be a closure over a
  * variable. `undefined` means "no context", which is a hard failure for a
  * tenant-scoped model — never a permissive default.

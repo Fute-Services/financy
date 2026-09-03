@@ -57,8 +57,8 @@ Durations assume one focused engineer. They are estimates for sequencing, not co
 | P0-05 | `packages/core` — `Money`, `Result`, error taxonomy, ID types, state-machine helper    | ✅     | 100 % coverage from day one                                        |
 | P0-06 | `packages/contracts` skeleton — envelopes, error codes, pagination, filters            | ✅     | Endpoint schemas ship with their endpoints                         |
 | P0-07 | `packages/db` — Prisma init, connection, tenant client extension skeleton              | ✅     | Scoping rules are a pure function; models land in 1.1              |
-| P0-08 | `apps/api` — NestJS bootstrap, config validation, health endpoints, error filter, Pino | ✅     |                                                                    |
-| P0-09 | `apps/web` — Next.js bootstrap, Tailwind, token layer, base layout                     | ✅     |                                                                    |
+| P0-08 | `backend` — NestJS bootstrap, config validation, health endpoints, error filter, Pino | ✅     |                                                                    |
+| P0-09 | `frontend` — Next.js bootstrap, Tailwind, token layer, base layout                     | ✅     |                                                                    |
 | P0-10 | `packages/ui` — token layer + first three primitives                                   | ✅     |                                                                    |
 | P0-11 | Test harness — Vitest projects, PostgreSQL test setup, Supertest, Playwright           | ✅     | Integration suites arrive with the schema in 1.1                   |
 | P0-12 | CI workflow — the full PR gate                                                         | ✅     | Under 15 min                                                       |

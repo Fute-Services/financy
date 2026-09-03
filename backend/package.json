@@ -5,9 +5,10 @@
   "description": "Financy API — NestJS modular monolith. One artefact serves HTTP and, from Phase 1, the worker.",
   "main": "./dist/main.js",
   "scripts": {
+    "start": "node ../scripts/free-ports.mjs --free --only api && nest start --watch",
     "dev": "nest start --watch",
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
     "lint": "eslint src test",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

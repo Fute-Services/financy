@@ -6,7 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
  * The authentication journey, in a real browser against the real stack
  * (docs/16 §8).
  *
- * The Supertest suite in `apps/api` already proves the API's behaviour. What
+ * The Supertest suite in `backend` already proves the API's behaviour. What
  * only a browser can prove is the part between them: that the `httpOnly`
  * cookie set by the API survives the Next proxy, that the server-rendered
  * shell sees the session, and that signing out actually ends it rather than

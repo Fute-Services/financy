@@ -109,7 +109,14 @@ export default defineConfig({
       // server has different bundling, different error handling, and no
       // production build step to fail. Locally `dev` is used instead, so the
       // suite picks up an edit without a rebuild.
-      command: isCI ? 'pnpm --filter @financy/api start' : 'pnpm --filter @financy/api dev',
+      //
+      // `start:prod`, not `start`: `start` is now the one-command developer
+      // entry point, which frees the port and then runs a watcher. Both halves
+      // of that are wrong here — Playwright owns the lifecycle of these servers
+      // and `reuseExistingServer` depends on the port being left alone.
+      command: isCI
+        ? 'pnpm --filter @financy/api start:prod'
+        : 'pnpm --filter @financy/api dev',
       url: `${API_BASE_URL}/v1/health/live`,
       reuseExistingServer: !isCI,
       timeout: 120_000,

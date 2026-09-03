@@ -123,9 +123,8 @@ All ports are environment-driven.
 ## Repository layout
 
 ```text
-apps/
-  api/          NestJS modular monolith — HTTP and worker entrypoints, one artefact
-  web/          Next.js 15 App Router
+backend/        NestJS modular monolith — HTTP and worker entrypoints, one artefact
+frontend/       Next.js 15 App Router
 packages/
   core/         Money, Result, errors, ids, state machines — zero I/O, zero framework
   contracts/    Zod schemas + inferred types — the shared API contract
@@ -146,9 +145,31 @@ side fails the build.
 
 ## Commands
 
+Start here:
+
+```bash
+npm start          # frontend + backend, ports freed first
+```
+
+`start` is the one command that should always work. It stops whatever is holding `3100` and
+`4100` — including the watchers behind them, which is what actually causes the `EADDRINUSE`
+you get an hour later — and then runs both applications in watch mode.
+
+Each half starts the same way from its own directory, freeing only its own port so the other
+one keeps running:
+
+```bash
+cd frontend && npm start     # http://127.0.0.1:3100
+cd backend  && npm start     # http://127.0.0.1:4100
+```
+
+`npm start` runs a **watcher**, which is what you want while developing. To run the built
+artefact the way production does, use `npm run start:prod` after `pnpm build`.
+
 | Command                       | Does                                            |
 | ----------------------------- | ----------------------------------------------- |
-| `pnpm dev`                    | Run everything in watch mode                    |
+| `npm start`                   | Free the ports, then run everything in watch mode |
+| `pnpm dev`                    | Run everything in watch mode, without freeing ports |
 | `pnpm build`                  | Build all packages                              |
 | `pnpm check`                  | Lint + typecheck + test — run before pushing    |
 | `pnpm test`                   | Unit, integration, and API tests                |

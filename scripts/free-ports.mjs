@@ -7,8 +7,14 @@
  * Node prints names the port and nothing else, so the next step is always the
  * same bit of platform-specific incantation nobody remembers.
  *
- *   pnpm ports          # what is listening, and what it is
- *   pnpm ports --free   # stop it, and the watchers behind it
+ *   pnpm ports                 # what is listening, and what it is
+ *   pnpm ports --free          # stop it, and the watchers behind it
+ *   pnpm ports --free --only web   # stop only the frontend's, leave the API alone
+ *
+ * `npm start` runs the `--free` form first, which is why it works from a dirty
+ * machine when `pnpm dev` does not. The cost of that is real and deliberate: a
+ * whole-repository `--free` also stops a `pnpm test` running in another
+ * terminal, because a test run is exactly the kind of stray this is hunting.
  *
  * `--free` stops more than the listener, and that is the whole point of the
  * second half of this file. Killing only the process holding the port leaves
@@ -37,6 +43,20 @@ const DEFAULT_PORTS = [
 
 const shouldFree = process.argv.includes('--free');
 const isWindows = process.platform === 'win32';
+
+/**
+ * `--only web` / `--only api`, so a package can free its own port on the way up
+ * without stopping its sibling — `npm start` inside one app must not take down
+ * the other one somebody has running next to it.
+ *
+ * Narrowing also skips the stray sweep at the bottom of this file: a stray
+ * `tsc --watch` cannot be attributed to one app, and stopping the whole
+ * repository's watchers from inside one of them would be a surprise.
+ */
+const onlyLabel = (() => {
+  const at = process.argv.indexOf('--only');
+  return at === -1 ? null : (process.argv[at + 1] ?? null);
+})();
 
 function run(command, args) {
   try {
@@ -142,7 +162,52 @@ function strayProcesses() {
   return parseRows(run('powershell', ['-NoProfile', '-Command', script]));
 }
 
+/**
+ * This process and everything that spawned it.
+ *
+ * The stray sweep grows upwards through `pnpm`, `turbo` and `corepack` — which
+ * is exactly what `npm start` runs under. Without this guard it stops the very
+ * shell that is waiting to launch the dev server, and the `&&` after it never
+ * fires. The failure is intermittent, because it depends on how the package
+ * manager happened to shell out, which is the worst kind to leave inside a
+ * script whose entire job is cleanup.
+ */
+const protectedPids = (() => {
+  const parentOf = new Map();
+
+  if (isWindows) {
+    const rows = run('powershell', [
+      '-NoProfile',
+      '-Command',
+      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId)" }',
+    ]);
+
+    for (const line of rows.split(/\r?\n/)) {
+      const [pid, ppid] = line.trim().split(/\s+/).map(Number);
+      if (Number.isFinite(pid) && Number.isFinite(ppid)) parentOf.set(pid, ppid);
+    }
+  } else {
+    for (const line of run('ps', ['-eo', 'pid=,ppid=']).split(/\r?\n/)) {
+      const [pid, ppid] = line.trim().split(/\s+/).map(Number);
+      if (Number.isFinite(pid) && Number.isFinite(ppid)) parentOf.set(pid, ppid);
+    }
+  }
+
+  const chain = new Set();
+  let current = process.pid;
+
+  // Bounded by the `has` check, because a torn process table can describe a cycle.
+  while (Number.isFinite(current) && current > 0 && !chain.has(current)) {
+    chain.add(current);
+    current = parentOf.get(current) ?? 0;
+  }
+
+  return chain;
+})();
+
 function stop(pid) {
+  if (protectedPids.has(pid)) return;
+
   if (isWindows) {
     run('powershell', [
       '-NoProfile',
@@ -166,7 +231,16 @@ function truncate(command) {
 const stopped = new Set();
 let found = 0;
 
-for (const { port, label } of DEFAULT_PORTS) {
+const ports =
+  onlyLabel === null ? DEFAULT_PORTS : DEFAULT_PORTS.filter(({ label }) => label === onlyLabel);
+
+if (ports.length === 0) {
+  const known = DEFAULT_PORTS.map(({ label }) => label).join(', ');
+  console.error(`Unknown --only value "${onlyLabel}". Expected one of: ${known}.`);
+  process.exit(1);
+}
+
+for (const { port, label } of ports) {
   const listeners = listenersOn(port);
 
   if (listeners.length === 0) {
@@ -188,7 +262,8 @@ for (const { port, label } of DEFAULT_PORTS) {
 }
 
 // The watchers, which hold no port and so never appeared above.
-const strays = strayProcesses().filter(({ pid }) => !stopped.has(pid));
+const strays =
+  onlyLabel === null ? strayProcesses().filter(({ pid }) => !stopped.has(pid)) : [];
 
 if (strays.length > 0) {
   console.log(

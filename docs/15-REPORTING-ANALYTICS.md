@@ -1,7 +1,7 @@
 # 15 — Reporting and Analytics
 
 **Status:** Baseline v1.0 — 2026-08-29
-**Module:** `apps/api/src/modules/reports`
+**Module:** `backend/src/modules/reports`
 
 ---
 
@@ -14,7 +14,7 @@ cell — is produced by a backend query. The frontend receives values and format
 
 This is enforced three ways:
 
-1. A lint rule forbids arithmetic on `Money`/`Decimal` types in `apps/web`.
+1. A lint rule forbids arithmetic on `Money`/`Decimal` types in `frontend`.
 2. Report responses contain no raw rows that would tempt a client to aggregate them.
 3. Every report has a backend test asserting the returned totals against known fixture data.
 
@@ -230,7 +230,7 @@ execution context, and a merchant name is user-controlled input.
 | Rounding       | Sum of group subtotals equals the reported grand total exactly (NFR-FIN-004)              |
 | Performance    | `EXPLAIN` assertions; p95 benchmarks against a seeded dataset                             |
 | Export         | Row count matches the report; escaping and formula-injection defence; audit event written |
-| No-client-math | A static check asserts no money arithmetic exists in `apps/web`                           |
+| No-client-math | A static check asserts no money arithmetic exists in `frontend`                           |
 
 The subtotal-equals-total test is the one that catches rounding bugs. If group subtotals are each
 rounded and then summed, they will not equal a separately-rounded grand total, and a controller

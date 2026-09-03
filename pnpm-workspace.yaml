@@ -1,5 +1,9 @@
+# The two deployables sit at the root under the names they are called by, so a
+# path in a stack trace or a CI log says which half of the system it came from
+# without anyone having to remember that `web` meant the frontend.
 packages:
-  - 'apps/*'
+  - 'frontend'
+  - 'backend'
   - 'packages/*'
   - 'tests'
 

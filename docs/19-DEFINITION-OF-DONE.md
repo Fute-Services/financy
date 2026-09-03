@@ -90,7 +90,7 @@ with a one-line reason — never silently dropped.
 - [ ] Error state — code + correlation ID + retry
 - [ ] Permission state — names the required permission; not a redirect and not a 404
 - [ ] Built from `packages/ui`; no bespoke one-off styling
-- [ ] **No money arithmetic anywhere in `apps/web`**
+- [ ] **No money arithmetic anywhere in `frontend`**
 - [ ] Filters, sort, and pagination reflected in the URL
 - [ ] Destructive and financial confirmations name the exact record, count, and amount
 - [ ] Keyboard operable end to end; focus visible, trapped in dialogs, restored on close

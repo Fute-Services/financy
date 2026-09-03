@@ -1,7 +1,7 @@
 # 11 — Approval and Policy Engine
 
 **Status:** Baseline v1.0 — 2026-08-29
-**Module:** `apps/api/src/modules/policies` and `apps/api/src/modules/approvals`
+**Module:** `backend/src/modules/policies` and `backend/src/modules/approvals`
 **Criticality:** Highest. This subsystem decides whether company money may be spent.
 
 ---

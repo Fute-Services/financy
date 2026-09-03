@@ -234,7 +234,7 @@ A flaky spec is quarantined and fixed within one sprint, never retried into gree
 | Component | Every `packages/ui` component: rendering, variants, states, keyboard interaction, `axe`, both themes |
 | Hook      | Data hooks against a mocked API client: loading, success, error, and cache invalidation              |
 | Form      | Validation, submission, server-error surfacing, and the disabled/loading state                       |
-| Static    | The lint rule asserting no money arithmetic exists anywhere in `apps/web`                            |
+| Static    | The lint rule asserting no money arithmetic exists anywhere in `frontend`                            |
 
 ---
 
@@ -245,9 +245,9 @@ A flaky spec is quarantined and fixed within one sprint, never retried into gree
 | `packages/core`                         | 100 % | 100 %  |
 | `modules/policies`, `modules/approvals` | 95 %  | 95 %   |
 | `modules/*` (other domain)              | 90 %  | 85 %   |
-| `apps/api` overall                      | 85 %  | 80 %   |
+| `backend` overall                      | 85 %  | 80 %   |
 | `packages/ui`                           | 85 %  | 80 %   |
-| `apps/web`                              | 70 %  | 65 %   |
+| `frontend`                              | 70 %  | 65 %   |
 
 Coverage is a floor, not a target. A module at 90 % with no test for its illegal state transitions
 is worse tested than one at 80 % that has them, so review asks _what_ is covered — the numbers only

@@ -72,7 +72,7 @@ export type OffsetPagination = z.infer<typeof offsetPaginationSchema>;
 /**
  * base64url, without `Buffer`.
  *
- * This package is imported by `apps/web` as well as `apps/api` — it is the
+ * This package is imported by `frontend` as well as `backend` — it is the
  * shared contract, so every module in it has to run in both. `Buffer` is a
  * Node global; reaching for it here fails the browser build as soon as
  * anything pulls in this module, even though the cursor itself is only ever

@@ -1,7 +1,7 @@
 # 14 — Async Jobs and Queues
 
 **Status:** Baseline v1.0 — 2026-08-29
-**Module:** `apps/api/src/platform/queue` and `apps/api/src/modules/*/jobs`
+**Module:** `backend/src/platform/queue` and `backend/src/modules/*/jobs`
 
 ---
 

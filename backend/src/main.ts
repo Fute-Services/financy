@@ -43,7 +43,7 @@ async function bootstrap(): Promise<void> {
   app.use(
     helmet({
       // The API serves JSON, never a document, so the directives that matter
-      // for a page do not apply. `apps/web` sets its own CSP.
+      // for a page do not apply. `frontend` sets its own CSP.
       contentSecurityPolicy: false,
       crossOriginResourcePolicy: { policy: 'same-site' },
     }),

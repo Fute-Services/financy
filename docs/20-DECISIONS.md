@@ -305,7 +305,7 @@ field — which is the correct experience anyway, because it forces the user to 
 **Decision.** Permissions, scope, totals, policy verdicts, and state transitions are decided
 server-side. Request DTOs **do not contain** computed totals, statuses, approver lists, or
 organisation IDs — the fields simply do not exist. The frontend's permission set drives rendering
-only. A lint rule forbids money arithmetic in `apps/web`.
+only. A lint rule forbids money arithmetic in `frontend`.
 
 **Consequences.** The vulnerability class is structurally absent rather than defended against.
 Cost: an extra round trip for policy preview (mitigated by the dry-run endpoint) and some

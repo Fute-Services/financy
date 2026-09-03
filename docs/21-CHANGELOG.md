@@ -328,7 +328,7 @@ idempotencyKey)` is reserved _before_ the handler runs, so two simultaneous deli
   restore-then-edit rather than refusing without a route forward; `LAST_ACTIVE_ENTITY` mirrors
   `LAST_ADMIN` — an organisation with no active entity can be logged into and can record no spend
   at all, a dead end reachable by one button click.
-- `apps/api/test/settings-writes.e2e.spec.ts` — thirteen end-to-end tests covering the three
+- `backend/test/settings-writes.e2e.spec.ts` — thirteen end-to-end tests covering the three
   properties no unit test can show: that two saves from the same version leave the _first_
   writer's value in place, that the audit event commits with its change and names only the fields
   that moved, and that a cross-tenant `PATCH` is a `404` rather than a `403`.
@@ -348,6 +348,22 @@ idempotencyKey)` is reserved _before_ the handler runs, so two simultaneous deli
 
 ### Changed
 
+- **`apps/api` and `apps/web` are now `backend/` and `frontend/`.** The two deployables sit at the
+  repository root under the names people actually call them, so a path in a stack trace or a CI log
+  says which half of the system it came from. Package names (`@financy/api`, `@financy/web`) are
+  unchanged, so every `pnpm --filter` command and the CI workflow still read the same. Earlier
+  entries in this file were rewritten to the new paths: a changelog whose paths no longer resolve
+  is harder to navigate than one that quietly reflects a rename.
+- **`npm start` is the one command that always works.** It frees ports `3100` and `4100` — and the
+  watchers behind them, which are the actual cause of the `EADDRINUSE` that turns up an hour later
+  — then runs both applications in watch mode. It works the same way from `frontend/` or
+  `backend/`, where it frees only that half's port so the other keeps running. The production
+  entrypoints moved to `start:prod`, and `tests/playwright.config.ts` was pointed at that: `start`
+  now runs a watcher and touches the port, both of which are wrong for a suite that owns its
+  servers' lifecycle.
+- **The API finds `.env` by walking up rather than counting `..`.** The old path was a hard-coded
+  `../../.env` and was wrong the moment the directory moved — silently, because a missing file is
+  not an error there, so the failure surfaced later as a confusing report about a missing variable.
 - **`GET /v1/people` is now `GET /v1/memberships`.** The specification named the second; the first
   shipped by accident. One endpoint with two names is a drift that only widens, so the old name is
   gone rather than aliased — one line in the web app. The browser route stays `/people`, because
@@ -529,7 +545,7 @@ mechanised form of a rule the documentation already states.
 
 **API**
 
-- `apps/api` — NestJS bootstrap with `/v1`, Helmet, an explicit CORS origin list, a body limit, and
+- `backend` — NestJS bootstrap with `/v1`, Helmet, an explicit CORS origin list, a body limit, and
   graceful shutdown (P0-08).
 - Startup configuration validation. A misconfigured process refuses to start and reports every
   problem at once — including Redis absent in production (ADR-0006), the local document provider in
@@ -589,10 +605,10 @@ mechanised form of a rule the documentation already states.
   between the contract and the middleware that enforces it.
 - Prisma configuration moved from the `prisma` key in `package.json`, deprecated and removed in
   Prisma 7, to `prisma.config.ts`.
-- `apps/web` no longer keeps its own copy of the permission matrix. It re-exports the catalogue
+- `frontend` no longer keeps its own copy of the permission matrix. It re-exports the catalogue
   from `@financy/contracts`; `src/lib/permissions.ts` now holds only the rule that the frontend
   uses permissions for rendering and never for access control.
-- The `dev` script for `apps/api` runs the Nest CLI watcher rather than `tsx`. esbuild cannot emit
+- The `dev` script for `backend` runs the Nest CLI watcher rather than `tsx`. esbuild cannot emit
   `design:paramtypes`, so under `tsx` every injected dependency arrived as `undefined` and the
   failure read as a bug in the service rather than a missing compiler feature.
 - `tsBuildInfoFile` moved inside `dist/` for every built package, so removing `dist` is a real
@@ -604,7 +620,7 @@ mechanised form of a rule the documentation already states.
 - `spend_request:update` was granted to four roles by `docs/03 §3` and to none of them by the
   frontend's copy of the matrix. Both now come from one definition, and a test asserts that every
   role which can raise a spend request can also edit its own draft.
-- The Overview page's build-status panel listed `packages/contracts`, `packages/db`, and `apps/api`
+- The Overview page's build-status panel listed `packages/contracts`, `packages/db`, and `backend`
   as forthcoming after they had shipped.
 
 - Sixteen integration tests against a real PostgreSQL (`packages/db/test/`), asserting that each
@@ -624,7 +640,7 @@ mechanised form of a rule the documentation already states.
 ### Known gaps
 
 - **The demo seed creates no people.** A membership needs a user, a user needs an argon2id hash, and
-  the hasher belongs in `apps/api` with the rest of authentication (task 1.3.1) — it cannot live in
+  the hasher belongs in `backend` with the rest of authentication (task 1.3.1) — it cannot live in
   `@financy/core`, which is compiled into the browser bundle. Seeding an account that exists and
   cannot sign in would be worse than seeding none.
 

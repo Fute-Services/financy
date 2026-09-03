@@ -1,7 +1,7 @@
 /**
  * Seed the demo organisation, including people.
  *
- * This lives in `apps/api` rather than `packages/db` for one reason: argon2 is
+ * This lives in `backend` rather than `packages/db` for one reason: argon2 is
  * a native addon, and `@financy/db` is imported by contexts that must not pull
  * one in. `seedDemo` therefore takes the hasher as a parameter, and this script
  * is the caller that has one.

@@ -15,10 +15,19 @@ import { ConfigService, loadConfig } from './config.service.js';
  * supply theirs, and why the file being absent there is not an error.
  */
 function loadDotEnv(): void {
-  // Try the repository root first, then the current directory, so the API
-  // starts whether it is run from `apps/api` or from the workspace root.
-  loadEnvFile({ path: path.resolve(process.cwd(), '../../.env'), override: false, quiet: true });
-  loadEnvFile({ path: path.resolve(process.cwd(), '.env'), override: false, quiet: true });
+  // Walk up from the working directory rather than counting `..` segments, so
+  // the API starts whether it is run from `backend/` or the workspace root —
+  // and keeps starting if either ever moves. A fixed depth was wrong the first
+  // time a directory was renamed, and silently: the file simply was not found,
+  // and the failure surfaced later as a confusing "missing variable" report.
+  const seen = new Set<string>();
+
+  for (let dir = process.cwd(); !seen.has(dir); dir = path.dirname(dir)) {
+    seen.add(dir);
+    // `override: false` throughout, so the nearest file wins and anything
+    // already in the environment beats all of them.
+    loadEnvFile({ path: path.join(dir, '.env'), override: false, quiet: true });
+  }
 }
 
 let cached: AppConfig | undefined;

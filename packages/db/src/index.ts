@@ -31,7 +31,7 @@ export { UnclassifiedModelError, UnscopedOperationError } from './tenancy/errors
 
 export { provisionOrganizationRoles, type RoleProvisionResult } from './seed/roles.js';
 
-// Exported so `apps/api` can run the demo seed *with* a password hasher.
+// Exported so `backend` can run the demo seed *with* a password hasher.
 // argon2 is a native addon and cannot be imported here; see `seedDemo`.
 export { seedDemo, DEMO_PASSWORD, type DemoSeedOptions, type DemoSeedResult } from './seed/demo.js';
 

@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "start": "node scripts/free-ports.mjs --free && turbo run dev",
     "dev": "turbo run dev",
     "ports": "node scripts/free-ports.mjs",
     "lint": "turbo run lint",

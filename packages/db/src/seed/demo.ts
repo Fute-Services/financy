@@ -20,7 +20,7 @@ export interface DemoSeedResult {
  * How to hash a demo password.
  *
  * Passed in rather than imported. argon2 is a native addon living in
- * `apps/api`, and `@financy/db` is also compiled into contexts that must not
+ * `backend`, and `@financy/db` is also compiled into contexts that must not
  * pull one in — the architecture lint rules exist to stop exactly that. The
  * caller that has a hasher supplies it; `pnpm db:seed` does not, and simply
  * seeds no people.
@@ -115,7 +115,7 @@ const DEPARTMENTS: readonly DepartmentTemplate[] = [
  *
  * **People are seeded only when a hasher is supplied.** A membership needs a
  * user and a user needs an argon2id hash, but argon2 is a native addon that
- * lives in `apps/api` and must not be pulled into this package. So the caller
+ * lives in `backend` and must not be pulled into this package. So the caller
  * passes `hashPassword` in: `pnpm db:seed:demo` does not have one and seeds
  * structure alone, while `pnpm --filter @financy/api seed:demo` does and seeds
  * the five demo accounts. A user written with a hash the real verifier cannot

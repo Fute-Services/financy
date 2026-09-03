@@ -1,7 +1,7 @@
 # 13 — Integrations and Provider Abstraction
 
 **Status:** Baseline v1.0 — 2026-08-29
-**Module:** `apps/api/src/modules/integrations`
+**Module:** `backend/src/modules/integrations`
 
 ---
 
