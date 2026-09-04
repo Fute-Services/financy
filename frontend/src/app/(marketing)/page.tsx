@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import {
   APP_BARS,
   APP_CARDS,
@@ -14,7 +16,7 @@ import {
   RuledRow,
   SectionHead,
 } from '@/components/marketing/primitives';
-import { EYEBROW, LINE, LINE_FAINT, LINE_SOFT, MONO } from '@/components/marketing/theme';
+import { EYEBROW, LINE, LINE_DARK, LINE_FAINT, LINE_SOFT, MONO } from '@/components/marketing/theme';
 
 /**
  * The landing page.
@@ -78,7 +80,74 @@ export default function HomePage(): React.JSX.Element {
           </RuledList>
         </Container>
       </section>
+
+      <Close />
     </>
+  );
+}
+
+/**
+ * The closing band.
+ *
+ * It replaces the "Recognition" band that used to end this page with invented
+ * awards and press names. Something has to sit here: the modules list ended
+ * flush against the footer, which reads as a page that was cut off rather than
+ * one that finished.
+ *
+ * It is the one inverted band on the site, so the ending reads in a different
+ * register from everything above it — and it says the only thing there is
+ * honestly to say at the end of a landing page, which is what to do next.
+ */
+function Close(): React.JSX.Element {
+  return (
+    <section className="mt-20 bg-[#14161A] text-[#EDEEF1] md:mt-26">
+      <Container className="py-20 md:py-24">
+        <div className="grid items-end gap-10 md:grid-cols-[1.2fr_1fr] md:gap-20">
+          <h2 className="m-0 max-w-[560px] text-[32px] leading-[1.08] font-semibold tracking-[-0.035em] text-balance md:text-[40px]">
+            Run it against your own last month of spend
+          </h2>
+
+          <div className="md:pb-1.5">
+            <p className="m-0 mb-7 max-w-[380px] text-[16px] leading-[1.6] text-[#8E93A0]">
+              Thirty minutes, your own transactions, and a straight answer on whether this fits. No
+              slides.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-6">
+              {/*
+                Plain links on both actions, not `PrimaryLink` and `QuietLink`.
+                Both primitives hard-code colours for the light page — white
+                text on cobalt, ink text on an ink underline — and a `className`
+                override does not reliably win, because two Tailwind utilities
+                of equal specificity are resolved by stylesheet order rather
+                than by the order they appear in the attribute. The first
+                attempt at this band shipped a white-on-white button for
+                exactly that reason.
+              */}
+              <Link
+                href="/contact"
+                className="inline-block rounded-md bg-[#F6F5F2] px-[22px] py-3 text-[14.5px] font-semibold text-[#14161A] transition-colors hover:bg-white hover:text-[#2B39C4]"
+              >
+                Book a demo
+              </Link>
+              {/*
+                A plain Link rather than `QuietLink`, which hard-codes an ink
+                underline that is invisible on this band. Giving the shared
+                primitive a dark variant for one call site would be more
+                surface than the six classes it saves.
+              */}
+              <Link
+                href="/pricing"
+                className="pb-0.5 text-[14.5px] font-semibold text-[#8E93A0] transition-colors hover:text-[#EDEEF1]"
+                style={{ borderBottom: `1px solid ${LINE_DARK}` }}
+              >
+                See pricing
+              </Link>
+            </div>
+          </div>
+        </div>
+      </Container>
+    </section>
   );
 }
 

@@ -50,6 +50,26 @@ export function useAuthSubmit(action: 'login' | 'register') {
          * with a new identity anyway.
          */
         window.location.assign('/overview');
+
+        /**
+         * Deliberately **not** clearing `pending`, and this return is the whole
+         * reason the state is not reset in a `finally`.
+         *
+         * `assign` only *starts* a navigation. The browser then fetches
+         * `/overview`, which renders the whole shell against the API — a second
+         * or more in production, and several while a dev server compiles the
+         * route for the first time. Nothing on screen changes during that time.
+         *
+         * Clearing `pending` here put the button back to "Sign in", enabled,
+         * while that navigation was still in flight. So the screen said idle
+         * when it was not, people clicked again, and signing in "took two
+         * clicks" — the second click being the one that appeared to work
+         * because the first had already loaded the page.
+         *
+         * Leaving it set keeps the button disabled and reading "Signing in…"
+         * until the document is replaced. There is no state to restore
+         * afterwards: this component is about to be torn down with the page.
+         */
         return;
       }
 
@@ -63,9 +83,11 @@ export function useAuthSubmit(action: 'login' | 'register') {
       // A network failure, not an API response. Saying so is more useful than
       // a generic message that makes the user doubt their password.
       setFormError('Could not reach the server. Check your connection and try again.');
-    } finally {
-      setPending(false);
     }
+
+    // Only the failure paths reach here. The success path has handed the page
+    // over to a navigation and must stay disabled until it completes.
+    setPending(false);
   }
 
   return { submit, pending, formError, fieldErrors };
@@ -181,8 +203,30 @@ export function SubmitButton({
     <button
       type="submit"
       disabled={pending}
-      className="h-10 w-full rounded-[var(--radius-sm)] bg-cobalt-600 text-sm font-medium text-white transition-colors hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+      // `aria-busy` because the disabled state alone says "you cannot press
+      // this", not "this is working" — and those are different messages.
+      aria-busy={pending || undefined}
+      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] bg-cobalt-600 text-sm font-medium text-white transition-colors hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
     >
+      {/*
+        A moving spinner, not just a changed label.
+
+        Signing in hands the page over to a full navigation that renders the
+        whole shell against the API, and nothing on screen changes while that
+        happens. Static text reads as a stuck screen; something that moves
+        reads as work in progress, which is what stops the second click.
+      */}
+      {pending && (
+        <svg className="size-3.5 animate-spin" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2" />
+          <path
+            d="M14.5 8A6.5 6.5 0 0 0 8 1.5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
       {pending ? pendingLabel : children}
     </button>
   );
