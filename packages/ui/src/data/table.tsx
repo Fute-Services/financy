@@ -5,15 +5,22 @@ import { cn } from '../lib/cn';
  * Data table.
  *
  * The most important component in the product: a finance user spends most of
- * their day in one. Design decisions that follow from that
+ * their day in one, and the thing they are doing is *scanning* — looking down
+ * a column for the row that is wrong. Every decision here serves that
  * (docs/UI-DESIGN-SYSTEM.md §6.3):
  *
- *  - 44px rows (36px compact) — 25 to 40 rows visible without scrolling.
- *  - Hairline separators, no zebra striping. Stripes add visual noise at this
- *    density without aiding scanning.
- *  - Sticky header, because the column you are reading matters at row 30.
- *  - Numeric columns right-aligned with tabular figures, so a column of
- *    amounts reads as a column.
+ *  - **32px rows (28px compact).** They were 44 and 36. A reconciliation queue
+ *    is read by comparing rows to each other, and rows you have to scroll
+ *    between cannot be compared — the taller row was costing a third of the
+ *    screen to whitespace inside cells that hold a date and a number.
+ *  - **13px text with tabular figures.** One step down from the body scale,
+ *    because a table is reference material rather than prose, and tabular
+ *    digits are what make a column of amounts line up on the decimal point.
+ *  - **A sticky header.** The specification asked for one and the component
+ *    never had it, so the column you were reading stopped being labelled at
+ *    row 20. That is the single most useful pixel in a long table.
+ *  - **Hairline separators, no zebra striping.** Stripes add noise at this
+ *    density without aiding scanning; at 32px the rule is enough.
  *  - Wide content scrolls inside its own container; the page body never
  *    scrolls horizontally.
  */
@@ -49,8 +56,8 @@ export function DataTable<T>({
   caption,
   className,
 }: DataTableProps<T>): React.JSX.Element {
-  const rowHeight = density === 'compact' ? 'h-9' : 'h-11';
-  const cellPadding = density === 'compact' ? 'px-3' : 'px-4';
+  const rowHeight = density === 'compact' ? 'h-7' : 'h-8';
+  const cellPadding = density === 'compact' ? 'px-2.5' : 'px-3';
 
   if (rows.length === 0 && emptyState) {
     return <div className={className}>{emptyState}</div>;
@@ -58,17 +65,26 @@ export function DataTable<T>({
 
   return (
     <div className={cn('w-full overflow-x-auto', className)}>
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full border-collapse text-[13px]">
         {caption && <caption className="sr-only">{caption}</caption>}
-        <thead>
-          <tr className="border-b border-[var(--border-default)] bg-[var(--surface-sunken)]">
+        {/*
+          `sticky` on the cells rather than the row: a `<tr>` is not a
+          positioning context in every engine, and sticking the row leaves the
+          borders behind while the text travels.
+        */}
+        <thead className="sticky top-0 z-10">
+          <tr className="bg-[var(--surface-sunken)]">
             {columns.map((column) => (
               <th
                 key={column.key}
                 scope="col"
                 style={column.width ? { width: column.width } : undefined}
                 className={cn(
-                  'h-9 text-[11px] font-semibold tracking-[0.05em] whitespace-nowrap text-ink-500 uppercase',
+                  'sticky top-0 h-8 bg-[var(--surface-sunken)]',
+                  'text-[10.5px] font-semibold tracking-[0.06em] whitespace-nowrap text-ink-500 uppercase',
+                  // A border on a sticky cell scrolls away with the box model,
+                  // so the rule under the header is drawn as a shadow instead.
+                  'shadow-[inset_0_-1px_0_var(--border-default)]',
                   cellPadding,
                   column.align === 'right' ? 'text-right' : 'text-left',
                 )}
@@ -106,7 +122,12 @@ export function DataTable<T>({
                   className={cn(
                     'text-ink-700',
                     cellPadding,
-                    column.align === 'right' ? 'tabular text-right' : 'text-left',
+                    // `tabular-nums` on every cell, not only the right-aligned
+                    // ones: a date column and an id column are read by
+                    // comparing them down the page too, and proportional
+                    // digits make the same date in two rows different widths.
+                    'tabular-nums',
+                    column.align === 'right' ? 'text-right' : 'text-left',
                   )}
                 >
                   {column.render(row)}

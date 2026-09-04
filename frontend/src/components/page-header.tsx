@@ -25,18 +25,29 @@ export function PageHeader({
   action?: React.ReactNode | undefined;
 }): React.JSX.Element {
   return (
-    <div className="mb-6 flex items-start justify-between gap-6">
+    /*
+      A console header, not a marketing one. `text-2xl` — 24px — was set for a
+      page you land on and read; this is a page you pass through forty times a
+      day on the way to a table, and every pixel it takes is a row the table
+      does not get. 17px still reads as the title of the screen because nothing
+      else on it competes.
+    */
+    <div className="mb-4 flex items-start justify-between gap-6">
       <div className="min-w-0">
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink-900">{title}</h1>
-          {count && <span className="tabular text-sm text-ink-500">{count}</span>}
+        <div className="flex items-baseline gap-2.5">
+          <h1 className="text-[17px] leading-6 font-semibold tracking-[-0.015em] text-ink-900">
+            {title}
+          </h1>
+          {count && <span className="text-[12.5px] text-ink-500 tabular-nums">{count}</span>}
           {phase !== undefined && (
             <Badge tone="info" title={`Delivered in Phase ${phase} of the roadmap`}>
               Phase {phase}
             </Badge>
           )}
         </div>
-        {description && <p className="mt-1.5 max-w-2xl text-sm text-ink-500">{description}</p>}
+        {description && (
+          <p className="mt-1 max-w-3xl text-[12.5px] leading-[1.5] text-ink-500">{description}</p>
+        )}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>

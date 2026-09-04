@@ -37,7 +37,7 @@ export function Sidebar({
   return (
     <nav
       aria-label="Primary"
-      className="flex w-[212px] shrink-0 flex-col border-r border-[var(--border-default)] bg-[var(--surface-nav)]"
+      className="flex w-[196px] shrink-0 flex-col border-r border-[var(--border-default)] bg-[var(--surface-nav)]"
     >
       <div className="px-2.5 pt-2.5">
         <OrgSwitcher session={session} />
@@ -47,7 +47,7 @@ export function Sidebar({
         <CommandPalette permissions={session.permissions} builtPhases={builtPhases} />
       </div>
 
-      <ul className="mt-3 flex-1 space-y-px overflow-y-auto px-2.5 pb-4">
+      <ul className="mt-2.5 flex-1 space-y-px overflow-y-auto px-2.5 pb-4">
         {pinned.map((item) => (
           <li key={item.href}>
             <NavLink
@@ -106,7 +106,7 @@ function NavLink({
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group relative flex h-[32px] items-center gap-2.5 rounded-[var(--radius-sm)] px-2 text-[13px]',
+        'group relative flex h-[28px] items-center gap-2.5 rounded-[var(--radius-sm)] px-2 text-[12.5px]',
         'transition-colors duration-100',
         active
           ? 'bg-white/10 font-medium text-white'

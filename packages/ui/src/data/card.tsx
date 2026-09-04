@@ -7,6 +7,12 @@ import { cn } from '../lib/cn';
  * Bordered, not shadowed. A card sitting flat on a page is not floating above
  * it, and a shadow that implies depth which does not exist is decoration
  * pretending to be information (docs/UI-DESIGN-SYSTEM.md §4.3).
+ *
+ * The shadow was there anyway — `shadow-elev-1`, contradicting the paragraph
+ * directly above it — and with a card on nearly every screen the page read as
+ * a pile of floating panels rather than as one surface with rules on it. It is
+ * gone, and the radius drops from 8px to 5px: heavy rounding reads as consumer
+ * software and eats horizontal space where a table meets the card's edge.
  */
 
 export function Card({
@@ -17,8 +23,8 @@ export function Card({
   return (
     <div
       className={cn(
-        'rounded-[var(--radius-md)] border border-[var(--border-default)]',
-        'bg-[var(--surface-raised)] shadow-[var(--shadow-elev-1)]',
+        'rounded-[var(--radius-sm)] border border-[var(--border-default)]',
+        'bg-[var(--surface-raised)]',
         className,
       )}
       {...rest}
@@ -42,15 +48,15 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] px-5 py-4',
+        'flex items-start justify-between gap-4 border-b border-[var(--border-subtle)] px-4 py-3',
         className,
       )}
     >
       <div className="min-w-0">
-        <h2 className="text-[15px] leading-6 font-semibold tracking-[-0.01em] text-ink-900">
+        <h2 className="text-[13.5px] leading-5 font-semibold tracking-[-0.005em] text-ink-900">
           {title}
         </h2>
-        {description && <p className="mt-0.5 text-sm text-ink-500">{description}</p>}
+        {description && <p className="mt-0.5 text-[12.5px] leading-[1.45] text-ink-500">{description}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -63,7 +69,7 @@ export function CardBody({
   ...rest
 }: React.HTMLAttributes<HTMLDivElement>): React.JSX.Element {
   return (
-    <div className={cn('p-5', className)} {...rest}>
+    <div className={cn('p-4', className)} {...rest}>
       {children}
     </div>
   );

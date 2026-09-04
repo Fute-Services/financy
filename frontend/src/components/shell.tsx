@@ -55,8 +55,13 @@ export function Shell({
         transaction and audit tables, and 260px of extra width is another
         column of figures rather than wasted space.
       */}
+      {/*
+        Tighter than it was — px-8 py-7 around a 32px table row is a page
+        border wider than three rows are tall. A console spends its space on
+        rows, not on margins.
+      */}
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="max-w-[1440px] px-8 py-7">{children}</div>
+        <div className="max-w-[1520px] px-6 py-5">{children}</div>
       </main>
     </div>
   );

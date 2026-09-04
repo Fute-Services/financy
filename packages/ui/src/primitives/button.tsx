@@ -29,10 +29,15 @@ const VARIANTS: Record<ButtonVariant, string> = {
   link: 'bg-transparent text-cobalt-500 hover:text-cobalt-700 hover:underline p-0 h-auto',
 };
 
+/**
+ * One step down across the board — 34px was a marketing-page button sitting in
+ * a toolbar above a 32px table row, so the control was taller than the data it
+ * acted on. A console's buttons should be the same weight as a row.
+ */
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-7 px-3 text-[13px] gap-1.5',
-  md: 'h-[34px] px-3.5 text-sm gap-2',
-  lg: 'h-10 px-4 text-[15px] gap-2',
+  sm: 'h-[26px] px-2.5 text-[12.5px] gap-1.5',
+  md: 'h-8 px-3 text-[13px] gap-1.5',
+  lg: 'h-9 px-3.5 text-[13.5px] gap-2',
 };
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
