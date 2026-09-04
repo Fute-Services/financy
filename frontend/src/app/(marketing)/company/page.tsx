@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { STATS, TIMELINE, VALUES } from '@/components/marketing/content';
+import { TIMELINE, VALUES } from '@/components/marketing/content';
 import {
   Container,
   PageHero,
@@ -27,23 +27,6 @@ export default function CompanyPage(): React.JSX.Element {
       />
 
       <section className="pt-14 md:pt-16">
-        <Container>
-          <RuledColumns>
-            {STATS.map((stat) => (
-              <RuledCell key={stat.k}>
-                <div className="text-[36px] leading-none font-semibold tracking-[-0.045em] tabular-nums md:text-[44px]">
-                  {stat.k}
-                </div>
-                <div className="mt-3 max-w-[190px] text-[14px] leading-[1.45] text-[#4B4F58]">
-                  {stat.v}
-                </div>
-              </RuledCell>
-            ))}
-          </RuledColumns>
-        </Container>
-      </section>
-
-      <section className="pt-20 md:pt-22">
         <Container>
           <SectionHead title="How we got here" className="mb-9" />
 

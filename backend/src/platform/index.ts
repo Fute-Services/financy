@@ -18,5 +18,6 @@ export * from './health/index.js';
 export * from './logging/index.js';
 export * from './documents/index.js';
 export * from './queue/index.js';
+export * from './rate-limit/index.js';
 export * from './request-context/index.js';
 export * from './validation/index.js';

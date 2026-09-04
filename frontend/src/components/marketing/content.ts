@@ -8,22 +8,26 @@
  * beside the markup means those three drift, and nobody notices until a
  * customer quotes the wrong one back.
  *
- * ## ⚠️ Placeholder content — replace before this is public
+ * ## What used to be here, and why it is not
  *
- * The sections marked `PLACEHOLDER` below were carried over from the design
- * mock and are **not true of this product yet**. They are here because the
- * layout needs realistic shapes to be judged, not because the claims hold:
+ * The site was built from a design mock, and the mock supplied realistic
+ * shapes for things this product does not have: customer logos, case studies,
+ * press mentions, awards, headline metrics, uptime figures, and a
+ * certifications table listing SOC 2, ISO 27001 and PCI DSS. All of it was
+ * marked `PLACEHOLDER` and all of it has now been removed, because the site is
+ * deployed and a placeholder that ships is simply a false claim.
  *
- * - `CUSTOMER_LOGOS`, `CASE_STUDIES`, `PRESS` — invented companies
- * - `AWARDS` — the mock labelled these "Placeholder award" itself
- * - `STATS` — spend volume, receipt counts, close time, uptime
- * - `CERTIFICATIONS` — SOC 2, ISO 27001, PCI DSS
- * - `SERVICES`, `INCIDENTS` — the status page's uptime figures
- *
- * The certifications matter most. Publishing an unearned SOC 2 or PCI DSS
+ * The certifications were the ones that mattered. An unearned SOC 2 or PCI DSS
  * claim is a misrepresentation a buyer's procurement team will check and a
- * regulator may act on — it is not the same kind of placeholder as a logo.
- * The rest of the site states things this product genuinely does.
+ * regulator may act on — not the same kind of placeholder as an invented logo.
+ *
+ * Two routes went with their content, because neither had any that was true:
+ * `/customers` was case studies alone, and `/status` was uptime numbers not
+ * measured against any monitor. A customers page with no customers, or a
+ * status page with no monitor, is worse than no page.
+ *
+ * **The bar for anything added here: it must be true today.** A section that
+ * needs a caveat to be honest does not go on a public finance site.
  */
 
 // ── Navigation ─────────────────────────────────────────────────────────────
@@ -61,7 +65,6 @@ export const FOOTER_COLUMNS = [
       { label: 'Docs', href: '/docs' },
       { label: 'Writing', href: '/writing' },
       { label: 'Changelog', href: '/changelog' },
-      { label: 'Status', href: '/status' },
       { label: 'Security', href: '/security' },
     ],
   },
@@ -69,7 +72,6 @@ export const FOOTER_COLUMNS = [
     head: 'Company',
     items: [
       { label: 'About', href: '/company' },
-      { label: 'Customers', href: '/customers' },
       { label: 'Careers', href: '/careers' },
       { label: 'Contact', href: '/contact' },
     ],
@@ -150,41 +152,6 @@ export const MODULES = [
     title: 'Ledger export',
     body: 'Reconciled spend by any dimension, pushed into Xero, NetSuite or Tally on the schedule you set.',
   },
-] as const;
-
-/** PLACEHOLDER — none of these figures are measured. */
-export const STATS = [
-  { k: '$1.4B', v: 'annualised spend managed' },
-  { k: '310K', v: 'receipts matched each month' },
-  { k: '4 days', v: 'average close, down from 11' },
-  { k: '99.99%', v: 'platform uptime' },
-] as const;
-
-/** PLACEHOLDER — invented companies. */
-export const CUSTOMER_LOGOS = [
-  'Northwind',
-  'Ledgerly',
-  'Cartsmith',
-  'Paperbase',
-  'Volta',
-  'Signalbox',
-] as const;
-
-/** PLACEHOLDER — the mock labelled these "Placeholder award". */
-export const AWARDS = [
-  { year: '2025', title: 'Fintech of the Year', meta: 'Placeholder award' },
-  { year: '2025', title: 'Best Spend Platform', meta: 'Placeholder award' },
-  { year: '2024', title: 'High Growth 100', meta: 'Placeholder listing' },
-  { year: '2024', title: "Editors' Choice", meta: 'Placeholder award' },
-] as const;
-
-/** PLACEHOLDER — invented publications. */
-export const PRESS = [
-  'The Ledger',
-  'FinTech Weekly',
-  'CFO Review',
-  'Business Standard',
-  'Tech in Asia',
 ] as const;
 
 // ── Product ────────────────────────────────────────────────────────────────
@@ -404,14 +371,6 @@ export const PERKS = [
 
 // ── Security ───────────────────────────────────────────────────────────────
 
-/** PLACEHOLDER — none of these certifications have been obtained. */
-export const CERTIFICATIONS = [
-  { k: 'SOC 2 Type II', v: 'Audited annually, report on request' },
-  { k: 'ISO 27001', v: 'Certified information security management' },
-  { k: 'PCI DSS Level 1', v: 'Card data handled by our issuing partner' },
-  { k: 'DPDP Act', v: 'Indian data residency available' },
-] as const;
-
 export const SECURITY_PRACTICES = [
   {
     num: '01',
@@ -432,54 +391,6 @@ export const SECURITY_PRACTICES = [
     num: '04',
     title: 'Recoverable by design',
     body: 'Point-in-time recovery, multi-region backups, and a documented RTO of four hours tested twice a year.',
-  },
-] as const;
-
-// ── Customers ──────────────────────────────────────────────────────────────
-
-/** PLACEHOLDER — invented companies and metrics. */
-export const CASE_STUDIES = [
-  {
-    num: '01',
-    co: 'Northwind',
-    industry: 'Logistics',
-    metric: '11 → 4 days',
-    body: 'Six hundred drivers on fuel cards with per-merchant locks, and a close that no longer waits on paper receipts.',
-  },
-  {
-    num: '02',
-    co: 'Ledgerly',
-    industry: 'Professional services',
-    metric: '94% receipts matched',
-    body: 'Client-billable spend coded at the point of purchase, so re-billing runs the same week rather than the next month.',
-  },
-  {
-    num: '03',
-    co: 'Cartsmith',
-    industry: 'Ecommerce',
-    metric: '$0 unapproved spend',
-    body: 'Ad platform cards with hard monthly caps, replacing a shared card that three teams had the number for.',
-  },
-  {
-    num: '04',
-    co: 'Paperbase',
-    industry: 'SaaS',
-    metric: '5 entities, 1 view',
-    body: 'Consolidated spend across five entities and three currencies, with local approval rules kept intact.',
-  },
-  {
-    num: '05',
-    co: 'Volta',
-    industry: 'Manufacturing',
-    metric: '2 weeks to rollout',
-    body: 'Four hundred employees onboarded in a fortnight, with policy imported from the existing expense manual.',
-  },
-  {
-    num: '06',
-    co: 'Signalbox',
-    industry: 'Media',
-    metric: '38% fewer approvals',
-    body: 'Threshold rules cleared routine spend automatically, leaving managers only the exceptions to look at.',
   },
 ] as const;
 
@@ -595,32 +506,6 @@ export const RELEASES = [
   },
 ] as const;
 
-// ── Status ─────────────────────────────────────────────────────────────────
-
-/** PLACEHOLDER — not measured against a real monitor. */
-export const SERVICES = [
-  { k: 'Card authorisation', v: 'Operational', up: '99.998%' },
-  { k: 'Dashboard', v: 'Operational', up: '99.99%' },
-  { k: 'Public API', v: 'Operational', up: '99.99%' },
-  { k: 'Receipt processing', v: 'Operational', up: '99.96%' },
-  { k: 'Ledger sync', v: 'Operational', up: '99.97%' },
-  { k: 'Notifications', v: 'Operational', up: '99.99%' },
-] as const;
-
-/** PLACEHOLDER — invented incidents. */
-export const INCIDENTS = [
-  {
-    date: '12 Aug 2026',
-    title: 'Delayed receipt processing',
-    body: 'Queue backlog of 40 minutes affecting OCR matching. Card authorisation was unaffected. Resolved in 1h 20m.',
-  },
-  {
-    date: '03 Jun 2026',
-    title: 'Xero sync failures',
-    body: 'A partner API change caused sync errors for 6% of accounts. Retried automatically after the fix. Resolved in 3h 05m.',
-  },
-] as const;
-
 // ── Contact ────────────────────────────────────────────────────────────────
 
 export const CONTACT_ROWS = [
@@ -629,11 +514,52 @@ export const CONTACT_ROWS = [
   { k: 'Hours', v: 'Mon–Fri, 9:00–18:00 IST' },
 ] as const;
 
+/**
+ * The demo-request fields.
+ *
+ * `name` is stated rather than derived from the label. It was derived once —
+ * `label.toLowerCase().replace(/\s+/g, '-')` — which made the wire contract a
+ * function of the display copy, so rewording "Work email" to "Your email"
+ * would silently rename the field the API validates and break the form with no
+ * failing build to show for it.
+ */
 export const CONTACT_FIELDS = [
-  { label: 'Full name', placeholder: 'Grace Sharma', type: 'text', autoComplete: 'name' },
-  { label: 'Work email', placeholder: 'grace@company.com', type: 'email', autoComplete: 'email' },
-  { label: 'Company', placeholder: 'Acme Ltd', type: 'text', autoComplete: 'organization' },
-  { label: 'Team size', placeholder: '50–200', type: 'text', autoComplete: 'off' },
+  {
+    name: 'name',
+    label: 'Full name',
+    placeholder: 'Grace Sharma',
+    type: 'text',
+    autoComplete: 'name',
+    required: true,
+    maxLength: 200,
+  },
+  {
+    name: 'email',
+    label: 'Work email',
+    placeholder: 'grace@company.com',
+    type: 'email',
+    autoComplete: 'email',
+    required: true,
+    maxLength: 254,
+  },
+  {
+    name: 'company',
+    label: 'Company',
+    placeholder: 'Acme Ltd',
+    type: 'text',
+    autoComplete: 'organization',
+    required: true,
+    maxLength: 200,
+  },
+  {
+    name: 'teamSize',
+    label: 'Team size',
+    placeholder: '50–200',
+    type: 'text',
+    autoComplete: 'off',
+    required: false,
+    maxLength: 80,
+  },
 ] as const;
 
 // ── Legal ──────────────────────────────────────────────────────────────────

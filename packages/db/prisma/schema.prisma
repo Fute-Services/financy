@@ -2682,3 +2682,65 @@ model AccountingPeriod {
   @@index([reopenedByMembershipId])
   @@map("accounting_periods")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Leads (the public site's demo request)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Somebody who asked for a demo from the marketing site.
+///
+/// **The one collection with no `organizationId`, and it is not an oversight.**
+/// A lead is a person who does not have an organisation yet — that is the
+/// definition of a lead. Scoping it would require inventing a tenant to hold
+/// prospects, which would then be a tenant every organisation's queries could
+/// not see and no membership could be granted to. It is registered in
+/// `GLOBAL_MODELS` for that reason, and the registry test enforces that the
+/// decision was made rather than forgotten.
+///
+/// Everything in a row here was typed by an anonymous caller over the public
+/// internet, so nothing in it may be treated as trustworthy input anywhere
+/// downstream — it is contact data to be read by a person, never a value the
+/// application branches on.
+model Lead {
+  id String @id @map("_id")
+
+  /// Lower-cased by `emailSchema` before it is written, the same as every
+  /// other address in the system. There is no `citext` on MongoDB, so that
+  /// transform is the only thing making `handledAt` lookups by address
+  /// reliable.
+  email   String
+  name    String
+  company String
+
+  /// Free text, not a band. Somebody will write "about 40, growing fast",
+  /// which is more useful than the dropdown option it would have been forced
+  /// into.
+  teamSize String?
+  brief    String?
+  /// Where the submission came from — `/contact` today, and whatever campaign
+  /// page exists later. Set by the API from the route, never by the caller,
+  /// so it cannot be used to write arbitrary text into a sales tool.
+  source   String  @default("contact")
+
+  /// Kept for abuse investigation and for nothing else, on the same footing
+  /// as `sessions.ipAddress`. Both are nullable because a request can arrive
+  /// without either, and a placeholder would read as fact.
+  ipAddress String?
+  userAgent String?
+
+  /// When sales picked it up. Null means nobody has, which is the only state
+  /// this record has that anyone acts on.
+  handledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Newest first is the only way this collection is ever read.
+  @@index([createdAt])
+  /// The duplicate check on submit: same address, recently. Not a unique
+  /// index — a prospect who asks twice in March and in July is two leads,
+  /// and a unique index would silently reject the second.
+  @@index([email, createdAt])
+  @@index([handledAt, createdAt])
+  @@map("leads")
+}

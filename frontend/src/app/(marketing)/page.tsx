@@ -2,25 +2,19 @@ import {
   APP_BARS,
   APP_CARDS,
   APP_NAV,
-  AWARDS,
-  CUSTOMER_LOGOS,
   HOME_HEADLINE,
   HOME_LEAD,
   MODULES,
-  PRESS,
-  STATS,
 } from '@/components/marketing/content';
 import {
   Container,
   PrimaryLink,
   QuietLink,
-  RuledCell,
-  RuledColumns,
   RuledList,
   RuledRow,
   SectionHead,
 } from '@/components/marketing/primitives';
-import { EYEBROW, LINE, LINE_DARK, LINE_DARK_SOFT, LINE_FAINT, LINE_SOFT, MONO } from '@/components/marketing/theme';
+import { EYEBROW, LINE, LINE_FAINT, LINE_SOFT, MONO } from '@/components/marketing/theme';
 
 /**
  * The landing page.
@@ -55,22 +49,6 @@ export default function HomePage(): React.JSX.Element {
 
       <ProductMock />
 
-      <section style={{ borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}` }}>
-        <Container className="flex flex-wrap items-center gap-x-12 gap-y-4 py-[26px]">
-          <div className={`${EYEBROW} whitespace-nowrap`}>Finance teams using it</div>
-          <div className="flex min-w-0 flex-1 items-center gap-7 overflow-x-auto md:flex-wrap md:justify-between md:overflow-x-visible">
-            {CUSTOMER_LOGOS.map((logo) => (
-              <div
-                key={logo}
-                className="text-[18px] font-semibold tracking-[-0.02em] whitespace-nowrap text-[#9A9EA8]"
-              >
-                {logo}
-              </div>
-            ))}
-          </div>
-        </Container>
-      </section>
-
       <section className="pt-20 md:pt-26">
         <Container>
           <SectionHead
@@ -100,25 +78,6 @@ export default function HomePage(): React.JSX.Element {
           </RuledList>
         </Container>
       </section>
-
-      <section className="py-20 md:py-26">
-        <Container>
-          <RuledColumns>
-            {STATS.map((stat) => (
-              <RuledCell key={stat.k} className="md:py-0">
-                <div className="text-[42px] leading-none font-semibold tracking-[-0.045em] tabular-nums md:text-[54px]">
-                  {stat.k}
-                </div>
-                <div className="mt-3.5 max-w-[190px] text-[14.5px] leading-[1.45] text-[#4B4F58]">
-                  {stat.v}
-                </div>
-              </RuledCell>
-            ))}
-          </RuledColumns>
-        </Container>
-      </section>
-
-      <Recognition />
     </>
   );
 }
@@ -230,58 +189,6 @@ function ProductMock(): React.JSX.Element {
           A view of the Financy dashboard showing spend this month, approvals awaiting a decision,
           missing receipts, and a six-month spend chart.
         </p>
-      </Container>
-    </section>
-  );
-}
-
-/** The one inverted band on the site, so it reads as a different register. */
-function Recognition(): React.JSX.Element {
-  return (
-    <section className="bg-[#14161A] text-[#EDEEF1]">
-      <Container className="pt-20 pb-24 md:pt-22">
-        <h2 className="m-0 mb-13 max-w-[520px] text-[32px] leading-[1.08] font-semibold tracking-[-0.035em] md:text-[40px]">
-          Recognition
-        </h2>
-
-        <div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-          style={{ borderTop: `1px solid ${LINE_DARK}` }}
-        >
-          {AWARDS.map((award) => (
-            <div
-              key={award.title}
-              className="px-0 py-7 sm:px-7 sm:pb-[34px]"
-              style={{ borderLeft: `1px solid ${LINE_DARK_SOFT}` }}
-            >
-              <div className={`${MONO} text-[10.5px] tracking-[0.12em] uppercase text-[#8E93A0]`}>
-                {award.year}
-              </div>
-              <h3 className="mt-3.5 mb-1.5 text-[18px] font-semibold tracking-[-0.015em]">
-                {award.title}
-              </h3>
-              <p className="m-0 text-[14px] text-[#8E93A0]">{award.meta}</p>
-            </div>
-          ))}
-        </div>
-
-        <div
-          className="mt-16 flex flex-wrap items-center gap-x-12 gap-y-4 pt-7"
-          style={{ borderTop: `1px solid ${LINE_DARK}` }}
-        >
-          <div
-            className={`${MONO} text-[10.5px] tracking-[0.12em] whitespace-nowrap uppercase text-[#8E93A0]`}
-          >
-            Press
-          </div>
-          <div className="flex min-w-0 flex-1 items-center gap-7 overflow-x-auto md:flex-wrap md:justify-between md:overflow-x-visible">
-            {PRESS.map((name) => (
-              <div key={name} className="text-[17px] font-medium whitespace-nowrap text-[#6F747F]">
-                {name}
-              </div>
-            ))}
-          </div>
-        </div>
       </Container>
     </section>
   );

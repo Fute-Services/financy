@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { CERTIFICATIONS, SECURITY_PRACTICES } from '@/components/marketing/content';
+import { SECURITY_PRACTICES } from '@/components/marketing/content';
 import { Container, PageHero, SectionHead } from '@/components/marketing/primitives';
 import { LINE, MONO } from '@/components/marketing/theme';
 
@@ -18,24 +18,18 @@ export default function SecurityPage(): React.JSX.Element {
         lead="Card credentials are tokenised and never stored by us. Everything else is audited, logged and recoverable."
       />
 
-      <section className="pt-12 md:pt-14">
-        <Container>
-          <div style={{ borderTop: `1px solid ${LINE}` }}>
-            {CERTIFICATIONS.map((cert) => (
-              <div
-                key={cert.k}
-                className="grid grid-cols-1 gap-1 py-5 md:grid-cols-[280px_1fr] md:items-baseline md:gap-10"
-                style={{ borderBottom: `1px solid ${LINE}` }}
-              >
-                <span className="text-[17px] font-semibold tracking-[-0.015em]">{cert.k}</span>
-                <span className="text-[15.5px] text-[#4B4F58]">{cert.v}</span>
-              </div>
-            ))}
-          </div>
-        </Container>
-      </section>
+      {/*
+        No certifications table.
 
-      <section className="pt-20 pb-20 md:pb-26">
+        SOC 2, ISO 27001 and PCI DSS were listed here as design placeholders and
+        none of them has been obtained. An unearned certification claim is not
+        the same kind of placeholder as an invented logo — it is a
+        misrepresentation a buyer's procurement team will check and a regulator
+        may act on. The section returns when there is an auditor's report behind
+        it, and not before.
+      */}
+
+      <section className="pt-12 pb-20 md:pt-14 md:pb-26">
         <Container>
           <SectionHead title="How it works in practice" className="mb-9" />
 

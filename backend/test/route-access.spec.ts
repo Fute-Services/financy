@@ -162,6 +162,17 @@ describe('every route declares its access', () => {
       // guessing at tokens which guesses were close.
       'InvitationAcceptanceController.accept',
       'InvitationAcceptanceController.preview',
+      /**
+       * The demo request on the marketing site. The people it exists for do
+       * not have accounts, so there is no session to require.
+       *
+       * What keeps it safe is that it can only write: no read route exists,
+       * the response is the constant `{ received: true }` rather than anything
+       * derived from the row, every field is length-bounded by
+       * `createLeadSchema`, and `@RateLimit(3, 3600)` caps it at the same
+       * ceiling docs/10 §7 gives `POST /auth/register`.
+       */
+      'LeadsController.submit',
     ]);
   });
 });
