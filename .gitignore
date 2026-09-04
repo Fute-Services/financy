@@ -70,3 +70,7 @@ temp/
 packages/*/test/*.js
 packages/*/test/*.d.ts
 packages/*/test/*.map
+
+# Vercel's project link. It holds the project and org ids for this checkout,
+# which are per-machine rather than per-repo — `vercel link` recreates them.
+.vercel
