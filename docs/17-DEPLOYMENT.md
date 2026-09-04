@@ -277,6 +277,48 @@ PostgreSQL, Redis, and object storage, available from every major provider. The 
 on the development host makes Vercel a natural fit for `frontend`; the API and workers need a
 container platform, since they are long-running and stateful in the queue sense.
 
+### 7.1.1 Deploying `frontend` to Vercel
+
+Configuration lives in `frontend/vercel.json`, which Vercel reads **from the Root Directory** —
+so the one setting that is not in the repository has to be made first:
+
+| Setting            | Value      | Why                                                                 |
+| ------------------ | ---------- | ------------------------------------------------------------------- |
+| **Root Directory** | `frontend` | Not expressible in `vercel.json`, and not settable from the CLI     |
+
+Leaving it at the repository root fails during install, because the commands then resolve one level
+above the checkout:
+
+```
+Running "install" command: `cd .. && pnpm install --frozen-lockfile`...
+ERR_PNPM_NO_PKG_MANIFEST  No package.json found in /vercel
+```
+
+With the Root Directory set, `cd ..` reaches the workspace root, where the lockfile and the sibling
+packages are.
+
+**The build command must go through turbo.** `pnpm --filter @financy/web build` runs `next build`
+alone, and `@financy/contracts` is consumed as built output rather than as source — it is absent
+from `transpilePackages`, unlike `@financy/ui` and `@financy/core`. On a developer machine the
+build passes because `dist/` is already there from an earlier run; on a clean checkout it fails:
+
+```
+Module not found: Can't resolve '@financy/contracts'
+```
+
+`turbo run build --filter=@financy/web` resolves `build → ^build`, so config, core, contracts and
+ui are built first. That ordering is the whole reason the command is not the simpler one.
+
+**Environment variables.** `API_BASE_URL` must point at the deployed API. Without it the client
+falls back to `http://127.0.0.1:4100`, which on Vercel is the function itself — so every
+authenticated screen fails while the marketing pages, which call no API, keep working. That is the
+expected shape of a frontend-only deployment, not a defect.
+
+**What a frontend-only deployment serves.** The public site — `/`, `/product`, `/solutions`,
+`/pricing`, `/docs`, `/company`, `/careers`, `/security`, `/writing`, `/changelog`, `/contact`,
+`/privacy`, `/terms` — renders fully. `/contact` submits to `POST /v1/leads` and will report that
+it could not reach the server until the API is deployed. Everything under `(app)` requires the API.
+
 ### 7.2 Network and hardening
 
 - TLS terminated at the load balancer; TLS 1.2+; HSTS with preload in production.

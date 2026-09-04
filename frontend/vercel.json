@@ -3,7 +3,8 @@
   "framework": "nextjs",
 
   "installCommand": "cd .. && pnpm install --frozen-lockfile",
-  "buildCommand": "cd .. && pnpm --filter @financy/web build",
+
+  "buildCommand": "cd .. && pnpm exec turbo run build --filter=@financy/web",
 
   "regions": ["bom1"]
 }
