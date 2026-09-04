@@ -422,7 +422,32 @@ Approval endpoints for bills and POs are **the shared `/v1/approvals/*` routes**
 
 `audit-events` supports **no** `POST`, `PATCH`, `PUT`, or `DELETE`. The absence is the control.
 
-### 5.15 Webhooks — `/v1/webhooks/{provider}`
+### 5.15 Leads — `/v1/leads`
+
+| Method | Path     | Auth | Perm | Notes                                                            |
+| ------ | -------- | :--: | ---- | ---------------------------------------------------------------- |
+| POST   | `/leads` |  —   | —    | The public site's demo request. Rate-limited 3/hour/IP. |
+
+The only endpoint in the API that belongs to no organisation: a lead is somebody who does not have
+one yet. The `leads` collection is therefore **global** (registered in `GLOBAL_MODELS`, not
+tenant-scoped), and the route is `@Public()` because the people it exists for have no session.
+
+Four things bound what a public write can do, and all four are load-bearing:
+
+- **It only writes.** There is deliberately no `GET /leads`. Sales reads the collection directly;
+  exposing a list would mean building tenant-free authorisation for a screen that does not exist.
+- **It returns a constant.** `{ "received": true }` — no id, no timestamp, no echo of the input. A
+  public write that reported what it stored is a way to probe what the server keeps.
+- **Every field is length-bounded** by `createLeadSchema`. An unbounded text column reachable
+  without a session is a storage bill somebody else decides the size of.
+- **`source`, `ipAddress`, and `userAgent` are set by the API**, never accepted from the body. The
+  schema is `strictObject`, so an attempt to supply one is a `422` rather than a silent override.
+
+Two submissions from the same address within ten minutes are one lead: the second overwrites the
+first, unless somebody in sales has already picked it up. Longer than that is a genuinely new
+enquiry and gets its own row.
+
+### 5.16 Webhooks — `/v1/webhooks/{provider}`
 
 | Method | Path                   | Auth                                       |
 | ------ | ---------------------- | ------------------------------------------ |
@@ -482,6 +507,7 @@ caller's own organisation, a permission failure correctly returns `403`.
 | `POST /auth/login`           | 5 per 15 min per IP+email       |
 | `POST /auth/register`        | 3 per hour per IP               |
 | `POST /auth/password/forgot` | 3 per hour per email            |
+| `POST /leads`                | 3 per hour per IP               |
 | Invitation resend            | 3 per day per invitation        |
 | Export endpoints             | 10 per hour per membership      |
 | Upload endpoints             | 100 per hour per membership     |
@@ -490,6 +516,18 @@ caller's own organisation, a permission failure correctly returns `403`.
 
 Responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and
 `Retry-After` on `429`.
+
+**Implementation status.** `@RateLimit(n, window)` is implemented as a global guard registered
+*before* `AuthGuard`, so a limit applies to requests that never reach authentication. It is
+currently applied to `POST /leads` only; the other rows in this table are specified and not yet
+enforced.
+
+The counter is held **in the instance's memory**. Behind more than one instance a limit of 3/hour
+is 3/hour *per instance*, so four instances permit twelve. That is a real weakening and it is
+stated rather than buried: a shared counter needs the Redis adapter `QueueModule` also does not
+have yet, and shipping nothing would leave a public, unauthenticated write endpoint with no
+ceiling at all. It stops the casual script and the accidental double-submit — which is the traffic
+a demo form attracts — and it does not stop a distributed flood, which belongs at the edge.
 
 ---
 

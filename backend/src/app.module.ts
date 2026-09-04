@@ -12,6 +12,7 @@ import {
   HealthModule,
   LoggingModule,
   QueueModule,
+  RateLimitGuard,
   RequestContextMiddleware,
 } from './platform/index.js';
 import { AuthModule } from './modules/auth/index.js';
@@ -32,6 +33,7 @@ import { PayablesModule } from './modules/payables/index.js';
 import { ReportsModule } from './modules/reports/index.js';
 import { TransactionsModule } from './modules/transactions/index.js';
 import { SpendModule } from './modules/spend/index.js';
+import { LeadsModule } from './modules/leads/index.js';
 
 /**
  * The application root.
@@ -74,6 +76,7 @@ import { SpendModule } from './modules/spend/index.js';
     PayablesModule,
     AccountingModule,
     AuditReadModule,
+    LeadsModule,
   ],
   providers: [
     {
@@ -81,6 +84,18 @@ import { SpendModule } from './modules/spend/index.js';
       // part in dependency injection and can hold the logger.
       provide: APP_FILTER,
       useClass: AppExceptionFilter,
+    },
+    {
+      // Before `AuthGuard`, and the order is the point: guards run in
+      // registration order, so this is what lets a limit apply to requests
+      // that never reach authentication. A limiter that only counted requests
+      // which had already passed auth would be useless on exactly the routes
+      // that need one — login, registration, and the public demo form.
+      //
+      // It is a no-op on any route without `@RateLimit`, which is all but a
+      // handful of them.
+      provide: APP_GUARD,
+      useClass: RateLimitGuard,
     },
     {
       // Global, so authentication is the default and `@Public()` is the

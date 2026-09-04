@@ -629,11 +629,52 @@ export const CONTACT_ROWS = [
   { k: 'Hours', v: 'Mon–Fri, 9:00–18:00 IST' },
 ] as const;
 
+/**
+ * The demo-request fields.
+ *
+ * `name` is stated rather than derived from the label. It was derived once —
+ * `label.toLowerCase().replace(/\s+/g, '-')` — which made the wire contract a
+ * function of the display copy, so rewording "Work email" to "Your email"
+ * would silently rename the field the API validates and break the form with no
+ * failing build to show for it.
+ */
 export const CONTACT_FIELDS = [
-  { label: 'Full name', placeholder: 'Grace Sharma', type: 'text', autoComplete: 'name' },
-  { label: 'Work email', placeholder: 'grace@company.com', type: 'email', autoComplete: 'email' },
-  { label: 'Company', placeholder: 'Acme Ltd', type: 'text', autoComplete: 'organization' },
-  { label: 'Team size', placeholder: '50–200', type: 'text', autoComplete: 'off' },
+  {
+    name: 'name',
+    label: 'Full name',
+    placeholder: 'Grace Sharma',
+    type: 'text',
+    autoComplete: 'name',
+    required: true,
+    maxLength: 200,
+  },
+  {
+    name: 'email',
+    label: 'Work email',
+    placeholder: 'grace@company.com',
+    type: 'email',
+    autoComplete: 'email',
+    required: true,
+    maxLength: 254,
+  },
+  {
+    name: 'company',
+    label: 'Company',
+    placeholder: 'Acme Ltd',
+    type: 'text',
+    autoComplete: 'organization',
+    required: true,
+    maxLength: 200,
+  },
+  {
+    name: 'teamSize',
+    label: 'Team size',
+    placeholder: '50–200',
+    type: 'text',
+    autoComplete: 'off',
+    required: false,
+    maxLength: 80,
+  },
 ] as const;
 
 // ── Legal ──────────────────────────────────────────────────────────────────

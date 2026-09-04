@@ -698,6 +698,20 @@ Every table, its tenancy, its deletion tier, and its purpose. `org` = carries `o
 | `provider_accounts`        |  ✓  | archive                          | A configured provider instance per port.                         |
 | `integration_connections`  |  ✓  | archive                          | Credentials (encrypted), status, last sync.                      |
 | `webhook_events`           |  ✓  | TTL purge                        | Raw inbound events with signature verification and replay guard. |
+| `leads`                    |  —  | hard, by hand                    | Demo requests from the public site. See below.                   |
+
+`leads` is the **only business collection with no `organizationId`**, and the absence is the
+definition rather than an omission: a lead is somebody who does not have an organisation yet.
+Scoping it would mean inventing a tenant to hold prospects — one no membership could be granted to
+and no query could reach. It is registered in `GLOBAL_MODELS`
+(`packages/db/src/tenancy/model-registry.ts`), and the registry test fails the build if a model is
+added without that decision being made.
+
+Two consequences follow, and both are enforced rather than assumed. Everything in a row was typed
+by an anonymous caller over the public internet, so nothing in it may be branched on downstream —
+it is contact data for a person to read. And `source`, `ipAddress`, and `userAgent` are written by
+the API from the request, never accepted from the body, which `createLeadSchema`'s `strictObject`
+turns into a `422` rather than a silent override.
 
 ---
 

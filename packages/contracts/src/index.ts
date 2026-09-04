@@ -33,6 +33,7 @@ export * from './budgets.js';
 export * from './reports.js';
 export * from './payables.js';
 export * from './accounting.js';
+export * from './leads.js';
 export * from './audit.js';
 export * from './errors.js';
 export * from './pagination.js';

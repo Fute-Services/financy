@@ -107,6 +107,12 @@ export const GLOBAL_MODELS: ReadonlySet<string> = new Set<string>([
   // would make the row for a cross-tenant job unreadable by the runner that
   // wrote it.
   'JobExecution',
+  // A lead is somebody who asked for a demo from the public site — a person
+  // who does not have an organisation yet, which is the definition of a lead.
+  // Scoping it would mean inventing a tenant to hold prospects, and that
+  // tenant would be one no membership could be granted to and no query could
+  // reach. Global is not a shortcut here; it is what the record is.
+  'Lead',
 ]);
 
 export type ModelClassification = 'tenant-scoped' | 'global' | 'unregistered';
