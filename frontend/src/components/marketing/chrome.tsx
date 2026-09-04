@@ -124,9 +124,6 @@ export function MarketingFooter(): React.JSX.Element {
             <Link href="/security" className="transition-colors hover:text-[#2B39C4]">
               Security
             </Link>
-            <Link href="/status" className="transition-colors hover:text-[#2B39C4]">
-              Status
-            </Link>
           </span>
         </div>
       </Container>
