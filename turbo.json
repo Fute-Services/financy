@@ -12,6 +12,24 @@
       "cache": false,
       "persistent": true
     },
+    /**
+     * The built servers, for judging how the product actually performs.
+     *
+     * `dev` compiles each route the first time it is asked for and re-checks
+     * the module graph on every request, which on this app is the difference
+     * between a screen arriving in ~0.35s and in ~1.5s. Reviewing speed — or
+     * showing the product to anybody — against `dev` measures Next's
+     * development loop, not the application.
+     *
+     * Not `dependsOn: ["build"]`: the root script runs `turbo run build`
+     * first, so the build is already a separate, cacheable step and declaring
+     * it here would make a persistent task depend on one, which turbo will not
+     * schedule.
+     */
+    "start:prod": {
+      "cache": false,
+      "persistent": true
+    },
     "lint": {
       "dependsOn": ["^build"]
     },

@@ -412,7 +412,26 @@ export class AuthService {
     expiresAt: Date,
     granted?: ReadonlySet<string>,
   ): Promise<SessionResponse> {
-    const membership = await this.database.unscoped.membership.findUniqueOrThrow({
+    /**
+     * The switcher's list needs the caller's user id, which the membership
+     * read below also returns — so this used to wait for it, and the two
+     * queries ran nose to tail.
+     *
+     * The guard resolved the same id moments ago and left it in the request
+     * context, so on an authenticated call there is nothing to wait for. Both
+     * reads go at once, and the endpoint costs one round trip instead of two.
+     * That matters more here than anywhere else: this route is on the critical
+     * path of **every** page the web app renders, and the database is remote,
+     * so a saved round trip is saved on every navigation.
+     *
+     * `undefined` on the public callers — login, register, invitation
+     * acceptance — which run before any guard. They fall back to the
+     * sequential path, which is correct and happens once per sign-in rather
+     * than once per page.
+     */
+    const knownUserId = getContext()?.userId;
+
+    const membershipRead = this.database.unscoped.membership.findUniqueOrThrow({
       where: { id: membershipId },
       select: {
         id: true,
@@ -425,6 +444,24 @@ export class AuthService {
       },
     });
 
+    const organizationsFor = (userId: string) =>
+      this.database.unscoped.membership.findMany({
+        where: { userId, status: 'ACTIVE' },
+        select: {
+          organization: { select: { id: true, slug: true, name: true } },
+          role: { select: { key: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+    const [membership, organizations] =
+      knownUserId === undefined
+        ? await (async () => {
+            const row = await membershipRead;
+            return [row, await organizationsFor(row.user.id)] as const;
+          })()
+        : await Promise.all([membershipRead, organizationsFor(knownUserId)]);
+
     const permissions =
       granted === undefined
         ? (
@@ -434,15 +471,6 @@ export class AuthService {
             })
           ).map((row) => row.permission.key)
         : [...granted];
-
-    const organizations = await this.database.unscoped.membership.findMany({
-      where: { userId: membership.user.id, status: 'ACTIVE' },
-      select: {
-        organization: { select: { id: true, slug: true, name: true } },
-        role: { select: { key: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
 
     return {
       user: membership.user,

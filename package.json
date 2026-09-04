@@ -11,6 +11,7 @@
   "scripts": {
     "build": "turbo run build",
     "start": "node scripts/free-ports.mjs --free && turbo run dev",
+    "start:prod": "node scripts/free-ports.mjs --free && turbo run build && turbo run start:prod",
     "dev": "turbo run dev",
     "ports": "node scripts/free-ports.mjs",
     "lint": "turbo run lint",
