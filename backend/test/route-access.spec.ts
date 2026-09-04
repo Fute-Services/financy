@@ -105,6 +105,13 @@ describe('every route declares its access', () => {
       // would teach the next reader that permissions here are decorative.
       'AuthController.stepUp',
       /**
+       * Switching organisation acts on the caller's own session, and every
+       * permission it could require belongs to an organisation they have not
+       * entered yet. The guard is in the service: the membership must be
+       * theirs and `ACTIVE`, or the answer is a 404.
+       */
+      'AuthController.switchOrganization',
+      /**
        * The dashboard is every widget the caller can already see, and nothing
        * else: an employee's endpoint returns the employee's own spend, and the
        * counts they cannot act on are absent rather than zero.

@@ -35,6 +35,10 @@ const ALLOWED_ACTIONS: Readonly<Record<string, string>> = {
   // `Set-Cookie` has to reach the browser, and a server action's would land
   // on the server's own fetch.
   'accept-invitation': 'invitations/accept',
+  // Rebinds the session cookie's active organisation. Proxied for the same
+  // reason as the rest: the browser holds the cookie, and a server action's
+  // fetch would send the server's own.
+  'switch-organization': 'session/switch',
 };
 
 export async function POST(

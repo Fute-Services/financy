@@ -38,8 +38,25 @@ export function Shell({
     <div className="flex h-screen overflow-hidden bg-[var(--surface-page)]">
       <Sidebar session={session} builtPhases={builtPhases} counts={counts} />
 
+      {/*
+        The content column is anchored to the sidebar, not centred in what is
+        left of the window.
+
+        It used to be `mx-auto max-w-[1180px]`. On a 1440px window that is
+        nearly invisible, which is why it survived; on a 1920px one the sidebar
+        ends at 212px and the content began at 476px, leaving a 264px dead
+        gutter between the navigation and the thing it navigates to. A gap that
+        much larger than the page's own padding does not read as breathing
+        room — it reads as a column that has come unstuck from the chrome.
+
+        So: no `mx-auto`. The column starts one padding-width from the sidebar
+        at every size, and the cap only decides where it stops growing. That
+        cap is 1440 rather than 1180 because the widest screens here are
+        transaction and audit tables, and 260px of extra width is another
+        column of figures rather than wasted space.
+      */}
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1180px] px-8 py-7">{children}</div>
+        <div className="max-w-[1440px] px-8 py-7">{children}</div>
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 import type { LoginRequest, RegisterRequest, SessionResponse } from '@financy/contracts';
 import { DEFAULT_CATEGORIES, ROLE_KEYS, flattenCategories } from '@financy/contracts';
-import { MembershipExistsError, UnauthenticatedError, newId } from '@financy/core';
+import { MembershipExistsError, NotFoundError, UnauthenticatedError, newId } from '@financy/core';
 import { provisionOrganizationRoles, type Prisma } from '@financy/db';
 import { Injectable } from '@nestjs/common';
 
@@ -333,6 +333,62 @@ export class AuthService {
     await this.database.unscoped.$transaction(async (tx) => {
       await this.sessions.revoke(tx, sessionId, 'USER_LOGOUT');
     });
+  }
+
+  /**
+   * Point the current session at a different organisation (docs/10 §5.1).
+   *
+   * The session is rebound rather than reissued: the same token, the same
+   * expiries, a different `activeMembershipId`. Issuing a new session here
+   * would silently reset the absolute timeout, so a person switching between
+   * two companies all day would never be asked to sign in again.
+   *
+   * Three things this must not become, and each is a line below:
+   *
+   *  - **A way to enter an organisation you are not in.** The membership is
+   *    looked up by `(organizationId, userId)`, so an id belonging to somebody
+   *    else's company matches nothing.
+   *  - **A way back into one you were removed from.** The membership has to be
+   *    `ACTIVE`. A deactivated one still exists, and matching on the pair alone
+   *    would make removal reversible by whoever still held the session.
+   *  - **A way to carry authority across a tenant boundary.** `setActiveMembership`
+   *    clears `steppedUpAt`, because having proved your password in one
+   *    organisation is not proof for another.
+   *
+   * A miss answers `404`, not `403`. A `403` would confirm the organisation
+   * exists, which is the cross-tenant leak docs/10 §6 exists to prevent.
+   */
+  async switchOrganization(sessionId: string, organizationId: string): Promise<string> {
+    const membership = await this.database.unscoped.membership.findFirst({
+      where: {
+        organizationId,
+        user: { sessions: { some: { id: sessionId } } },
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+
+    if (membership === null) throw new NotFoundError('Organization');
+
+    await this.database.unscoped.$transaction(async (tx) => {
+      await this.sessions.setActiveMembership(tx, sessionId, membership.id);
+
+      // Recorded in the organisation being *entered*, which is the log where
+      // "who was acting here, and from when" has to be answerable. Both
+      // overrides are needed: the request context still names the organisation
+      // the caller is leaving, so the event would otherwise land in the wrong
+      // tenant's log with the wrong membership as its actor.
+      await this.audit.record(tx, {
+        action: 'session.organization_switched',
+        resourceType: 'session',
+        resourceId: sessionId,
+        after: { organizationId },
+        organizationId,
+        actorMembershipId: membership.id,
+      });
+    });
+
+    return membership.id;
   }
 
   /** The payload behind `GET /v1/auth/session`. */

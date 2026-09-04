@@ -2,11 +2,13 @@ import {
   loginRequestSchema,
   registerRequestSchema,
   stepUpRequestSchema,
+  switchOrganizationRequestSchema,
   type LoginRequest,
   type RegisterRequest,
   type SessionResponse,
   type StepUpRequest,
   type StepUpResponse,
+  type SwitchOrganizationRequest,
 } from '@financy/contracts';
 import { UnauthenticatedError } from '@financy/core';
 import { Body, Controller, Get, HttpCode, Post, Res } from '@nestjs/common';
@@ -117,6 +119,45 @@ export class AuthController {
     }
 
     response.clearCookie(this.config.get('SESSION_COOKIE_NAME'), cookieOptions(this.config));
+  }
+
+  /**
+   * Switch the active organisation (docs/10 §5.1).
+   *
+   * Specified since Phase 1 and, until now, only half built: the contract, the
+   * service method and the switcher's menu all existed, but there was no route
+   * between them — so a person with memberships in two companies could see
+   * both listed and reach neither.
+   *
+   * Like `session` and `logout`, it takes no `@RequirePermission`: it acts on
+   * the caller's own session, and every permission it could borrow belongs to
+   * an organisation it has not entered yet. What guards it is in the service —
+   * the membership must be the caller's own and `ACTIVE`, or the answer is a
+   * `404` that does not confirm the organisation exists.
+   *
+   * The response is the new session description, so the client re-renders as
+   * the identity it now holds rather than re-fetching to find out.
+   */
+  @Post('session/switch')
+  @HttpCode(200)
+  async switchOrganization(
+    @Body(new ZodValidationPipe(switchOrganizationRequestSchema)) body: SwitchOrganizationRequest,
+  ): Promise<SessionResponse> {
+    const sessionId = getContext()?.sessionId;
+
+    /* c8 ignore next 1 -- the guard rejects before this can be reached. */
+    if (sessionId === undefined) throw new UnauthenticatedError();
+
+    const membershipId = await this.auth.switchOrganization(sessionId, body.organizationId);
+
+    const expiresAt = new Date(
+      Date.now() + this.config.get('SESSION_ABSOLUTE_TIMEOUT_HOURS') * 3_600_000,
+    );
+
+    // No permission set passed: the guard resolved the *previous* membership's
+    // grants for this request, and handing those over would describe the new
+    // organisation with the old organisation's authority.
+    return this.auth.describeSession(membershipId, expiresAt);
   }
 
   /** The current user, organisation, role, and resolved permission set. */

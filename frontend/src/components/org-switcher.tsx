@@ -24,7 +24,57 @@ export function OrgSwitcher({ session }: { session: Session }): React.JSX.Elemen
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  /** The organisation being switched to, or `null`. Doubles as the busy flag. */
+  const [switching, setSwitching] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Switch the session's active organisation.
+   *
+   * The list in this menu was rendered as plain `<div>`s for a long time — the
+   * organisations were named, and clicking one did nothing. Somebody with
+   * memberships in two companies could see the second and never reach it,
+   * which on a demo account meant staring at a full application with no data
+   * in it and concluding the application was broken.
+   *
+   * A full navigation rather than `router.refresh()`, for the reason signing
+   * in uses one: everything on screen — the sidebar's permission-filtered
+   * items, the counts, every cached server render — belongs to the previous
+   * organisation. Refreshing re-renders the tree against a router cache still
+   * holding the old tenant's data, and the first frame after the switch shows
+   * one organisation's chrome around another's figures. Replacing the document
+   * is the only thing that cannot half-apply.
+   */
+  async function switchTo(organizationId: string): Promise<void> {
+    if (organizationId === session.organization.id) {
+      setOpen(false);
+      return;
+    }
+
+    setSwitching(organizationId);
+
+    try {
+      const response = await fetch('/api/auth/switch-organization', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId }),
+      });
+
+      if (response.ok) {
+        // Deliberately not clearing `switching`: the page is being replaced,
+        // and re-enabling the row mid-navigation is what made signing in look
+        // like it needed two clicks.
+        window.location.assign('/overview');
+        return;
+      }
+    } catch {
+      // Fall through to the reset below. There is no error surface in this
+      // menu and inventing one for a case the user can retry by clicking again
+      // would be more chrome than the failure is worth.
+    }
+
+    setSwitching(null);
+  }
 
   /**
    * Signing out revokes the session server-side, not just in the browser.
@@ -123,6 +173,11 @@ export function OrgSwitcher({ session }: { session: Session }): React.JSX.Elemen
                   label={organization.name}
                   hint={ROLE_LABELS[organization.roleKey]}
                   active={organization.id === session.organization.id}
+                  busy={switching === organization.id}
+                  disabled={switching !== null}
+                  onSelect={() => {
+                    void switchTo(organization.id);
+                  }}
                 />
               ))}
               <div className="my-1 h-px bg-[var(--border-subtle)]" />
@@ -153,25 +208,53 @@ export function OrgSwitcher({ session }: { session: Session }): React.JSX.Elemen
   );
 }
 
+/**
+ * One organisation in the menu.
+ *
+ * A `<button>`, not a `<div>`. It was a div — styled like a row, listed under
+ * a heading, inside a `role="menu"`, and inert. Nothing about it said "this is
+ * not clickable", which is the worst kind of dead control: it does not look
+ * broken, it looks like the click failed.
+ *
+ * `role="menuitemradio"` because that is what this list is — a set of options
+ * of which exactly one is current. It gives a screen-reader user the selected
+ * state that the dot beside the active row gives everyone else.
+ */
 function MenuRow({
   label,
   hint,
   active,
+  busy,
+  disabled,
+  onSelect,
 }: {
   label: string;
   hint: string;
   active: boolean;
+  busy: boolean;
+  disabled: boolean;
+  onSelect: () => void;
 }): React.JSX.Element {
   return (
-    <div
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={active}
+      aria-busy={busy || undefined}
+      disabled={disabled}
+      onClick={onSelect}
       className={cn(
-        'flex items-center gap-2 px-3 py-1.5 text-[13px]',
+        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-colors',
         active ? 'text-ink-900' : 'text-ink-600',
+        // The active row is not a target — it is where you already are — so it
+        // gets no hover affordance, while the others do.
+        active ? 'cursor-default' : 'hover:bg-ink-50',
+        disabled && !busy && 'opacity-60',
       )}
     >
       <span className="flex-1 truncate">{label}</span>
-      <span className="text-[11px] text-ink-400">{hint}</span>
+      <span className="text-[11px] text-ink-400">{busy ? 'Switching…' : hint}</span>
       {active && <span className="text-cobalt-600">·</span>}
-    </div>
+    </button>
   );
 }
