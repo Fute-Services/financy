@@ -3,5 +3,17 @@
 
 /* Tailwind v4 needs to be told where to scan for class names when the source
    lives outside this app — otherwise every utility used inside @financy/ui
-   is tree-shaken away and the design system renders unstyled. */
-@source '../../../../packages/ui/src/**/*.{ts,tsx}';
+   is tree-shaken away and the design system renders unstyled.
+
+   The path is relative to *this file*: src/app -> src -> frontend -> repo
+   root. It was one `..` deeper while this file lived at apps/web/src/app, and
+   the rename to frontend/ left it pointing above the repository at a
+   directory that does not exist.
+
+   Tailwind does not warn about an @source that matches nothing, so the
+   failure was silent and total: every utility used only inside the design
+   system stopped being generated. Cards lost their padding, badges their
+   shape, tables their spacing — which reads as "the pages are misaligned"
+   rather than as a missing stylesheet, because the markup was still there and
+   the app's own utilities still worked. */
+@source '../../../packages/ui/src/**/*.{ts,tsx}';

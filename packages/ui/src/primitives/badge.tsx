@@ -11,17 +11,22 @@ import { cn } from '../lib/cn';
 
 export type BadgeTone = 'neutral' | 'info' | 'pending' | 'success' | 'warning' | 'danger';
 
+/**
+ * Fill, text, and an inset ring — the ring rather than a border so the chip's
+ * height is the same whether or not a tone happens to define one, and so it
+ * never adds a pixel to a table row's rhythm.
+ */
 const TONES: Record<BadgeTone, string> = {
-  neutral: 'bg-ink-50 text-ink-600 border-ink-200',
-  info: 'bg-[var(--color-info-fill)] text-[var(--color-info-text)] border-[var(--color-info-border)]',
+  neutral: 'bg-ink-50 text-ink-600 ring-ink-200/70',
+  info: 'bg-[var(--color-info-fill)] text-[var(--color-info-text)] ring-[var(--color-info-border)]/60',
   pending:
-    'bg-[var(--color-pending-fill)] text-[var(--color-pending-text)] border-[var(--color-pending-border)]',
+    'bg-[var(--color-pending-fill)] text-[var(--color-pending-text)] ring-[var(--color-pending-border)]/60',
   success:
-    'bg-[var(--color-success-fill)] text-[var(--color-success-text)] border-[var(--color-success-border)]',
+    'bg-[var(--color-success-fill)] text-[var(--color-success-text)] ring-[var(--color-success-border)]/60',
   warning:
-    'bg-[var(--color-warning-fill)] text-[var(--color-warning-text)] border-[var(--color-warning-border)]',
+    'bg-[var(--color-warning-fill)] text-[var(--color-warning-text)] ring-[var(--color-warning-border)]/60',
   danger:
-    'bg-[var(--color-danger-fill)] text-[var(--color-danger-text)] border-[var(--color-danger-border)]',
+    'bg-[var(--color-danger-fill)] text-[var(--color-danger-text)] ring-[var(--color-danger-border)]/60',
 };
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -39,8 +44,23 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex h-5 items-center gap-1.5 rounded-[var(--radius-xs)] border px-2',
+        /**
+         * A pill, and the shape is doing real work.
+         *
+         * This was a 3px-radius rectangle with a 1px border — which is exactly
+         * the shape of the outline button two columns over. On a table row
+         * where "Active", "Posted" and "Change role" sit side by side, a
+         * reader cannot tell from the shape which of the three they are meant
+         * to click, and two of them are not clickable at all.
+         *
+         * A fully rounded, borderless chip is not decoration: rectangles with
+         * borders read as controls, pills read as labels. The tone's fill and
+         * text still carry the meaning, and the inset ring keeps the edge
+         * legible on a tinted row without reintroducing a button's crispness.
+         */
+        'inline-flex h-5 items-center gap-1.5 rounded-full px-2',
         'text-xs font-medium whitespace-nowrap',
+        'ring-1 ring-inset',
         TONES[tone],
         className,
       )}
