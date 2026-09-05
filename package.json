@@ -37,10 +37,13 @@
     "db:seed:demo:full": "pnpm --filter @financy/api seed:demo",
     "db:push": "pnpm --filter @financy/db push",
     "db:push:reset": "pnpm --filter @financy/db push:reset",
-    "db:seed:demo:activity": "pnpm --filter @financy/api seed:demo:activity"
+    "db:seed:demo:activity": "pnpm --filter @financy/api seed:demo:activity",
+    "knip": "knip",
+    "audit:prod": "pnpm audit --prod"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "knip": "^6.34.0",
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"

@@ -1,0 +1,171 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  Scans that are not the pull request gate.
+#
+#  `ci.yml` answers "is this correct" and blocks the merge. This answers
+#  "is this safe, and is it accumulating weight", which is a different
+#  question with a different failure cost: a new advisory published overnight
+#  is not a reason to block a pull request that did not introduce it, and a
+#  newly unused export is not a reason to block anything at all.
+#
+#  So this runs on the same events *and* on a schedule, and only the two
+#  checks that mean "something shipped is exposed" can fail the run.
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Code scan
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Monday morning, before the Renovate window, so a fresh advisory and the
+    # PR that fixes it arrive together rather than a week apart.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: scan-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.x'
+  TURBO_TELEMETRY_DISABLED: '1'
+  DO_NOT_TRACK: '1'
+
+jobs:
+  # ── Dependencies ─────────────────────────────────────────────────────────
+  # Two audits, and only one of them is allowed to fail the run. A production
+  # dependency with a known advisory is shipped, reachable, and worth stopping
+  # for. A dev-only one is a laptop's problem: worth a PR, not worth a red
+  # build on somebody else's change.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Production dependencies
+        run: pnpm audit --prod
+
+      - name: Every dependency
+        continue-on-error: true
+        run: pnpm audit
+
+  # ── Static application security testing ──────────────────────────────────
+  # Semgrep's open rule packs, which need no account. The reference dev host
+  # is Windows with no Python and no Docker, so this is the one check that
+  # genuinely cannot be run the same way locally — which is the argument for
+  # having it here rather than as a script nobody can execute.
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan
+        run: >
+          semgrep scan
+          --error
+          --config p/typescript
+          --config p/nodejs
+          --config p/owasp-top-ten
+          --config p/secrets
+          --exclude '**/dist/**'
+          --exclude '**/.next/**'
+          --exclude '**/node_modules/**'
+
+  # ── Weight ───────────────────────────────────────────────────────────────
+  # Unused files, exports and dependencies. Advisory on purpose: knip is a
+  # conversation starter, and a tool that fails the build on a newly unused
+  # export teaches people to export less honestly rather than to delete more.
+  knip:
+    name: Unused code and dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        run: pnpm db:generate
+
+      - name: Knip
+        run: pnpm knip
+
+  # ── Quality gate ─────────────────────────────────────────────────────────
+  # SonarCloud, and it skips itself rather than failing when the token is
+  # absent. A required secret that nobody has set turns every fork's run red
+  # for a reason that has nothing to do with the code in it.
+  sonar:
+    name: SonarCloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Sonar reads history to attribute issues to the commit that
+          # introduced them; a shallow clone attributes everything to today.
+          fetch-depth: 0
+
+      - name: Is Sonar configured?
+        id: configured
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: echo "yes=${{ secrets.SONAR_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+        if: steps.configured.outputs.yes == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.configured.outputs.yes == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        if: steps.configured.outputs.yes == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build, then test with coverage
+        if: steps.configured.outputs.yes == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+        run: |
+          pnpm build
+          pnpm test:coverage
+
+      - name: Scan
+        if: steps.configured.outputs.yes == 'true'
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Not configured
+        if: steps.configured.outputs.yes != 'true'
+        run: |
+          echo "SONAR_TOKEN is not set — skipping." >> "$GITHUB_STEP_SUMMARY"
+          echo "Create the project at https://sonarcloud.io, then add the token as a repository secret." >> "$GITHUB_STEP_SUMMARY"

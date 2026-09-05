@@ -1,0 +1,60 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommits"],
+  "timezone": "Asia/Kolkata",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 4,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "postUpdateOptions": ["pnpmDedupe"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "schedule": null,
+    "prPriority": 10
+  },
+  "packageRules": [
+    {
+      "description": "Patches and dev-only minors carry the least risk and the most noise, so they arrive as one PR rather than twenty.",
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "groupName": "patches",
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Types packages track the runtime they describe; separating them from it produces PRs that cannot pass on their own.",
+      "matchPackageNames": ["@types/**"],
+      "groupName": "type definitions"
+    },
+    {
+      "description": "The three frameworks this repository is actually built on. Each gets its own PR, because reading the migration notes is the work and a grouped PR hides which one needs it.",
+      "matchPackageNames": ["next", "react", "react-dom", "@nestjs/**", "prisma", "@prisma/**"],
+      "groupName": null,
+      "separateMajorMinor": true,
+      "automerge": false
+    },
+    {
+      "description": "Turbo, ESLint, Prettier, TypeScript and the test runners move together often enough that separate PRs mostly conflict with each other.",
+      "matchPackageNames": [
+        "turbo",
+        "typescript",
+        "eslint",
+        "prettier",
+        "vitest",
+        "@vitest/**",
+        "@playwright/test"
+      ],
+      "groupName": "toolchain"
+    },
+    {
+      "description": "A major is never automerged, whatever else matched it.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["major"]
+    }
+  ]
+}

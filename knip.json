@@ -1,0 +1,50 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs"],
+      "project": ["scripts/**/*.mjs"]
+    },
+
+    "backend": {
+      "entry": [
+        "src/main.ts",
+        "api/index.js",
+        "src/scripts/*.ts",
+        "test/**/*.spec.ts",
+        "src/**/*.test.ts",
+        "src/**/index.ts"
+      ],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+      "ignoreDependencies": ["pino-pretty"]
+    },
+
+    "frontend": {
+      "entry": [
+        "src/app/**/{page,layout,error,not-found,loading,route,template}.tsx",
+        "next.config.*",
+        "postcss.config.*"
+      ],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["tailwindcss"]
+    },
+
+    "packages/*": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+
+    "packages/config": {
+      "entry": ["eslint/*.js", "vitest/*.js"],
+      "project": ["**/*.js"]
+    },
+
+    "tests": {
+      "entry": ["specs/**/*.spec.ts"],
+      "project": ["specs/**/*.ts", "*.ts"]
+    }
+  },
+
+  "ignoreExportsUsedInFile": true
+}
