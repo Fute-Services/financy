@@ -35,3 +35,12 @@ overrides:
   postcss: '^8.5.26'
   # GHSA-ggr8-5vv4-36mx — stack exhaustion, reached via prisma.
   deepmerge-ts: '^8.0.2'
+  # GHSA-fx2h-pf6j-xcff / GHSA-4w7w-66w2-5vf9 / GHSA-v6wh-96g9-6wx3 — dev
+  # server file-read advisories, reached via vitest. Test tooling only and
+  # never shipped, but the dev server binds a port on a laptop that is also on
+  # somebody else's network.
+  vite: '^6.4.3'
+  # GHSA-67mh-4wv8-2f99 — same reach, same reason. The advisory names 0.24.3
+  # as the fix and no such release exists: 0.24.2 is the last of that line and
+  # 0.25.0 the first one carrying it.
+  esbuild: '^0.25.0'
