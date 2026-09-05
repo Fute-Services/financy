@@ -46,16 +46,28 @@ export default defineConfig({
    */
   retries: isCI ? 1 : 0,
   /**
-   * Two workers, everywhere.
+   * One worker, everywhere.
    *
    * Playwright's local default is half the cores, and that was fine when the
    * database was a local PostgreSQL. It is not fine against Atlas: every
    * registration is a multi-write transaction crossing the internet, so six
    * workers queue behind each other and behind the dev server's first compile
-   * of each route, and journeys that pass alone time out together. CI has the
-   * same ceiling for the same reason.
+   * of each route, and journeys that pass alone time out together.
+   *
+   * Two was still too many, and the measurement is what settled it. At two
+   * workers a full run failed the audit screen and both budget journeys,
+   * every one of which passed alone; at one worker the same specs are green.
+   * The cost is about a minute — 6.7 against 5.6 — which is nothing beside a
+   * suite that fails differently depending on scheduling.
+   *
+   * Worker count is *not* what makes `contact-form` flaky, and reducing it
+   * will not help: `POST /v1/leads` allows three an hour keyed on `req.ip`
+   * (see `LeadsController`), the counter lives in the API process, and the
+   * three specs that submit the form sit at that ceiling. Run the suite twice
+   * inside an hour against the same server and the second run gets 429 no
+   * matter how it is scheduled. Restarting the API clears the window.
    */
-  workers: 2,
+  workers: 1,
 
   reporter: isCI
     ? [

@@ -167,7 +167,13 @@ test.describe('authentication', () => {
     // module.
     await expect(palette.locator('button[data-highlighted="true"]')).toHaveText(/Approvals/);
 
-    await page.keyboard.press('Enter');
+    // Pressed on the input, not on the page. `page.keyboard` sends the key to
+    // whatever holds focus, and the re-render that filtered the list can take
+    // focus off the input for a tick — the key then lands on the body, no
+    // handler sees it, and the palette sits there having quietly ignored it.
+    // That is the whole failure: under load this asserted `/overview` for the
+    // full five seconds, because Enter was dropped rather than slow.
+    await search.press('Enter');
 
     await expect(page).toHaveURL(/\/approvals$/);
   });
