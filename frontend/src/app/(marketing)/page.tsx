@@ -40,8 +40,14 @@ export default function HomePage(): React.JSX.Element {
               <p className="m-0 mb-[26px] max-w-[380px] text-[17px] leading-[1.55] text-pretty text-[#4B4F58]">
                 {HOME_LEAD}
               </p>
+              {/*
+               * Self-serve first. The Starter plan is free and needs no
+               * conversation, so the hero should not send everyone who wants
+               * it through sales — the demo stays one click away beside it.
+               */}
               <div className="flex flex-wrap items-center gap-5">
-                <PrimaryLink href="/contact">Book a demo</PrimaryLink>
+                <PrimaryLink href="/register">Create an organisation</PrimaryLink>
+                <QuietLink href="/contact">Book a demo</QuietLink>
                 <QuietLink href="/product">See the product</QuietLink>
               </div>
             </div>

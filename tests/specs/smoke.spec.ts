@@ -67,7 +67,9 @@ test.describe('landing page', () => {
   test('renders the hero and both calls to action', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Most companies discover');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(
+      'Company spend, under control by default',
+    );
     await expect(page.getByRole('link', { name: 'Create an organisation' }).first()).toBeVisible();
   });
 

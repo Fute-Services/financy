@@ -57,18 +57,30 @@ export function MarketingNav(): React.JSX.Element {
           ))}
         </nav>
 
+        {/*
+         * Three destinations, in the order a visitor needs them: back in,
+         * talk to someone, start on your own. "Sign in" rather than "Log in"
+         * because that is the word the sign-in screen itself uses, and a
+         * visitor should not have to notice they are the same door.
+         */}
         <div className="ml-auto flex items-center gap-4 sm:gap-5">
           <Link
             href="/login"
             className="hidden text-[14px] font-medium text-[#565A63] transition-colors hover:text-[#14161A] sm:block"
           >
-            Log in
+            Sign in
           </Link>
           <Link
             href="/contact"
-            className="rounded-md bg-[#14161A] px-4 py-[9px] text-[14px] font-semibold text-[#F6F5F2] transition-colors hover:bg-[#2B39C4] hover:text-white"
+            className="hidden text-[14px] font-medium text-[#565A63] transition-colors hover:text-[#14161A] sm:block"
           >
             Book a demo
+          </Link>
+          <Link
+            href="/register"
+            className="rounded-md bg-[#14161A] px-4 py-[9px] text-[14px] font-semibold text-[#F6F5F2] transition-colors hover:bg-[#2B39C4] hover:text-white"
+          >
+            Get started
           </Link>
         </div>
       </Container>
@@ -109,10 +121,19 @@ export function MarketingFooter(): React.JSX.Element {
       </Container>
 
       <Container className="pb-9">
-        <div
-          className="flex flex-wrap justify-between gap-5 pt-[22px] text-[13px] text-[#7A7E88]"
+        {/*
+         * The disclaimer sits on every marketing page, not only on the sign-in
+         * screens. A page that talks about cards and spend reads like a bank
+         * to someone skimming it, and the correction has to be where the claim
+         * is. Wording matches `(auth)/layout.tsx`; change both together.
+         */}
+        <p
+          className="m-0 pt-[22px] text-[13px] leading-[1.55] text-[#7A7E88]"
           style={{ borderTop: `1px solid ${LINE}` }}
         >
+          Financy is not a bank and holds no compliance certification.
+        </p>
+        <div className="flex flex-wrap justify-between gap-5 pt-4 text-[13px] text-[#7A7E88]">
           <span>© {new Date().getFullYear()} Financy</span>
           <span className="flex gap-6">
             <Link href="/privacy" className="transition-colors hover:text-[#2B39C4]">
