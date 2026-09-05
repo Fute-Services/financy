@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import {
   BUDGET_SCOPE_TYPE_LABELS,
   BUDGET_STATUS_LABELS,
@@ -86,9 +87,19 @@ export default async function BudgetsPage({ searchParams }: Props): Promise<Reac
     {
       key: 'name',
       header: 'Budget',
+      // The name is the way into the budget, as the reference is on expenses.
+      // Without it `/budgets/[id]` is only reachable by the redirect that
+      // follows creation, which leaves every budget made before today — and
+      // every one whose creation redirect was lost to a revalidation — with no
+      // route to its own periods and movements.
       render: (budget) => (
         <div className="min-w-0">
-          <div className="truncate font-medium text-ink-900">{budget.name}</div>
+          <Link
+            href={`/budgets/${budget.id}`}
+            className="truncate font-medium text-ink-900 hover:text-cobalt-600 hover:underline"
+          >
+            {budget.name}
+          </Link>
           <div className="truncate text-[12px] text-ink-500">
             {BUDGET_SCOPE_TYPE_LABELS[budget.scopeType]}
             {budget.scopeName === null ? '' : ` · ${budget.scopeName}`}
