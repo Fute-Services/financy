@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { Module } from '@nestjs/common';
+import { Module, RequestMethod } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 
 import { ConfigService } from '../config/index.js';
@@ -24,6 +24,15 @@ import { REDACTED_PATHS, REDACTION_PLACEHOLDER } from './redaction.js';
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
+        /**
+         * Every route, spelled in the named-parameter syntax `path-to-regexp`
+         * v8 requires. nestjs-pino still defaults to the bare `*`, which Nest
+         * auto-converts — correctly, but with a paragraph of deprecation
+         * warning on every boot. Stating it here keeps startup output to
+         * things worth reading. Remove once nestjs-pino updates its default.
+         */
+        forRoutes: [{ path: '*path', method: RequestMethod.ALL }],
+
         pinoHttp: {
           level: config.get('LOG_LEVEL'),
 
